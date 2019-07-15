@@ -1,7 +1,7 @@
 # Py Packages
 
 This tool attempts to implement 
-[PEP 582 -- Python local packages directory](Python local packages directory). It abstracts over commands used for creating
+[PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/). It abstracts over commands used for creating
 activating, modifying, and using virtual environments.
 
 
@@ -62,15 +62,16 @@ deactivate
 This is a signifcant impact the usability of Python, especially for new users. IDEs like `PyCharm` abstract this away, but are a specific solution
 to a general problem.
 
-If [PEP 582](Python local packages directory) is impelemented, this tool
+If [PEP 582](https://www.python.org/dev/peps/pep-0582/) is impelemented, this tool
 will become obsolete, but this isn't likely to happen in the near future.
 
 
-## Why use this over existing projects
+## Why create another attempt at solving this?
 Pipenv and Poetry both address this problem directly. This project aims to keep
 dependencies in the project directory, both in `__pypackages__`, and a `.venv`
 folder, containing the virtual environment. It doesn't modify files outside
-your project directory. It aims to be simple, fast, and easy to use.
+your project directory. It aims to avoid needing to worry about selecting
+the correct Python interpreter to use, if multiple are installed.
 
 
 ## What this doesn't do (at least currently)
