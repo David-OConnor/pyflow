@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+
+.venv
+python.toml
+__pypackages__
