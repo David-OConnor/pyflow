@@ -1,2 +1,7 @@
 [Python]
 version = "3.7"
+
+[dependencies]
+numpy = "^1.16.4"
+django = "^2.0.0"
+
