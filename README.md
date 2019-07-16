@@ -10,7 +10,7 @@ The virtual environment is created in the same diretory as `lib`.
 Python 3.3 or newer required.
 
 ## Installation
-There are 2 main ways to install this:
+There are 2 main ways to install:
 - Download the binary from (fill in), and add it to a location on the system path.
 For example, place it under `/usr/bin` in linux, or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 - If you have `Rust` installed, the most convenient way is to 
@@ -25,8 +25,13 @@ Example contents:
 ```toml
 [tool.pypackage.dependencies]
 numpy = "^1.16.4"
-django = "^2.0.0"
+django = "2.0.0"
 ```
+
+For details on how to specify dependencies in this `Cargo.toml`-inspired 
+[semvar](https://semver.org) format,
+ reference
+[this guide](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html).
 
 
 ## Example use
@@ -35,7 +40,7 @@ Managing dependencies:
 - `pypackages install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified
 - `pypackages install toolz` - If you specify one or more packages after `install`, only those packages will be installed, 
 and will be added to `pyproject.toml`.
-- `pypackages install numpy==1.16.4 matplotlib>=3.1.` Example with multiple dependencies, and specified versions
+- `pypackages install numpy==1.16.4 matplotlib>=3.1.` - Example with multiple dependencies, and specified versions
 - `pypackages uninstall toolz` - Remove a dependency
 
 Running REPL and Python files in the environment:
@@ -53,10 +58,10 @@ Misc:
 
 ## Why?
 
-Using the main python installation, especially one the operating system depends on
-isn't a good way to use python packages. Virtual environments isolate dependencies
-for each project, and prevent damaging system python setups,
-but are cumbersome to use. An example workflow:
+Using a Python installation directly when installing dependencies can become messy.
+If using a system-level Python, which is ubiqutious in Linux, altering dependencies
+may break the OS. Virtual environments correct this, but are cumbersome to use. 
+An example workflow:
 
 Setup:
 ```bash
@@ -76,24 +81,25 @@ cd ~/myproject
 python main.py
 deactivate
 ```
-This is a signifcant impact the usability of Python, especially for new users. IDEs like `PyCharm` abstract this away, but are a specific solution
-to a general problem.
+This is a signifcant impact the usability of Python, especially for new users. 
+IDEs like `PyCharm` abstract this away, but are a specific solution
+to a general problem. See [this section of PEP 582](https://www.python.org/dev/peps/pep-0582/#id3).
 
-If [PEP 582](https://www.python.org/dev/peps/pep-0582/) is impelemented, this tool
-will become obsolete, but this isn't likely to happen in the near future.
+Additionally, if multiple versions of Python are installed, verifying you're using
+the one you want may be difficult.
 
 
-## Why add another attempt at solving this?
-Pipenv and Poetry both address this problem. Some reasons why I decided to make this Project:
+## Why add another Python dependency manager?
+`Pipenv` and `Poetry` both address this problem. Some reasons why this tools is different:
 
-- This tool keeps dependencies in the project directory, in `__pypackages__`. It abstracts
+- It eeps dependencies in the project directory, in `__pypackages__`. It abstracts
 over the virtual environment, and doesn't modify files outside
 the project directory.
 
-- By not requiring Python to install or run, it maintains intallation-agnostic.
+- By not requiring Python to install or run, it remains intallation-agnostic.
 This is especially important on Linux, where there may be several versions
 of Python installed, with different versions and access levels. This avoids
-complications which may arrise, especially for new users.
+complications, especially for new users.
 
 - This automates the build and publish process, in addition to managing
 dependencies.
@@ -118,9 +124,8 @@ repository = "https://github.com/everythingkiller/nicepackage"
 
 [tool.pypackage.dependencies]
 numpy = "^1.16.4"
-django = "^2.0.0"
+django = "2.0.0"
 ```
-
 
 ## Building this from source                      
 

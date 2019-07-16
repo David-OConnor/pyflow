@@ -1,5 +1,12 @@
 use regex::Regex;
-use std::{env, fs, num, path, str::FromStr};
+use serde::Deserialize;
+use std::path::Prefix::Verbatim;
+use std::{
+    env, fs,
+    io::{BufRead, BufReader},
+    num, path,
+    str::FromStr,
+};
 use structopt::StructOpt;
 use toml;
 
@@ -21,7 +28,7 @@ enum Arg {
 }
 
 impl FromStr for Arg {
-    type Err = num::ParseIntError; // todo not sure what to put here.
+    type Err = num::ParseError; // todo not sure what to put here.
 
     fn from_str(arg: &str) -> Result<Self, Self::Err> {
         let result = match arg.to_string().to_lowercase().as_ref() {
@@ -59,25 +66,26 @@ enum Task {
     Publish,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 enum VersionType {
     Exact,
-    OrHigher,
-    OrLower,
+    Carot,
+    Tilde,
 }
 
 impl ToString for VersionType {
     fn to_string(&self) -> String {
         match self {
             VersionType::Exact => "==".into(),
-            VersionType::OrHigher => ">=".into(),
-            VersionType::OrLower => "<=".into(),
+            VersionType::Carot => ">=".into(),
+            VersionType::Tilde => "<=".into(),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
 struct Version {
+    // todo wildcard
     major: u32,
     minor: u32,
     patch: Option<u32>,
@@ -91,10 +99,19 @@ impl Version {
             patch: Some(patch),
         }
     }
+
+    /// No patch specified.
+    fn new_short(major: u32, minor: u32) -> Self {
+        Self {
+            major,
+            minor,
+            patch: None,
+        }
+    }
 }
 
 impl FromStr for Version {
-    type Err = num::ParseIntError; // todo not sure what to put here.
+    type Err = num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // todo: This fn needs better garbage-in handling.
@@ -111,7 +128,7 @@ impl FromStr for Version {
             None => None,
         };
 
-          Ok(Self {
+        Ok(Self {
             major,
             minor,
             patch,
@@ -128,7 +145,7 @@ impl ToString for Version {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 struct Package {
     name: String,
     version_type: VersionType, // Not used if version not specified.
@@ -147,13 +164,94 @@ impl Package {
     }
 }
 
+//impl FromStr for Package {
+//    type Err = num::ParseError;
+//
+//    fn from_str(s: &str) -> Result<Self, Self::Err> {
+//        // todo: Wildcard
+//        let re = Regex::new(r"^(\.*?)\s*=\s*(([\^\~]?)(\d{1,4})(?:\.(\d{1,4}))?(?:\.(\d{1,4}))?)?$").unwrap();
+//
+//
+//        let caps = re.captures(s)
+//            .expect(&format!("Problem parsing dependency: {}", s));
+//
+//        println!("CAPS: {:?}", caps);
+////
+////        let prefix = match caps.get(0) {
+////            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+////            None => None,
+////        };
+////
+////        let major = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
+////
+////        let minor = match caps.get(2) {
+////            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+////            None => None,
+////        };
+////
+////        let patch = match caps.get(3) {
+////            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+////            None => None,
+////        };
+//
+//        let result = Self {
+//            name: "temp".to_string(),
+//            version: Some(Version::new(0, 1, 1)),
+//            version_type: VersionType::Exact,
+//        };
+//
+//        Ok(result)
+//    }
+//}
+
+/// // todo: You need 2 fns: One for TOML, one for Pip.
 impl From<String> for Package {
-    fn from(arg: String) -> Self {
-        // todo impl with regex for versions
+    fn from(s: String) -> Self {
+        // todo: Wildcard
+        let re = Regex::new(
+            r#"^(.+?)(?:\s*=\s*"([\^\~]?)(\d{1,4})(?:\.(\d{1,4}))?(?:\.(\d{1,4})")?)?$"#,
+        )
+        .unwrap();
+
+        let caps = re
+            .captures(&s)
+            .expect(&format!("Problem parsing dependency: {}. Skipping", &s));
+
+        let name = caps.get(1).unwrap().as_str();
+
+        let prefix = match caps.get(2) {
+            Some(p) => Some(p.as_str()),
+            None => None,
+        };
+
+        let major = match caps.get(3) {
+            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+            None => None,
+        };
+
+        let minor = match caps.get(4) {
+            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+            None => None,
+        };
+
+        let patch = match caps.get(5) {
+            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+            None => None,
+        };
+
         Self {
-            name: arg,
-            version_type: VersionType::Exact,
-            version: None,
+            name: name.to_string(),
+            version: Some(Version::new(0, 1, 1)),
+            version_type: match prefix {
+                Some(t) => {
+                    if t == "^" {
+                        VersionType::Carot
+                    } else {
+                        VersionType::Tilde
+                    }
+                }
+                None => VersionType::Exact,
+            },
         }
     }
 }
@@ -166,12 +264,12 @@ struct Opt {
 }
 
 /// A config, parsed from pyproject.toml
-#[derive(Default)]
+#[derive(Debug, Default, Deserialize)]
 struct Config {
     py_version: Option<Version>,
     dependencies: Vec<Package>,
-    name: String,
-    version: Version,
+    name: Option<String>,
+    version: Option<Version>,
     author: Option<String>,
     author_email: Option<String>,
     description: Option<String>,
@@ -181,45 +279,51 @@ struct Config {
     readme_filename: Option<String>,
 }
 
+fn key_re(key: &str) -> Regex {
+    Regex::new(&format!(r"^{}\s*=\s*(.*)$", key)).unwrap()
+}
+
 impl Config {
     pub fn from_file(file_name: &str) -> Self {
-        match fs::read_to_string(file_name) {
-            Ok(data) => {
-                let data = data
-                    .parse::<toml::Value>()
-                    .expect("Problem parsing pyproject.toml");
+        let mut result = Config::default();
+        let file = fs::File::open(file_name).expect("cannot open pyproject.toml");
 
-                let pypackage_section = &data
-                    .get("tool")
-                    .expect("Can't find tool.pypackage in pyproject.toml")
-                    .get("pypackage")
-                    .expect("Can't find tool.pypackage in pyproject.toml");
+        let mut in_sect = false;
+        let mut in_dep = false;
 
-                let mut py_version = None;
+        let sect_re = Regex::new(r"\[.*\]").unwrap();
 
-                if let Some(v) = pypackage_section.get("py_version") {
-                    let py_ver_str = v
-                        .as_str()
-                        .expect("Problem parsing py_version in pyproject.toml");
-                    py_version = Some(
-                        Version::from_str(py_ver_str).expect("Problem parsing python version"),
-                    );
+        for line in BufReader::new(file).lines() {
+            if let Ok(l) = line {
+                if &l == "[tool.pypackage]" {
+                    in_sect = true;
+                    in_dep = false;
+                } else if &l == "[tool.pypackage.dependencies]" {
+                    in_sect = false;
+                    in_dep = true;
+                } else if sect_re.is_match(&l) {
+                    in_sect = false;
+                    in_dep = false;
                 }
 
-                let mut dependencies = Vec::new();
+                if in_sect {
+                    let name_cap = key_re("name").captures(&l);
 
-                println!("{:?}", pypackage_section.get("dependsencies"));
-
-                dependencies.push("saturn".to_string().into());
-                // todo fill dependencies
-
-                let mut result = Self::default();
-                result.py_version = py_version;
-                result.dependencies = dependencies;
-                result
+                    if let Some(n2) = name_cap {
+                        if let Some(n) = n2.get(1) {
+                            result.name = Some(n.as_str().to_string());
+                        }
+                    }
+                } else if in_dep {
+//                    result.dependencies.push(l.into());
+                                        let temp: Package = l.into();
+                                        println!("PARSED: {:?}", temp);
+                }
             }
-            Err(_) => panic!("Can't find pyproject.toml in this directory . Does it exist?"),
         }
+
+        println!("cfg: {:?}", &result);
+        result
     }
 }
 
@@ -360,8 +464,11 @@ fn main() {
     let py_alias = find_py_alias(cfg.py_version);
     let project_dir = env::current_dir().expect("Can't find current path");
 
-    let py_version = "3.7"; // todo temp; clean this up.
-    let venv_name = &format!("__pypackages__/{}/.venv", py_version);
+    let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
+    let venv_name = &format!(
+        "__pypackages__/{}.{}/.venv",
+        py_version.major, py_version.minor
+    );
     let venv_path = project_dir.join(venv_name);
 
     if !venv_exists(&venv_path) {
@@ -371,7 +478,6 @@ fn main() {
 
     for task in find_tasks(&opt.args).iter() {
         match task {
-            // todo DRY
             Task::Install(packages) => {
                 commands::install(&venv_name, packages, false);
                 add_dependencies(packages);

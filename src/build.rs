@@ -6,6 +6,10 @@ use std::process::Command;
 fn create_dummy_setup(cfg: crate::Config) {
     let classifiers = ""; // todo temp
                           // todo add to this
+    let version = match cfg.version {
+        Some(v) => v.to_string(),
+        None => "".into(),
+    };
 
     let data = format!(
         r#"import setuptools
@@ -27,8 +31,8 @@ setuptools.setup(
 )
 "#,
         cfg.readme_filename.unwrap_or_else(|| "README.md".into()),
-        cfg.name,
-        cfg.version.to_string(),
+        cfg.name.unwrap_or_else(|| "".into()),
+        version,
         cfg.author.unwrap_or_else(|| "".into()),
         cfg.author_email.unwrap_or_else(|| "".into()),
         cfg.description.unwrap_or_else(|| "".into()),
