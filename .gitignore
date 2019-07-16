@@ -2,5 +2,7 @@
 **/*.rs.bk
 
 .venv
-python.toml
-__pypackages__
+Python.toml
+pyproject.toml
+/__pypackages__
+script.py

@@ -1,38 +1,55 @@
 # Py Packages
 
 This tool attempts to implement 
-[PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/). It abstracts over commands used for creating
-activating, modifying, and using virtual environments.
+[PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/). 
+It abstracts over commands used for creating
+activating, modifying, and using virtual environments. Per PEP 582, dependencies
+are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
+The virtual environment is created in the same diretory as `lib`.
 
+Python 3.3 or newer required.
 
 ## Installation
 There are 2 main ways to install this:
 - Download the binary from (fill in), and add it to a location on the system path.
 For example, place it under `/usr/bin` in linux, or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 - If you have `Rust` installed, the most convenient way is to 
-run `cargo install pypackages`.
+run `cargo install pypackage`.
 
 
 ## Use
-- Create the file `Python.toml` in your project directory
+- Create a `pyproject.toml` file in your project directory. See
+[PEP 518](https://www.python.org/dev/peps/pep-0518/) for details.
 
 Example contents:
 ```toml
-[Python]
-version = "3.7"
-
-[dependencies]
+[tool.pypackage.dependencies]
 numpy = "^1.16.4"
 django = "^2.0.0"
 ```
-- In a terminal, Run `pyprojects install` to install all dependencies in the `Python.toml`.
-- Run `pyprojects` followed by the command you wish in order to run that
-command inside the virtual environment. Eg `pyprojects python main.py`.
 
-Additional commands:
-- `pyprojects install numpy`: Install a specific package (`numpy` in this example), and add it to `Python.toml`.
-- `pyprojects uninstall numpy`. Uninstall a package, and remove it from `Python.toml`.
 
+## Example use
+
+Managing dependencies:
+- `pypackages install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified
+- `pypackages install toolz` - If you specify one or more packages after `install`, only those packages will be installed, 
+and will be added to `pyproject.toml`.
+- `pypackages install numpy==1.16.4 matplotlib>=3.1.` Example with multiple dependencies, and specified versions
+- `pypackages uninstall toolz` - Remove a dependency
+
+Running REPL and Python files in the environment:
+- `pypackages python` - Run a Python REPL
+- `pypackages ipython` - Run an IPython (AKA Jupyter) REPL
+- `pypackages python main.py` - Run a python file
+
+Building and publishing:
+- `pypackages package` - Package for distribution (uses setuptools internally, and 
+builds both source and binary if applicable.)
+- `pypackages publish` - Upload to PyPi (Rep specified in `pyproject.toml`. Uses `Twine` internally.)
+
+Misc:
+- `pypackages list` - Run `pip list` in the environment
 
 ## Why?
 
@@ -66,42 +83,62 @@ If [PEP 582](https://www.python.org/dev/peps/pep-0582/) is impelemented, this to
 will become obsolete, but this isn't likely to happen in the near future.
 
 
-## Why create another attempt at solving this?
-Pipenv and Poetry both address this problem directly. This project aims to keep
-dependencies in the project directory, both in `__pypackages__`, and a `.venv`
-folder, containing the virtual environment. It doesn't modify files outside
-your project directory. It aims to avoid needing to worry about selecting
-the correct Python interpreter to use, if multiple are installed.
+## Why add another attempt at solving this?
+Pipenv and Poetry both address this problem. Some reasons why I decided to make this Project:
+
+- This tool keeps dependencies in the project directory, in `__pypackages__`. It abstracts
+over the virtual environment, and doesn't modify files outside
+the project directory.
+
+- By not requiring Python to install or run, it maintains intallation-agnostic.
+This is especially important on Linux, where there may be several versions
+of Python installed, with different versions and access levels. This avoids
+complications which may arrise, especially for new users.
+
+- This automates the build and publish process, in addition to managing
+dependencies.
 
 
-## What this doesn't do (at least currently)
+## What this doesn't do currently
 
 - Lock dependencies
 - Check or resolve dependency conflicts
 
+## Building and uploading your project to PyPi.
+In order to build and publish your project, additional info is needed in
+`pyproject.toml`, that mimics what would be in `setup.py`. Example:
+```toml
+[tool.pypackage]
+name = "nicepackage"
+version = "0.1.0"
+author = "Fraa Erasmas"
+description = "Does things"
+homepage = "https://nicepackage.com"
+repository = "https://github.com/everythingkiller/nicepackage"
 
-## Why Rust over Python?
-We'd like to avoid the ambiguity of which Python version is executing commands
-from this tool by providing a standalone binary. Eg, as an executable
-python script, we may run into ambiguity over which python version is activating
-the environment and installing dependencies. (System Python 2? Python 3? A different
-version of Python 3? A user-installed Python? Super-user Python?) 
-
-A downside
-to this approach is that contributing to this project may be less accessible
-to its users.
+[tool.pypackage.dependencies]
+numpy = "^1.16.4"
+django = "^2.0.0"
+```
 
 
-## Why create a new config format?
-In the future, this tool may adopt or consolidate with
-[pyproject.toml](https://poetry.eustace.io/docs/pyproject/) or
-[Pipfile](https://github.com/pypa/pipfile), but we're starting
-with a custom config.
+## Building this from source                      
 
-`requirements.txt` doesn't include useful metadata, like the required Python version.
+If you’d like to build from source, [download and install Rust]( https://www.rust-lang.org/tools/install),
+clone the repo, and in the repo directory, run `cargo build –release`.
+
+Ie on Linux:
+
+```bash
+curl https://sh.rustup.rs -sSf | sh
+git clone https://github.com/david-oconnor/pypackages.git
+cd pypackages
+cargo build --release
+
+```
 
 
 ## Gotchas
-- Make sure the `pypackages` binary is accessible in your path. If installing
+- Make sure the `pypackage` binary is accessible in your path. If installing
 via `Cargo`, this should be set up automatically.
-- Make sure `__pypackages__` and `.venv` are in your `.gitignore` file.
+- Make sure `__pypackage__` and `.venv` are in your `.gitignore` file.
