@@ -2,12 +2,18 @@ use regex::Regex;
 use serde::Deserialize;
 use std::path::Prefix::Verbatim;
 use std::{
-    env, fs,
-    io::{BufRead, BufReader},
+    env,
+    error::Error,
+    fmt, fs,
+    io::{self, BufRead, BufReader},
     num, path,
+    process::Command,
     str::FromStr,
+    string::ParseError,
 };
 use structopt::StructOpt;
+//use textio;
+use std::collections::HashMap;
 use toml;
 
 mod build;
@@ -28,7 +34,7 @@ enum Arg {
 }
 
 impl FromStr for Arg {
-    type Err = num::ParseError; // todo not sure what to put here.
+    type Err = ParseError;
 
     fn from_str(arg: &str) -> Result<Self, Self::Err> {
         let result = match arg.to_string().to_lowercase().as_ref() {
@@ -57,11 +63,10 @@ enum Task {
     UninstallAll,
     Install(Vec<Package>),
     Uninstall(Vec<Package>),
-    Run(Option<String>), // ie run python, or a script
-    IPython(Option<String>),
+    Python(Vec<String>),
+    IPython(Vec<String>),
     Pip(Vec<String>), // If if we want pip list etc
     General(Vec<String>),
-
     Package,
     Publish,
 }
@@ -77,8 +82,9 @@ impl ToString for VersionType {
     fn to_string(&self) -> String {
         match self {
             VersionType::Exact => "==".into(),
+            // todo this isn't quite a valid mapping.
             VersionType::Carot => ">=".into(),
-            VersionType::Tilde => "<=".into(),
+            VersionType::Tilde => ">=".into(),
         }
     }
 }
@@ -114,7 +120,6 @@ impl FromStr for Version {
     type Err = num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // todo: This fn needs better garbage-in handling.
         let re = Regex::new(r"^(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?$").unwrap();
         let caps = re
             .captures(s)
@@ -164,58 +169,19 @@ impl Package {
     }
 }
 
-//impl FromStr for Package {
-//    type Err = num::ParseError;
-//
-//    fn from_str(s: &str) -> Result<Self, Self::Err> {
-//        // todo: Wildcard
-//        let re = Regex::new(r"^(\.*?)\s*=\s*(([\^\~]?)(\d{1,4})(?:\.(\d{1,4}))?(?:\.(\d{1,4}))?)?$").unwrap();
-//
-//
-//        let caps = re.captures(s)
-//            .expect(&format!("Problem parsing dependency: {}", s));
-//
-//        println!("CAPS: {:?}", caps);
-////
-////        let prefix = match caps.get(0) {
-////            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
-////            None => None,
-////        };
-////
-////        let major = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
-////
-////        let minor = match caps.get(2) {
-////            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
-////            None => None,
-////        };
-////
-////        let patch = match caps.get(3) {
-////            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
-////            None => None,
-////        };
-//
-//        let result = Self {
-//            name: "temp".to_string(),
-//            version: Some(Version::new(0, 1, 1)),
-//            version_type: VersionType::Exact,
-//        };
-//
-//        Ok(result)
-//    }
-//}
+impl FromStr for Package {
+    type Err = ParseError;
 
-/// // todo: You need 2 fns: One for TOML, one for Pip.
-impl From<String> for Package {
-    fn from(s: String) -> Self {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         // todo: Wildcard
         let re = Regex::new(
-            r#"^(.+?)(?:\s*=\s*"([\^\~]?)(\d{1,4})(?:\.(\d{1,4}))?(?:\.(\d{1,4})")?)?$"#,
+            r#"^(.+?)(?:\s*=\s*"([\^\~]?)(\d{1,4})(?:\.(\d{1,4}?))?(?:\.(\d{1,4})")?)?$"#,
         )
         .unwrap();
 
         let caps = re
-            .captures(&s)
-            .expect(&format!("Problem parsing dependency: {}. Skipping", &s));
+            .captures(s)
+            .expect(&format!("Problem parsing dependency: {}. Skipping", s));
 
         let name = caps.get(1).unwrap().as_str();
 
@@ -229,22 +195,44 @@ impl From<String> for Package {
             None => None,
         };
 
-        let minor = match caps.get(4) {
+        let mut minor = match caps.get(4) {
             Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
             None => None,
         };
 
-        let patch = match caps.get(5) {
+        let mut patch = match caps.get(5) {
             Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
             None => None,
         };
 
-        Self {
+        // If the version has 2 numbers, eg 4.3, the regex is picking up the second
+        // as patch and None for minor.
+        // todo: Ideally, fix the regex instead of using this workaround.
+        if let Some(p) = patch {
+            if minor.is_none() {
+                minor = Some(p);
+                patch = None;
+            }
+        }
+
+        // If no major, Version is None
+        let version = match major {
+            Some(ma) => Some(Version {
+                major: ma,
+                minor: minor.unwrap_or(0),
+                patch,
+            }),
+            None => None,
+        };
+
+        Ok(Self {
             name: name.to_string(),
-            version: Some(Version::new(0, 1, 1)),
+            version,
             version_type: match prefix {
                 Some(t) => {
-                    if t == "^" {
+                    if t.is_empty() {
+                        VersionType::Exact
+                    } else if t == "^" {
                         VersionType::Carot
                     } else {
                         VersionType::Tilde
@@ -252,9 +240,11 @@ impl From<String> for Package {
                 }
                 None => VersionType::Exact,
             },
-        }
+        })
     }
 }
+
+// todo: Another string parser to package, from pip fmt ie == / >=
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "basic")]
@@ -280,7 +270,7 @@ struct Config {
 }
 
 fn key_re(key: &str) -> Regex {
-    Regex::new(&format!(r"^{}\s*=\s*(.*)$", key)).unwrap()
+    Regex::new(&format!(r#"^{}\s*=\s*"(.*)"$"#, key)).unwrap()
 }
 
 impl Config {
@@ -295,45 +285,149 @@ impl Config {
 
         for line in BufReader::new(file).lines() {
             if let Ok(l) = line {
+                // todo replace this with something that clips off
+                // todo post-# part of strings; not just ignores ones starting with #
+                if l.starts_with('#') {
+                    continue;
+                }
+
                 if &l == "[tool.pypackage]" {
                     in_sect = true;
                     in_dep = false;
+                    continue;
                 } else if &l == "[tool.pypackage.dependencies]" {
                     in_sect = false;
                     in_dep = true;
+                    continue;
                 } else if sect_re.is_match(&l) {
                     in_sect = false;
                     in_dep = false;
+                    continue;
                 }
 
                 if in_sect {
-                    let name_cap = key_re("name").captures(&l);
-
-                    if let Some(n2) = name_cap {
+                    // todo DRY
+                    if let Some(n2) = key_re("name").captures(&l) {
                         if let Some(n) = n2.get(1) {
                             result.name = Some(n.as_str().to_string());
                         }
                     }
+                    if let Some(n2) = key_re("description").captures(&l) {
+                        if let Some(n) = n2.get(1) {
+                            result.description = Some(n.as_str().to_string());
+                        }
+                    }
+                //                    if let Some(n2) = key_re("version").captures(&l) {
+                //                        if let Some(n) = n2.get(1) {
+                //                            result.version = Some(Version::from_str(n.as_str()).unwrap());
+                //                        }
+                //                    }
                 } else if in_dep {
-//                    result.dependencies.push(l.into());
-                                        let temp: Package = l.into();
-                                        println!("PARSED: {:?}", temp);
+                    if !l.is_empty() {
+                        result.dependencies.push(Package::from_str(&l).unwrap());
+                    }
                 }
             }
         }
 
-        println!("cfg: {:?}", &result);
+        //        println!("cfg: {:?}", &result);
         result
     }
 }
 
-/// Make an educated guess at the command needed to execute python the
-/// current system.
-fn find_py_alias(config_ver: Option<Version>) -> String {
-    let mut guess = "python3";
-    let version_guess = commands::find_version(guess);
+/// Prompt which Python alias to use, if multiple are found.
+fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
+    // Todo: Overall, the API here is inelegant.
+    println!("Found multiple Python aliases. Please enter the number associated with the one you'd like to use for this project:");
+    for (i, (alias, version)) in aliases.iter().enumerate() {
+        println!("{}: {} version: {}", i, alias, version.to_string())
+    }
 
-    guess.to_string()
+    let mut mapping = HashMap::new();
+    for (i, alias) in aliases.iter().enumerate() {
+        mapping.insert(i, alias);
+    }
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Unable to read user input for version");
+
+    let input = input
+        .chars()
+        .next()
+        .expect("Problem reading input")
+        .to_string();
+
+    let (alias, version) = mapping
+        .get(
+            &input
+                .parse::<usize>()
+                .expect("Enter the number associated with the Python alias."),
+        )
+        .expect(
+            "Can't find the Python alias associated with that number. Is it in the list above?",
+        );
+    (alias.to_string(), version.clone())
+}
+
+#[derive(Debug)]
+struct AliasError {
+    details: String,
+}
+
+impl Error for AliasError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
+impl fmt::Display for AliasError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
+
+/// Make an educated guess at the command needed to execute python the
+/// current system.  An alternative approach is trying to find python
+/// installations.
+fn find_py_alias(config_ver: Option<Version>) -> Result<(String, Version), AliasError> {
+    let mut guess = "python3";
+    //    let version_guess = commands::find_version(guess);
+
+    // todo expand, and iterate over versions.
+    let possible_aliases = &[
+        "python3.8",
+        "python3.7",
+        "python3.6",
+        "python3.5",
+        "python3.4",
+        "python3.3",
+        "python3.2",
+        "python3.1",
+        "python3",
+        "python",
+        "python2",
+    ];
+
+    let mut found_aliases = Vec::new();
+
+    for alias in possible_aliases {
+        // We use the --version command as a quick+effective way to determine if
+        // this command is associated with Python.
+        match commands::find_py_version(alias) {
+            Some(v) => found_aliases.push((alias.to_string(), v)),
+            None => (),
+        }
+    }
+
+    match possible_aliases.len() {
+        0 => Err(AliasError {
+            details: "Can't find Python on the path.".into(),
+        }),
+        1 => Ok(found_aliases[0].clone()),
+        _ => Ok(prompt_alias(&found_aliases)),
+    }
 }
 
 fn venv_exists(venv_path: &path::PathBuf) -> bool {
@@ -362,7 +456,7 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                 for i2 in i + 1..args.len() {
                     let arg2 = &args[i2];
                     match arg2 {
-                        Arg::Other(name) => packages.push(name.to_string().into()),
+                        Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
                         _ => break,
                     }
                 }
@@ -378,7 +472,7 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                 for i2 in i + 1..args.len() {
                     let arg2 = &args[i2];
                     match arg2 {
-                        Arg::Other(name) => packages.push(name.to_string().into()),
+                        Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
                         _ => break,
                     }
                 }
@@ -389,28 +483,28 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                 }
             }
             Arg::Python => {
-                let mut script = None;
+                let mut args_ = vec![];
                 for i2 in i + 1..args.len() {
                     let arg2 = &args[i2];
-                    if let Arg::Other(filename) = arg2 {
-                        script = Some(filename.to_string());
+                    if let Arg::Other(a) = arg2 {
+                        args_.push(a.to_string());
                     }
-                    break; // todo: Consider how to handle more than one arg following `python`.
                 }
-                result.push(Task::Run(script));
+                result.push(Task::Python(args_));
             }
             Arg::IPython => {
                 // todo DRY
-                let mut script = None;
+                let mut args_ = vec![];
                 for i2 in i + 1..args.len() {
                     let arg2 = &args[i2];
-                    if let Arg::Other(filename) = arg2 {
-                        script = Some(filename.to_string());
+                    if let Arg::Other(a) = arg2 {
+                        args_.push(a.to_string());
                     }
                     break; // todo: Consider how to handle more than one arg following `python`.
                 }
-                result.push(Task::IPython(script));
+                result.push(Task::IPython(args_));
             }
+
             Arg::Pip => {
                 let mut args_ = vec![];
                 for i2 in i + 1..args.len() {
@@ -418,10 +512,15 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                     if let Arg::Other(arg) = arg2 {
                         args_.push(arg.to_string());
                     }
-                    break; // todo: Consider how to handle more than one arg following `python`.
+                    // List can be used directly as an arg, or passed to pip normally; handle
+                    // the latter case here.
+                    if let Arg::List = arg2 {
+                        args_.push("list".to_string());
+                    }
                 }
                 result.push(Task::Pip(args_));
             }
+
             Arg::List => {
                 // todo
 
@@ -461,7 +560,7 @@ fn remove_dependencies(dependencies: &[Package]) {
 fn main() {
     let opt = Opt::from_args();
     let cfg = Config::from_file("pyproject.toml");
-    let py_alias = find_py_alias(cfg.py_version);
+
     let project_dir = env::current_dir().expect("Can't find current path");
 
     let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
@@ -472,8 +571,16 @@ fn main() {
     let venv_path = project_dir.join(venv_name);
 
     if !venv_exists(&venv_path) {
-        // todo version
-        commands::create_venv(&py_alias, "__pypackages__/3.7", ".venv");
+        // We only use the alias for creating the virtual environment. After that,
+        // we call our venv's executable directly.
+        let alias = find_py_alias(cfg.py_version);
+        // todo version QC
+        match alias {
+            Ok((alias, py_version)) => {
+                commands::create_venv(&alias, "__pypackages__/3.7", ".venv", py_version);
+            }
+            Err(e) => panic!(e),
+        }
     }
 
     for task in find_tasks(&opt.args).iter() {
@@ -492,7 +599,7 @@ fn main() {
             Task::UninstallAll => {
                 commands::install(&venv_name, &cfg.dependencies, true);
             }
-            Task::Run(script) => commands::run_python(&venv_name, script, false),
+            Task::Python(script) => commands::run_python(&venv_name, script, false),
             Task::IPython(script) => {
                 let mut ipython_installed = false;
                 for package in &cfg.dependencies {
@@ -515,7 +622,6 @@ fn main() {
                 commands::run_python(&venv_name, script, true)
             }
             Task::Pip(args) => commands::run_pip(&venv_name, args),
-
             Task::Package => build::build(&venv_name, &cfg),
             Task::Publish => build::publish(&venv_name, &cfg),
 
@@ -531,20 +637,20 @@ pub mod tests {
     #[test]
     fn tasks_python() {
         let args = vec![Arg::Python];
-        assert_eq!(vec![Task::Run(None)], find_tasks(&args));
+        assert_eq!(vec![Task::Python(None)], find_tasks(&args));
     }
 
     #[test]
     fn tasks_python_with_script() {
         let script = "main.py".to_string();
         let args = vec![Arg::Python, Arg::Other(script.clone())];
-        assert_eq!(vec![Task::Run(Some(script))], find_tasks(&args));
+        assert_eq!(vec![Task::Python(Some(script))], find_tasks(&args));
     }
 
     #[test]
     fn tasks_ipython() {
-        //        let args = vec![Arg::Python];
-        //        assert_eq!(Task::Run(None), find_tasks(&args));
+        let args = vec![Arg::IPython];
+        assert_eq!(vec![Task::IPython(None)], find_tasks(&args));
     }
 
     #[test]
@@ -644,6 +750,12 @@ pub mod tests {
     }
 
     #[test]
+    fn tasks_pip() {
+        let args = vec![Arg::Pip, Arg::Other("list".into())];
+        assert_eq!(vec![Task::Pip(vec!["list".into()])], find_tasks(&args));
+    }
+
+    #[test]
     fn tasks_general() {
         let name1 = "pip".to_string();
         let name2 = "list".to_string();
@@ -655,7 +767,7 @@ pub mod tests {
     // todo: Versioned tasks.
 
     #[test]
-    fn valid_py_version() {
+    fn valid_version() {
         assert_eq!(
             Version::from_str("3.7").unwrap(),
             Version {
@@ -665,11 +777,64 @@ pub mod tests {
             }
         );
         assert_eq!(Version::from_str("3.12.5").unwrap(), Version::new(3, 12, 5));
+        assert_eq!(Version::from_str("0.1.0").unwrap(), Version::new(0, 1, 0));
     }
 
     #[test]
     #[should_panic(expected = "Problem parsing version: 3-7")]
-    fn bad_py_version() {
+    fn bad_version() {
         Version::from_str("3-7").unwrap();
+    }
+
+    #[test]
+    fn parse_package_novers() {
+        let p = Package::from_str("saturn").unwrap();
+        assert_eq!(
+            p,
+            Package {
+                name: "saturn".into(),
+                version: None,
+                version_type: VersionType::Exact,
+            }
+        )
+    }
+
+    #[test]
+    fn parse_package_withvers() {
+        let p = Package::from_str("bolt = \"3.1.4\"").unwrap();
+        assert_eq!(
+            p,
+            Package {
+                name: "bolt".into(),
+                version: Some(Version::new(3, 1, 4)),
+                version_type: VersionType::Exact,
+            }
+        )
+    }
+
+    #[test]
+    fn parse_package_carot() {
+        let p = Package::from_str("chord = \"^2.7.18\"").unwrap();
+        assert_eq!(
+            p,
+            Package {
+                name: "chord".into(),
+                version: Some(Version::new(2, 7, 18)),
+                version_type: VersionType::Carot,
+            }
+        )
+    }
+
+    #[test]
+    fn parse_package_tilde_short() {
+        let p = Package::from_str("sphere = \"~6.7\"").unwrap();
+        assert_eq!(
+            p,
+            Package {
+                name: "sphere".into(),
+                version: Some(Version::new_short(6, 7)),
+                version_type: VersionType::Tilde,
+            }
+        )
     }
 }

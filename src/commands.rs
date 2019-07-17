@@ -1,30 +1,70 @@
 use regex::Regex;
-use std::{env, process::Command};
+use std::{env, fs, path, process::Command, string::ParseError};
 
-/// Find the py_version from the `python --py_version` command. Eg: "Python 3.7".
-pub(crate) fn find_version(alias: &str) -> crate::Version {
-    Command::new(alias)
-        .args(&["--version"])
-        .output()
-        .expect("Problem finding python py_version");
-
-    // todo fix with regex
-    crate::Version::new(3, 7, 1) // todo
+/// Sets the `PYTHONPATH` environment variable, causing Python to look for
+/// dependencies in `__pypackages__`,
+fn set_pythonpath() {
+    env::set_var(
+        "PYTHONPATH",
+        env::current_dir()
+            .expect("Problem finding current directory")
+            .join("__pypackages__/3.7/lib") // todo version hack
+            .to_str()
+            .expect("Problem converting current path to string"),
+    );
 }
 
-/// Create the virtual env. Assume we're running Python 3.3+, where venv is included.
-pub(crate) fn create_venv(py_alias: &str, directory: &str, name: &str) {
+/// Find the py_version from the `python --py_version` command. Eg: "Python 3.7".
+pub(crate) fn find_py_version(alias: &str) -> Option<crate::Version> {
+    let output = Command::new(alias).arg("--version").output();
+
+    let mut output_bytes = vec![];
+    match output {
+        Ok(ob) => output_bytes = ob.stdout,
+        Err(_) => return None,
+    }
+
+    if let Ok(version) = std::str::from_utf8(&output_bytes) {
+        let re = Regex::new(r"Python\s+(\d{1,4})\.(\d{1,4})\.(\d{1,4})").unwrap();
+
+        println!("\nTEST: {:?}\n", alias);
+        println!("\nTEST1.5: {:?}\n", version);
+
+        match re.captures(version) {
+            Some(caps) => {
+                let major = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
+                let minor = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
+                let patch = caps.get(3).unwrap().as_str().parse::<u32>().unwrap();
+                Some(crate::Version::new(major, minor, patch))
+            }
+            None => None,
+        }
+    } else {
+        None
+    }
+}
+
+/// Create the virtual env. Assume we're running Python 3.3+, where `venv` is included.
+/// Additionally, create the __pypackages__ directory if not already created.
+pub(crate) fn create_venv(py_alias: &str, directory: &str, name: &str, py_version: crate::Version) {
+    let lib_path = &format!(
+        "__pypackages__/{}.{}/lib",
+        py_version.major, py_version.minor
+    );
+    if !path::PathBuf::from(lib_path).exists() {
+        fs::create_dir_all(lib_path).expect("Problem creating __pypackages__ directory");
+    }
+
     Command::new(py_alias)
         .args(&["-m", "venv", name])
-        // todo fix this!
         .current_dir(directory)
         .spawn()
         .expect("Problem creating the virtual environment");
 }
 
 pub(crate) fn install(venv_name: &str, packages: &[crate::Package], uninstall: bool) {
-    // We don't need an alias from the venv's bin directory; should
-    // always be `python` or `pip`.
+    // We don't need an alias from the venv's bin directory; we call the
+    // executble directly.
     let install = if uninstall { "uninstall" } else { "install" };
 
     // todo: this path setup may be linux specific. Make it more generic.
@@ -45,44 +85,27 @@ pub(crate) fn install(venv_name: &str, packages: &[crate::Package], uninstall: b
     }
 }
 
-pub(crate) fn run_python(venv_name: &str, script: &Option<String>, ipython: bool) {
+pub(crate) fn run_python(venv_name: &str, args: &[String], ipython: bool) {
     // todo: this path setup may be linux specific. Make it more generic.
     let name = if ipython { "ipython" } else { "python" };
     let venv = format!("{}/bin", venv_name);
+    set_pythonpath();
 
-    env::set_var(
-        "PYTHONPATH",
-        env::current_dir()
-            .expect("Problem finding current directory")
-            .join("__pypackages__/3.7/lib") // todo version hack
-            .to_str()
-            .expect("Problem converting current path to string"),
-    );
-
-    match script {
-        Some(filename) => {
-            Command::new("./".to_string() + name)
-                .current_dir(venv)
-                .arg(filename)
-                .status()
-                .unwrap_or_else(|_| panic!("Problem running Python with {}", filename));
-        }
-        None => {
-            Command::new("./".to_string() + name)
-                .current_dir(venv)
-                .status()
-                .expect("Problem running Python");
-        }
-    }
+    Command::new("./".to_string() + name)
+        .current_dir(venv)
+        .args(args)
+        .status()
+        .expect("Problem running Python");
 }
 
 //// todo consolidate this (and others) with run python or run_general?
 pub(crate) fn run_pip(venv_name: &str, args: &[String]) {
     // todo: this path setup may be linux specific. Make it more generic.
-    Command::new("./pip")
+    set_pythonpath();
+
+    Command::new("./python")
         .current_dir(&format!("{}/bin", venv_name))
-        .arg("--target")
-        .arg("../lib")
+        .args(&["-m", "pip"])
         .args(args)
         .status()
         .expect("Problem running Pip");
