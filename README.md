@@ -7,6 +7,9 @@ activating, modifying, and using virtual environments. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
 The virtual environment is created in the same diretory as `lib`.
 
+This is a new project undergoing active development: expect breaking changes
+in the near future. 
+
 Python 3.3 or newer required.
 
 ## Installation
@@ -106,8 +109,6 @@ dependencies.
 
 
 ## What this doesn't do currently
-
-- Lock dependencies
 - Check or resolve dependency conflicts
 
 ## Building and uploading your project to PyPi.
@@ -128,7 +129,6 @@ django = "2.0.0"
 ```
 
 ## Building this from source                      
-
 If you’d like to build from source, [download and install Rust]( https://www.rust-lang.org/tools/install),
 clone the repo, and in the repo directory, run `cargo build –release`.
 
@@ -141,6 +141,10 @@ cd pypackages
 cargo build --release
 
 ```
+
+## Contributing
+If you notice unexpected behavior or missing features, please post an issue,
+or submit a PR.
 
 
 ## Gotchas

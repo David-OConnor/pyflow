@@ -1,13 +1,11 @@
 use regex::Regex;
-use serde::Deserialize;
-use std::path::Prefix::Verbatim;
+use serde::{Deserialize, Serialize};
 use std::{
     env,
     error::Error,
     fmt, fs,
     io::{self, BufRead, BufReader},
     num, path,
-    process::Command,
     str::FromStr,
     string::ParseError,
 };
@@ -66,7 +64,7 @@ enum Task {
     Python(Vec<String>),
     IPython(Vec<String>),
     Pip(Vec<String>), // If if we want pip list etc
-    General(Vec<String>),
+//    General(Vec<String>),
     Package,
     Publish,
 }
@@ -85,6 +83,16 @@ impl ToString for VersionType {
             // todo this isn't quite a valid mapping.
             VersionType::Carot => ">=".into(),
             VersionType::Tilde => ">=".into(),
+        }
+    }
+}
+
+impl VersionType {
+    pub fn toml_string(&self) -> String {
+        match self {
+            VersionType::Exact => "".into(),
+            VersionType::Carot => "^".into(),
+            VersionType::Tilde => "~".into(),
         }
     }
 }
@@ -159,11 +167,25 @@ struct Package {
 }
 
 impl Package {
+    /// eg `saturn>=0.3.1`
     pub fn name_with_version(&self) -> String {
         match self.version {
             Some(version) => {
                 self.name.clone() + &self.version_type.to_string() + &version.to_string()
             }
+            None => self.name.clone(),
+        }
+    }
+
+    /// eg `saturn = "^0.3.1"`
+    pub fn toml_string(&self) -> String {
+        match self.version {
+            Some(version) => format!(
+                "{} = \"{}{}\"",
+                self.name.clone(),
+                self.version_type.toml_string(),
+                version.to_string()
+            ),
             None => self.name.clone(),
         }
     }
@@ -274,9 +296,11 @@ fn key_re(key: &str) -> Regex {
 }
 
 impl Config {
-    pub fn from_file(file_name: &str) -> Self {
+    /// Pull config data from Cargo.toml
+    pub fn from_file(filename: &str) -> Self {
+        // We don't use the `toml` crate here because it doesn't appear flexible enough.
         let mut result = Config::default();
-        let file = fs::File::open(file_name).expect("cannot open pyproject.toml");
+        let file = fs::File::open(filename).expect("cannot open pyproject.toml");
 
         let mut in_sect = false;
         let mut in_dep = false;
@@ -392,11 +416,9 @@ impl fmt::Display for AliasError {
 /// current system.  An alternative approach is trying to find python
 /// installations.
 fn find_py_alias(config_ver: Option<Version>) -> Result<(String, Version), AliasError> {
-    let mut guess = "python3";
-    //    let version_guess = commands::find_version(guess);
-
     // todo expand, and iterate over versions.
     let possible_aliases = &[
+        "python3.9",
         "python3.8",
         "python3.7",
         "python3.6",
@@ -431,6 +453,7 @@ fn find_py_alias(config_ver: Option<Version>) -> Result<(String, Version), Alias
 }
 
 fn venv_exists(venv_path: &path::PathBuf) -> bool {
+    // todo make this more robust
     venv_path.exists()
 }
 
@@ -440,6 +463,31 @@ fn find_sub_dependencies(package: Package) -> Vec<Package> {
     vec![]
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct LockPackage {
+    // todo: merge with Package?
+    name: Option<String>,
+    version: Option<String>,  // todo serialize Version?
+    source: Option<String>,
+    dependencies: Option<String>, // todo serialize Package or Self?
+}
+
+/// Modelled after [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct Lock {
+    packages: Option<Vec<LockPackage>>,
+    metadata: Option<String>,  // todo unimplemented
+}
+
+/// Write dependency data to a lock file.
+fn write_lock(filename: &str, data: &Lock) -> Result<(), Error>{
+    let toml = toml::to_string(data)?;
+    fs::write(filename, toml)?;
+
+    Ok(())
+}
+
+/// Categorize CLI arguments.
 fn find_tasks(args: &[Arg]) -> Vec<Task> {
     // We want to match args as appropriate. Ie, `python main.py`, and
     // `pip install django requests` are parsed as separate args,
@@ -534,32 +582,64 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
 }
 
 /// Write dependencies to pyproject.toml
-fn add_dependencies(dependencies: &[Package]) {
-    let data = fs::read_to_string("pyproject.toml")
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+fn add_dependencies(filename: &str, dependencies: &[Package]) {
+//        let data = fs::read_to_string("pyproject.toml")
+//            .expect("Unable to read pyproject.toml while attempting to add a dependency");
+    let file = fs::File::open(filename).expect("cannot open pyproject.toml");
 
-    // todo
-    let new_data = data;
+    let mut in_dep = false;
 
-    fs::write("pyproject.toml", new_data)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+    let sect_re = Regex::new(r"\[.*\]").unwrap();
+
+    let result = String::new();
+
+    for line in BufReader::new(file).lines() {
+//    for line in data.lines() {
+        if let Ok(l) = line {
+            // todo replace this with something that clips off
+            // todo post-# part of strings; not just ignores ones starting with #
+            if l.starts_with('#') {
+                continue;
+            }
+
+            if &l == "[tool.pypackage.dependencies]" {
+                in_dep = true;
+                continue;
+            } else if sect_re.is_match(&l) {
+                in_dep = false;
+                continue;
+            }
+
+            if in_dep {
+
+            }
+        }
+    }
+
+//    let new_data = data;
+
+//    fs::write("pyproject.toml", new_data)
+//        .expect("Unable to read pyproject.toml while attempting to add a dependency");
 }
 
 /// Remove dependencies from pyproject.toml
-fn remove_dependencies(dependencies: &[Package]) {
+fn remove_dependencies(filename: &str, dependencies: &[Package]) {
     let data = fs::read_to_string("pyproject.toml")
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 
     // todo
     let new_data = data;
 
-    fs::write("pyproject.toml", new_data)
+    fs::write(filename, new_data)
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 }
 
 fn main() {
+    let cfg_filename = "pyproject.toml";
+    let lock_filename ="pypackage.lock";
+
     let opt = Opt::from_args();
-    let cfg = Config::from_file("pyproject.toml");
+    let cfg = Config::from_file(cfg_filename);
 
     let project_dir = env::current_dir().expect("Can't find current path");
 
@@ -587,20 +667,24 @@ fn main() {
         match task {
             Task::Install(packages) => {
                 commands::install(&venv_name, packages, false);
-                add_dependencies(packages);
+                add_dependencies(cfg_filename,packages);
+                write_lock(lock_filename, lock);
             }
             Task::InstallAll => {
                 commands::install(&venv_name, &cfg.dependencies, false);
+                write_lock(lock_filename, lock);
             }
             Task::Uninstall(packages) => {
                 commands::install(&venv_name, packages, true);
-                remove_dependencies(packages);
+                remove_dependencies(cfg_filename, packages);
+                write_lock(lock_filename, lock);
             }
             Task::UninstallAll => {
                 commands::install(&venv_name, &cfg.dependencies, true);
+                write_lock(lock_filename, &Lock::default());
             }
-            Task::Python(script) => commands::run_python(&venv_name, script, false),
-            Task::IPython(script) => {
+            Task::Python(args) => commands::run_python(&venv_name, args, false),
+            Task::IPython(args) => {
                 let mut ipython_installed = false;
                 for package in &cfg.dependencies {
                     if &package.name == "ipython" {
@@ -619,13 +703,13 @@ fn main() {
                         false,
                     );
                 }
-                commands::run_python(&venv_name, script, true)
+                commands::run_python(&venv_name, args, true)
             }
             Task::Pip(args) => commands::run_pip(&venv_name, args),
             Task::Package => build::build(&venv_name, &cfg),
             Task::Publish => build::publish(&venv_name, &cfg),
 
-            Task::General(args) => (),
+//            Task::General(args) => (),
         }
     }
 }
@@ -644,7 +728,7 @@ pub mod tests {
     fn tasks_python_with_script() {
         let script = "main.py".to_string();
         let args = vec![Arg::Python, Arg::Other(script.clone())];
-        assert_eq!(vec![Task::Python(Some(script))], find_tasks(&args));
+        assert_eq!(vec![Task::Python(vec![script])], find_tasks(&args));
     }
 
     #[test]
@@ -755,13 +839,13 @@ pub mod tests {
         assert_eq!(vec![Task::Pip(vec!["list".into()])], find_tasks(&args));
     }
 
-    #[test]
-    fn tasks_general() {
-        let name1 = "pip".to_string();
-        let name2 = "list".to_string();
-        let args = vec![Arg::Other(name1.clone()), Arg::Other(name2.clone())];
-        assert_eq!(vec![Task::General(vec![name1, name2])], find_tasks(&args));
-    }
+//    #[test]
+//    fn tasks_general() {
+//        let name1 = "pip".to_string();
+//        let name2 = "list".to_string();
+//        let args = vec![Arg::Other(name1.clone()), Arg::Other(name2.clone())];
+//        assert_eq!(vec![Task::General(vec![name1, name2])], find_tasks(&args));
+//    }
 
     // todo: Invalid or non-standard task arg combos for tasks
     // todo: Versioned tasks.

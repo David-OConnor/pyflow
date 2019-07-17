@@ -1,5 +1,5 @@
 use regex::Regex;
-use std::{env, fs, path, process::Command, string::ParseError};
+use std::{env, fs, path, process::Command};
 
 /// Sets the `PYTHONPATH` environment variable, causing Python to look for
 /// dependencies in `__pypackages__`,
@@ -27,8 +27,9 @@ pub(crate) fn find_py_version(alias: &str) -> Option<crate::Version> {
     if let Ok(version) = std::str::from_utf8(&output_bytes) {
         let re = Regex::new(r"Python\s+(\d{1,4})\.(\d{1,4})\.(\d{1,4})").unwrap();
 
-        println!("\nTEST: {:?}\n", alias);
-        println!("\nTEST1.5: {:?}\n", version);
+        //        println!("\nTEST: {:?}\n", alias);
+        //        println!("\nTEST1.5: {:?}\n", version);
+        // todo: Not working properly; ie able to find python 3.7 and 3, but not python2 and python2.
 
         match re.captures(version) {
             Some(caps) => {
