@@ -40,24 +40,26 @@ For details on how to specify dependencies in this `Cargo.toml`-inspired
 ## Example use
 
 Managing dependencies:
-- `pypackages install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified
-- `pypackages install toolz` - If you specify one or more packages after `install`, only those packages will be installed, 
+- `pypackage install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified
+- `pypackage install toolz` - If you specify one or more packages after `install`, only those packages will be installed, 
 and will be added to `pyproject.toml`.
-- `pypackages install numpy==1.16.4 matplotlib>=3.1.` - Example with multiple dependencies, and specified versions
-- `pypackages uninstall toolz` - Remove a dependency
+- `pypackage install numpy==1.16.4 matplotlib>=3.1.` - Example with multiple dependencies, and specified versions
+- `pypackage uninstall toolz` - Remove a dependency
 
 Running REPL and Python files in the environment:
-- `pypackages python` - Run a Python REPL
-- `pypackages ipython` - Run an IPython (AKA Jupyter) REPL
-- `pypackages python main.py` - Run a python file
+- `pypackage python` - Run a Python REPL
+- `pypackage ipython` - Run an IPython (AKA Jupyter) REPL
+- `pypackage python main.py` - Run a python file
 
 Building and publishing:
-- `pypackages package` - Package for distribution (uses setuptools internally, and 
+- `pypackage package` - Package for distribution (uses setuptools internally, and 
 builds both source and binary if applicable.)
-- `pypackages publish` - Upload to PyPi (Rep specified in `pyproject.toml`. Uses `Twine` internally.)
+- `pypackage publish` - Upload to PyPi (Rep specified in `pyproject.toml`. Uses `Twine` internally.)
 
 Misc:
-- `pypackages list` - Run `pip list` in the environment
+- `pypackage new projname` - Create a directory containing the basics for
+a project: a readme, pyproject.toml, and directory for source code.
+- `pypackage list` - Run `pip list` in the environment
 
 ## Why?
 
@@ -136,8 +138,8 @@ Ie on Linux:
 
 ```bash
 curl https://sh.rustup.rs -sSf | sh
-git clone https://github.com/david-oconnor/pypackages.git
-cd pypackages
+git clone https://github.com/david-oconnor/pypackage.git
+cd pypackage
 cargo build --release
 
 ```
@@ -150,4 +152,4 @@ or submit a PR.
 ## Gotchas
 - Make sure the `pypackage` binary is accessible in your path. If installing
 via `Cargo`, this should be set up automatically.
-- Make sure `__pypackage__` and `.venv` are in your `.gitignore` file.
+- Make sure `__pypackages__` and `.venv` are in your `.gitignore` file.

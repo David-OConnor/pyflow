@@ -77,7 +77,7 @@ pub(crate) fn install(venv_name: &str, packages: &[crate::Package], uninstall: b
                 "-m",
                 "pip",
                 install,
-                &package.name_with_version(),
+                &package.to_pip_string(),
                 "--target",
                 "../../lib",
             ])
