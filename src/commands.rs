@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::error::Error;
 use std::{env, fs, path, process::Command};
 
 /// Sets the `PYTHONPATH` environment variable, causing Python to look for
@@ -47,7 +48,12 @@ pub(crate) fn find_py_version(alias: &str) -> Option<crate::Version> {
 
 /// Create the virtual env. Assume we're running Python 3.3+, where `venv` is included.
 /// Additionally, create the __pypackages__ directory if not already created.
-pub(crate) fn create_venv(py_alias: &str, directory: &str, name: &str, py_version: crate::Version) {
+pub(crate) fn create_venv(
+    py_alias: &str,
+    directory: &str,
+    name: &str,
+    py_version: crate::Version,
+) -> Result<(), Box<Error>> {
     let lib_path = &format!(
         "__pypackages__/{}.{}/lib",
         py_version.major, py_version.minor
@@ -59,11 +65,16 @@ pub(crate) fn create_venv(py_alias: &str, directory: &str, name: &str, py_versio
     Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(directory)
-        .spawn()
-        .expect("Problem creating the virtual environment");
+        .spawn()?;
+
+    Ok(())
 }
 
-pub(crate) fn install(venv_name: &str, packages: &[crate::Package], uninstall: bool) {
+pub(crate) fn install(
+    venv_name: &str,
+    packages: &[crate::Package],
+    uninstall: bool,
+) -> Result<(), Box<Error>> {
     // We don't need an alias from the venv's bin directory; we call the
     // executble directly.
     let install = if uninstall { "uninstall" } else { "install" };
@@ -81,9 +92,10 @@ pub(crate) fn install(venv_name: &str, packages: &[crate::Package], uninstall: b
                 "--target",
                 "../../lib",
             ])
-            .status()
-            .unwrap_or_else(|_| panic!("Problem {}ing these packages: {:#?}", install, packages));
+            .status()?;
     }
+
+    Ok(())
 }
 
 pub(crate) fn run_python(venv_name: &str, args: &[String], ipython: bool) {

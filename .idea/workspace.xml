@@ -24,27 +24,27 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/main.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="92">
-              <caret line="382" column="12" lean-forward="true" selection-start-line="382" selection-start-column="12" selection-end-line="382" selection-end-column="12" />
+            <state relative-caret-position="91">
+              <caret line="564" column="33" lean-forward="true" selection-start-line="564" selection-start-column="33" selection-end-line="564" selection-end-column="33" />
               <folding>
-                <element signature="e#7682#7683#0" expanded="true" />
-                <element signature="e#7747#7748#0" expanded="true" />
-                <element signature="e#12729#12730#0" expanded="true" />
-                <element signature="e#12757#12758#0" expanded="true" />
-                <element signature="e#12858#12859#0" expanded="true" />
-                <element signature="e#12902#12903#0" expanded="true" />
-                <element signature="e#28111#28112#0" expanded="true" />
-                <element signature="e#28160#28161#0" expanded="true" />
+                <element signature="e#8367#8368#0" expanded="true" />
+                <element signature="e#8432#8433#0" expanded="true" />
+                <element signature="e#13384#13385#0" expanded="true" />
+                <element signature="e#13412#13413#0" expanded="true" />
+                <element signature="e#13513#13514#0" expanded="true" />
+                <element signature="e#13557#13558#0" expanded="true" />
+                <element signature="e#31226#31227#0" expanded="true" />
+                <element signature="e#31275#31276#0" expanded="true" />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/Cargo.lock">
+        <entry file="file://$PROJECT_DIR$/pypackage.lock">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="445">
-              <caret line="163" column="78" selection-start-line="163" selection-start-column="78" selection-end-line="163" selection-end-column="78" />
+            <state relative-caret-position="72">
+              <caret line="4" selection-start-line="4" selection-end-line="4" />
             </state>
           </provider>
         </entry>
@@ -52,8 +52,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/commands.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="252">
-              <caret line="27" column="27" selection-start-line="27" selection-start-column="27" selection-end-line="27" selection-end-column="27" />
+            <state relative-caret-position="173">
+              <caret line="93" column="14" selection-start-line="93" selection-start-column="14" selection-end-line="93" selection-end-column="14" />
             </state>
           </provider>
         </entry>
@@ -70,17 +70,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/pyproject.toml">
           <provider selected="true" editor-type-id="text-editor">
-            <state>
-              <caret selection-end-line="11" selection-end-column="17" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/Cargo.toml">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="234">
-              <caret line="13" column="15" selection-start-line="13" selection-start-column="15" selection-end-line="13" selection-end-column="15" />
+            <state relative-caret-position="126">
+              <caret line="7" selection-start-line="7" selection-end-line="7" />
             </state>
           </provider>
         </entry>
@@ -89,8 +80,8 @@
         <entry file="file://$PROJECT_DIR$/README.md">
           <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
             <state split_layout="SPLIT">
-              <first_editor relative-caret-position="1080">
-                <caret line="60" column="67" selection-start-line="60" selection-start-column="67" selection-end-line="60" selection-end-column="67" />
+              <first_editor relative-caret-position="140">
+                <caret line="96" column="32" selection-start-line="96" selection-start-column="32" selection-end-line="96" selection-end-column="32" />
               </first_editor>
               <second_editor />
             </state>
@@ -108,24 +99,11 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>installing these</find>
-      <find>problem ins</find>
-      <find>__pypack</find>
-      <find>create_env</find>
-      <find>.exist</find>
-      <find>ipython</find>
-      <find>toml</find>
-      <find>file_name</find>
-      <find>filename</find>
-      <find>struct pa</find>
-      <find>struct pack</find>
-      <find>toml_st</find>
       <find>fs::</find>
       <find>deserial</find>
       <find>create_d</find>
       <find>write_to</find>
       <find>pyproject.</find>
-      <find>write_lo</find>
       <find>general</find>
       <find>fn write</find>
       <find>__pypackage__</find>
@@ -138,6 +116,19 @@
       <find>::new</find>
       <find>arg::new</find>
       <find>fn new</find>
+      <find>problem install</find>
+      <find>these pack</find>
+      <find>create_ven</find>
+      <find>problem</find>
+      <find>deserializer</find>
+      <find>struct exa</find>
+      <find>write_l</find>
+      <find>write_</find>
+      <find>impl tos</find>
+      <find>write_lo</find>
+      <find>println</find>
+      <find>add_pack</find>
+      <find>.unwrap</find>
     </findStrings>
     <replaceStrings>
       <replace>pypackage</replace>
@@ -161,6 +152,7 @@
         <option value="$PROJECT_DIR$/Cargo.toml" />
         <option value="$PROJECT_DIR$/README.md" />
         <option value="$PROJECT_DIR$/src/commands.rs" />
+        <option value="$PROJECT_DIR$/pypackage.lock" />
         <option value="$PROJECT_DIR$/src/main.rs" />
       </list>
     </option>
@@ -169,9 +161,9 @@
     <option name="directoryName" value="XQqpFPMC" />
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="717" />
-    <option name="y" value="43" />
-    <option name="width" value="1103" />
+    <option name="x" value="735" />
+    <option name="y" value="41" />
+    <option name="width" value="1159" />
     <option name="height" value="989" />
   </component>
   <component name="ProjectView">
@@ -249,13 +241,13 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="68222000" />
+    <option name="totallyTimeSpent" value="77090000" />
   </component>
   <component name="ToolWindowManager">
-    <frame x="717" y="43" width="1103" height="989" extended-state="0" />
+    <frame x="735" y="41" width="1159" height="989" extended-state="0" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.18164617" />
+      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.17250673" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
@@ -269,7 +261,7 @@
       <window_info anchor="bottom" id="Version Control" order="8" />
       <window_info anchor="bottom" id="Database Changes" order="9" />
       <window_info anchor="bottom" id="Event Log" order="10" side_tool="true" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="11" visible="true" weight="0.4302462" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="11" visible="true" weight="0.45720986" />
       <window_info anchor="bottom" id="Python Console" order="12" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
@@ -305,20 +297,34 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/pyproject.toml">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <caret selection-end-line="11" selection-end-column="17" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/README.md">
       <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
         <state split_layout="SPLIT">
-          <first_editor relative-caret-position="1080">
-            <caret line="60" column="67" selection-start-line="60" selection-start-column="67" selection-end-line="60" selection-end-column="67" />
+          <first_editor relative-caret-position="140">
+            <caret line="96" column="32" selection-start-line="96" selection-start-column="32" selection-end-line="96" selection-end-column="32" />
           </first_editor>
           <second_editor />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.cargo/registry/src/github.com-1ecc6299db9ec823/serde-1.0.94/src/ser/mod.rs">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="163">
+          <caret line="322" column="10" selection-start-line="322" selection-start-column="10" selection-end-line="322" selection-end-column="10" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/.cargo/registry/src/github.com-1ecc6299db9ec823/serde-1.0.94/src/de/mod.rs">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="163">
+          <caret line="892" column="10" selection-start-line="892" selection-start-column="10" selection-end-line="892" selection-end-column="10" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/pyproject.toml">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="126">
+          <caret line="7" selection-start-line="7" selection-end-line="7" />
         </state>
       </provider>
     </entry>
@@ -331,31 +337,38 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/Cargo.lock">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="445">
-          <caret line="163" column="78" selection-start-line="163" selection-start-column="78" selection-end-line="163" selection-end-column="78" />
+        <state relative-caret-position="189">
+          <caret line="158" selection-start-line="158" selection-end-line="166" selection-end-column="1" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/commands.rs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="252">
-          <caret line="27" column="27" selection-start-line="27" selection-start-column="27" selection-end-line="27" selection-end-column="27" />
+        <state relative-caret-position="173">
+          <caret line="93" column="14" selection-start-line="93" selection-start-column="14" selection-end-line="93" selection-end-column="14" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/pypackage.lock">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="72">
+          <caret line="4" selection-start-line="4" selection-end-line="4" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/main.rs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="92">
-          <caret line="382" column="12" lean-forward="true" selection-start-line="382" selection-start-column="12" selection-end-line="382" selection-end-column="12" />
+        <state relative-caret-position="91">
+          <caret line="564" column="33" lean-forward="true" selection-start-line="564" selection-start-column="33" selection-end-line="564" selection-end-column="33" />
           <folding>
-            <element signature="e#7682#7683#0" expanded="true" />
-            <element signature="e#7747#7748#0" expanded="true" />
-            <element signature="e#12729#12730#0" expanded="true" />
-            <element signature="e#12757#12758#0" expanded="true" />
-            <element signature="e#12858#12859#0" expanded="true" />
-            <element signature="e#12902#12903#0" expanded="true" />
-            <element signature="e#28111#28112#0" expanded="true" />
-            <element signature="e#28160#28161#0" expanded="true" />
+            <element signature="e#8367#8368#0" expanded="true" />
+            <element signature="e#8432#8433#0" expanded="true" />
+            <element signature="e#13384#13385#0" expanded="true" />
+            <element signature="e#13412#13413#0" expanded="true" />
+            <element signature="e#13513#13514#0" expanded="true" />
+            <element signature="e#13557#13558#0" expanded="true" />
+            <element signature="e#31226#31227#0" expanded="true" />
+            <element signature="e#31275#31276#0" expanded="true" />
           </folding>
         </state>
       </provider>

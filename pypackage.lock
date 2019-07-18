@@ -1,0 +1,13 @@
+[[package]]
+name = "numpy"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "siunits"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "fplot"
+version = "0.0.0"

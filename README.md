@@ -95,23 +95,25 @@ the one you want may be difficult.
 
 
 ## Why add another Python dependency manager?
-`Pipenv` and `Poetry` both address this problem. Some reasons why this tools is different:
+`Pipenv`,`Poetry` both address this problem. Some reasons why this tool is different:
 
-- It eeps dependencies in the project directory, in `__pypackages__`. It abstracts
-over the virtual environment, and doesn't modify files outside
+- It keeps dependencies in the project directory, in `__pypackages__`, and
+doesn't modify files outside
 the project directory.
 
 - By not requiring Python to install or run, it remains intallation-agnostic.
 This is especially important on Linux, where there may be several versions
 of Python installed, with different versions and access levels. This avoids
-complications, especially for new users.
-
-- This automates the build and publish process, in addition to managing
-dependencies.
+complications, especially for new users. If multiple python versions are found,
+it allows the user to select the desired one.
 
 
-## What this doesn't do currently
+
+## Todo
 - Check or resolve dependency conflicts
+- Improve CLI and console feedback.
+- Improve docs
+
 
 ## Building and uploading your project to PyPi.
 In order to build and publish your project, additional info is needed in

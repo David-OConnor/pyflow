@@ -1,5 +1,5 @@
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     env,
     error::Error,
@@ -24,7 +24,7 @@ enum Arg {
     Uninstall,
     Python,
     IPython,
-//    Pip,
+    //    Pip,
     List,
     Package,
     Publish,
@@ -162,6 +162,28 @@ impl ToString for Version {
     }
 }
 
+/// This is a thinly-wrapped tuple, which exists so we can implement
+/// serialization for the lock file.
+struct LockVersion {
+    major: u32,
+    minor: u32,
+    patch: u32,
+}
+
+//impl Serialize for ExactVersion {
+//    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//    where
+//        S: Serializer,
+//    {
+//        // 3 is the number of fields in the struct.
+//        let mut s = serializer.serialize_struct("Person", 3)?;
+//        state.serialize_field("r", &self.r)?;
+//        state.serialize_field("g", &self.g)?;
+//        state.serialize_field("b", &self.b)?;
+//        state.end()
+//    }
+//}
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 struct Package {
     name: String,
@@ -290,7 +312,7 @@ struct Config {
     author_email: Option<String>,
     description: Option<String>,
     classifiers: Vec<String>,
-    keywords: Vec<String>,  // todo: Classifiers vs keywords?
+    keywords: Vec<String>, // todo: Classifiers vs keywords?
     homepage: Option<String>,
     repo_url: Option<String>,
     readme_filename: Option<String>,
@@ -390,7 +412,8 @@ __pycache__/
 # Project ignores
 "##;
 
-    let pyproject_init = &format!(r##"[tool.pypackage]
+    let pyproject_init = &format!(
+        r##"[tool.pypackage]
 name = "{}"
 py_version = "3.7"
 version = "0.1.0"
@@ -398,7 +421,9 @@ description = ""
 author = ""
 
 [tool.pypackage.dependencies]
-"##, name);
+"##,
+        name
+    );
 
     // todo: flesh readme out
     let readme_init = &format!("# {}", name);
@@ -514,25 +539,51 @@ fn find_sub_dependencies(package: Package) -> Vec<Package> {
     vec![]
 }
 
+/// Similar to that used by Cargo.lock
 #[derive(Debug, Deserialize, Serialize)]
 struct LockPackage {
-    // todo: merge with Package?
-    name: Option<String>,
-    version: Option<String>, // todo serialize Version?
+    name: String,
+    // We use a tuple for version instead of Version, since the lock
+    // uses exact, 3-number versions only.
+    //    version: Option<LockVersion>,  // todo not sure how to implement
+    version: String,
     source: Option<String>,
-    dependencies: Option<String>, // todo serialize Package or Self?
+    dependencies: Option<Vec<String>>, // todo option self
 }
 
 /// Modelled after [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct Lock {
-    packages: Option<Vec<LockPackage>>,
+    package: Option<Vec<LockPackage>>,
     metadata: Option<String>, // todo unimplemented
+}
+
+impl Lock {
+    fn add_packages(&mut self, packages: &[Package]) {
+        // todo: Write tests for this.
+
+        for package in packages {
+            // Use the actual version installed, not the requirement!
+            // todo: reconsider your package etc structs
+            let lock_package = LockPackage {
+                name: package.name.clone(),
+                version: package.version.unwrap_or(Version::new(0, 0, 0)).to_string(), // todo ensure 3-digit.
+                source: None,                         // todo
+                dependencies: None,                   // todo
+            };
+
+            match &mut self.package {
+                Some(p) => {p.push(lock_package)}
+                None => self.package = Some(vec![lock_package]),
+            }
+        }
+    }
 }
 
 /// Read dependency data froma lock file.
 fn read_lock(filename: &str) -> Result<(Lock), Box<Error>> {
     let data = fs::read_to_string(filename)?;
+    let t: Lock = toml::from_str(&data).unwrap();
     Ok(toml::from_str(&data)?)
 }
 
@@ -540,7 +591,6 @@ fn read_lock(filename: &str) -> Result<(Lock), Box<Error>> {
 fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
     let data = toml::to_string(data)?;
     fs::write(filename, data)?;
-
     Ok(())
 }
 
@@ -720,14 +770,15 @@ fn main() {
     );
     let venv_path = project_dir.join(venv_name);
 
-
-    let lock = match read_lock(lock_filename) {
+    let mut lock = match read_lock(lock_filename) {
         Ok(l) => {
             println!("Found lockfile");
             l
-        },
+        }
         Err(_) => Lock::default(),
     };
+
+    println!("LOCK!: {:?}", lock);
 
     if !venv_exists(&venv_path) {
         // We only use the alias for creating the virtual environment. After that,
@@ -747,20 +798,26 @@ fn main() {
             Task::Install(packages) => {
                 commands::install(&venv_name, packages, false);
                 add_dependencies(cfg_filename, packages);
-                write_lock(lock_filename, &lock);
+
+                lock.add_packages(packages);
+
+                write_lock(lock_filename, &lock).expect("Problem writing lock.");
             }
             Task::InstallAll => {
                 commands::install(&venv_name, &cfg.dependencies, false);
-                write_lock(lock_filename, &lock);
+                write_lock(lock_filename, &lock).expect("Problem writing lock.");
             }
             Task::Uninstall(packages) => {
-                commands::install(&venv_name, packages, true);
+                // todo: Display which packages?
+                commands::install(&venv_name, packages, true)
+                    .expect("Problem uninstalling packages");
                 remove_dependencies(cfg_filename, packages);
-                write_lock(lock_filename, &lock);
+                write_lock(lock_filename, &lock).expect("Problem writing lock.");
             }
             Task::UninstallAll => {
-                commands::install(&venv_name, &cfg.dependencies, true);
-                write_lock(lock_filename, &Lock::default());
+                commands::install(&venv_name, &cfg.dependencies, true)
+                    .expect("Problem uninstalling packages");
+                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
             }
             Task::Python(args) => commands::run_python(&venv_name, args, false),
             Task::IPython(args) => {
@@ -772,7 +829,7 @@ fn main() {
                 }
 
                 if !ipython_installed {
-                    commands::install(
+                    match commands::install(
                         &venv_name,
                         &[Package {
                             name: "ipython".to_string(),
@@ -780,16 +837,23 @@ fn main() {
                             version_type: VersionType::Exact,
                         }],
                         false,
-                    );
+                    ) {
+                        Ok(_) => (),
+                        Err(e) => println!("Problem installing packages"),
+                    }
                 }
-                commands::run_python(&venv_name, args, true)
+                commands::run_python(&venv_name, args, true);
+                //                match commands::run_python(&venv_name, args, true) {
+                //                    Ok() => (),
+                //                    Err(e) panic!(e),
+                //                }
             }
-//            Task::Pip(args) => commands::run_pip(&venv_name, args),
+            //            Task::Pip(args) => commands::run_pip(&venv_name, args),
             Task::New(name) => {
                 new(name).expect("Problem creating project");
                 // todo: Maybe show the path created at.
                 println!("Created a new Python project named {}", name)
-            },
+            }
             Task::Package => build::build(&venv_name, &cfg),
             Task::Publish => build::publish(&venv_name, &cfg),
             //            Task::General(args) => (),
@@ -804,7 +868,7 @@ pub mod tests {
     #[test]
     fn tasks_python() {
         let args = vec![Arg::Python];
-        assert_eq!(vec![Task::Python(None)], find_tasks(&args));
+        assert_eq!(vec![Task::Python(vec![])], find_tasks(&args));
     }
 
     #[test]
@@ -817,7 +881,7 @@ pub mod tests {
     #[test]
     fn tasks_ipython() {
         let args = vec![Arg::IPython];
-        assert_eq!(vec![Task::IPython(None)], find_tasks(&args));
+        assert_eq!(vec![Task::IPython(vec![])], find_tasks(&args));
     }
 
     #[test]
@@ -916,11 +980,11 @@ pub mod tests {
         assert_eq!(vec![Task::UninstallAll], find_tasks(&args));
     }
 
-    #[test]
-    fn tasks_pip() {
-        let args = vec![Arg::Pip, Arg::Other("list".into())];
-        assert_eq!(vec![Task::Pip(vec!["list".into()])], find_tasks(&args));
-    }
+    //    #[test]
+    //    fn tasks_pip() {
+    //        let args = vec![Arg::Pip, Arg::Other("list".into())];
+    //        assert_eq!(vec![Task::Pip(vec!["list".into()])], find_tasks(&args));
+    //    }
 
     //    #[test]
     //    fn tasks_general() {
