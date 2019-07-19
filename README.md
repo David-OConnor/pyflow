@@ -58,8 +58,10 @@ builds both source and binary if applicable.)
 
 Misc:
 - `pypackage new projname` - Create a directory containing the basics for
-a project: a readme, pyproject.toml, and directory for source code.
+a project: a readme, pyproject.toml, and directory for source code
 - `pypackage list` - Run `pip list` in the environment
+- `pypackage version` - Get the current version of this tool
+- `pypackage help` Get help, including a list of available commands
 
 ## Why?
 

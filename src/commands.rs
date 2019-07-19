@@ -18,20 +18,21 @@ fn set_pythonpath() {
 /// Find the py_version from the `python --py_version` command. Eg: "Python 3.7".
 pub(crate) fn find_py_version(alias: &str) -> Option<crate::Version> {
     let output = Command::new(alias).arg("--version").output();
-
-    let mut output_bytes = vec![];
-    match output {
-        Ok(ob) => output_bytes = ob.stdout,
+    let output_bytes = match output {
+        Ok(ob) => {
+            // Old versions of python output `--version` to `stderr`; newer ones to `stdout`,
+            // so check both.
+            if ob.stdout.is_empty() {
+                ob.stderr
+            } else {
+                ob.stdout
+            }
+        }
         Err(_) => return None,
-    }
+    };
 
     if let Ok(version) = std::str::from_utf8(&output_bytes) {
         let re = Regex::new(r"Python\s+(\d{1,4})\.(\d{1,4})\.(\d{1,4})").unwrap();
-
-        //        println!("\nTEST: {:?}\n", alias);
-        //        println!("\nTEST1.5: {:?}\n", version);
-        // todo: Not working properly; ie able to find python 3.7 and 3, but not python2 and python2.
-
         match re.captures(version) {
             Some(caps) => {
                 let major = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
@@ -48,16 +49,8 @@ pub(crate) fn find_py_version(alias: &str) -> Option<crate::Version> {
 
 /// Create the virtual env. Assume we're running Python 3.3+, where `venv` is included.
 /// Additionally, create the __pypackages__ directory if not already created.
-pub(crate) fn create_venv(
-    py_alias: &str,
-    directory: &str,
-    name: &str,
-    py_version: crate::Version,
-) -> Result<(), Box<Error>> {
-    let lib_path = &format!(
-        "__pypackages__/{}.{}/lib",
-        py_version.major, py_version.minor
-    );
+pub(crate) fn create_venv(py_alias: &str, directory: &str, name: &str) -> Result<(), Box<Error>> {
+    let lib_path = &format!("{}/lib", directory);
     if !path::PathBuf::from(lib_path).exists() {
         fs::create_dir_all(lib_path).expect("Problem creating __pypackages__ directory");
     }
@@ -111,18 +104,18 @@ pub(crate) fn run_python(venv_name: &str, args: &[String], ipython: bool) {
         .expect("Problem running Python");
 }
 
-//// todo consolidate this (and others) with run python or run_general?
-pub(crate) fn run_pip(venv_name: &str, args: &[String]) {
-    // todo: this path setup may be linux specific. Make it more generic.
-    set_pythonpath();
-
-    Command::new("./python")
-        .current_dir(&format!("{}/bin", venv_name))
-        .args(&["-m", "pip"])
-        .args(args)
-        .status()
-        .expect("Problem running Pip");
-}
+////// todo consolidate this (and others) with run python or run_general?
+//pub(crate) fn run_pip(venv_name: &str, args: &[String]) {
+//    // todo: this path setup may be linux specific. Make it more generic.
+//    set_pythonpath();
+//
+//    Command::new("./python")
+//        .current_dir(&format!("{}/bin", venv_name))
+//        .args(&["-m", "pip"])
+//        .args(args)
+//        .status()
+//        .expect("Problem running Pip");
+//}
 
 // Run a general task not specialized to this package.  First, attempt to run a command by
 // that name in the bin directory. Useful for pip, ipython, and other environment-specific

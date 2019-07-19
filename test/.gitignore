@@ -1,0 +1,12 @@
+# General Python ignores
+
+build/
+dist/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+*~
+*/.mypy_cache/
+
+
+# Project ignores
