@@ -1,6 +1,23 @@
 use regex::Regex;
-use std::error::Error;
 use std::{env, fs, path, process::Command};
+use std::{error::Error, fmt};
+
+#[derive(Debug)]
+struct ExecutionError {
+    details: String,
+}
+
+impl Error for ExecutionError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
+impl fmt::Display for ExecutionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
 
 /// Sets the `PYTHONPATH` environment variable, causing Python to look for
 /// dependencies in `__pypackages__`,
@@ -64,7 +81,7 @@ pub(crate) fn create_venv(py_alias: &str, directory: &str, name: &str) -> Result
 }
 
 pub(crate) fn install(
-    venv_name: &str,
+    bin_path: &path::PathBuf,
     packages: &[crate::Package],
     uninstall: bool,
 ) -> Result<(), Box<Error>> {
@@ -72,11 +89,10 @@ pub(crate) fn install(
     // executble directly.
     let install = if uninstall { "uninstall" } else { "install" };
 
-    // todo: this path setup may be linux specific. Make it more generic.
     for package in packages {
         // Even though `bin` contains `pip`, it doesn't appear to work directly.
         Command::new("./python")
-            .current_dir(&format!("{}/bin", venv_name))
+            .current_dir(bin_path)
             .args(&[
                 "-m",
                 "pip",
@@ -91,55 +107,26 @@ pub(crate) fn install(
     Ok(())
 }
 
-pub(crate) fn run_python(venv_name: &str, args: &[String], ipython: bool) {
-    // todo: this path setup may be linux specific. Make it more generic.
-    let name = if ipython { "ipython" } else { "python" };
-    let venv = format!("{}/bin", venv_name);
+// todo have these propogate errors.
+
+pub(crate) fn run_python(bin_path: &path::PathBuf, args: &[String]) {
     set_pythonpath();
 
-    Command::new("./".to_string() + name)
-        .current_dir(venv)
+    Command::new("./python")
+        .current_dir(bin_path)
         .args(args)
         .status()
         .expect("Problem running Python");
 }
 
-////// todo consolidate this (and others) with run python or run_general?
-//pub(crate) fn run_pip(venv_name: &str, args: &[String]) {
-//    // todo: this path setup may be linux specific. Make it more generic.
-//    set_pythonpath();
-//
-//    Command::new("./python")
-//        .current_dir(&format!("{}/bin", venv_name))
-//        .args(&["-m", "pip"])
-//        .args(args)
-//        .status()
-//        .expect("Problem running Pip");
-//}
+/// Run a binary installed in the virtual environment, such as `ipython` or `black`.
+pub(crate) fn run_bin(bin_path: &path::PathBuf, name: &str, args: &[String]) {
+    set_pythonpath();
 
-// Run a general task not specialized to this package.  First, attempt to run a command by
-// that name in the bin directory. Useful for pip, ipython, and other environment-specific
-// Python tools.
-//pub(crate) fn run_general(venv_name: &str, args: &Vec<String>) {
-//    // todo: this path setup may be linux specific. Make it more generic.
-//
-//    // See if the first arg is something we can run
-//    let first = args.get(0).expect("args is empty");
-//    let env_specific = Command::new(("./".to_string() + first)
-//        .current_dir(&format!("{}/bin", venv_name))
-//        .args(args)
-//        .status();
-//
-//    match env_specific {
-//        Ok(_) => (),
-//        // Just run a normal command.
-//        Err(error) => {
-//            Command::new("bash")
-//                .current_dir(&format!("{}/bin", venv_name))
-//                .arg("-c")
-//                .args(args)
-//                .status()
-//                .expect("Problem running Python");
-//        }
-//    }
-//}
+    Command::new("./".to_string())
+        .current_dir(bin_path)
+        .args(&["-m", name])
+        .args(args)
+        .status()
+        .expect(&format!("Problem running {}", name));
+}

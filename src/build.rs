@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{path, process::Command};
 
 // https://packaging.python.org/tutorials/packaging-projects/
 
@@ -43,9 +43,9 @@ setuptools.setup(
 
 fn cleanup_dummy_setup(filename: &str) {}
 
-pub(crate) fn build(venv_name: &str, cfg: &crate::Config) {
+pub(crate) fn build(bin_path: &path::PathBuf, cfg: &crate::Config) {
     Command::new("./python")
-        .current_dir(&format!("{}/bin", venv_name))
+        .current_dir(bin_path)
         .args(&[
             "-m",
             "pip",
@@ -59,17 +59,17 @@ pub(crate) fn build(venv_name: &str, cfg: &crate::Config) {
         .expect("Problem building");
 
     Command::new("./python")
-        .current_dir(&format!("{}/bin", venv_name))
+        .current_dir(bin_path)
         .args(&["setup.py", "sdist", "bdist_wheel"])
         .status()
         .expect("Problem building");
 }
 
-pub(crate) fn publish(venv_name: &str, cfg: &crate::Config) {
+pub(crate) fn publish(bin_path: &path::PathBuf, cfg: &crate::Config) {
     let repo_url = cfg.repo_url.clone();
 
     Command::new("./python")
-        .current_dir(&format!("{}/bin", venv_name))
+        .current_dir(bin_path)
         .args(&[
             "-m",
             "twine_upload",

@@ -1,5 +1,5 @@
 use regex::Regex;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::{
     cmp, env,
     error::Error,
@@ -24,7 +24,7 @@ enum Arg {
     Install,
     Uninstall,
     Python,
-    IPython,
+    //    IPython,
     //    Pip,
     List,
     Package,
@@ -44,8 +44,8 @@ impl FromStr for Arg {
             "uninstall" => Arg::Uninstall,
             "python" => Arg::Python,
             "python3" => Arg::Python,
-            "ipython" => Arg::IPython,
-            "ipython3" => Arg::IPython,
+            //            "ipython" => Arg::IPython,
+            //            "ipython3" => Arg::IPython,
             "list" => Arg::List,
             "package" => Arg::Package,
             "publish" => Arg::Publish,
@@ -67,11 +67,13 @@ enum Task {
     Install(Vec<Package>),
     Uninstall(Vec<Package>),
     Python(Vec<String>),
+    CustomBin(String, Vec<String>), // bin name, args
 
     // todo: Instead of special ipython here, should have a type for running any
     // todo custom executable for Python that ends up in the bin/Scripts folder.
     // todo eg Black.
-    IPython(Vec<String>),
+
+    //    IPython(Vec<String>),
     //    Pip(Vec<String>), // If if we want pip list etc
     //    General(Vec<String>),
     New(String), // holds the project name.
@@ -657,7 +659,7 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                     match arg2 {
                         Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
                         // Ipython as an arg could mean run ipython, or install it, if post the `install` arg.
-                        Arg::IPython => packages.push(Package::from_str("ipython").unwrap()),
+                        //                        Arg::IPython => packages.push(Package::from_str("ipython").unwrap()),
                         _ => break,
                     }
                 }
@@ -693,17 +695,17 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                 }
                 result.push(Task::Python(args_));
             }
-            Arg::IPython => {
-                // todo DRY
-                let mut args_ = vec![];
-                for i2 in i + 1..args.len() {
-                    let arg2 = &args[i2];
-                    if let Arg::Other(a) = arg2 {
-                        args_.push(a.to_string());
-                    }
-                }
-                result.push(Task::IPython(args_));
-            }
+            //            Arg::IPython => {
+            //                // todo DRY
+            //                let mut args_ = vec![];
+            //                for i2 in i + 1..args.len() {
+            //                    let arg2 = &args[i2];
+            //                    if let Arg::Other(a) = arg2 {
+            //                        args_.push(a.to_string());
+            //                    }
+            //                }
+            //                result.push(Task::IPython(args_));
+            //            }
 
             //            Arg::Pip => {
             //                let mut args_ = vec![];
@@ -817,7 +819,9 @@ fn wait_for_dirs(dirs: &Vec<path::PathBuf>) -> Result<(), AliasError> {
         }
         thread::sleep(time::Duration::from_millis(10));
     }
-    Err(AliasError{details: "Timed out attempting to create a directory".to_string()})
+    Err(AliasError {
+        details: "Timed out attempting to create a directory".to_string(),
+    })
 }
 
 fn main() {
@@ -831,11 +835,11 @@ fn main() {
     let project_dir = env::current_dir().expect("Can't find current path");
 
     let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
-    let venv_name = &format!(
+
+    let venv_path = project_dir.join(&format!(
         "{}/{}.{}/.venv",
         package_dir, py_version.major, py_version.minor
-    );
-    let venv_path = project_dir.join(venv_name);
+    ));
 
     let mut lock = match read_lock(lock_filename) {
         Ok(l) => {
@@ -856,7 +860,7 @@ fn main() {
         // we call our venv's executable directly.
         let alias = find_py_alias(cfg.py_version);
 
-        println!("Setting up Python environment...")
+        println!("Setting up Python environment...");
         match alias {
             Ok((alias, py_version)) => {
                 if let Err(_) = commands::create_venv(
@@ -878,10 +882,21 @@ fn main() {
         wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
     }
 
+    // The bin name should be `bin` on Linux, and `Scripts` on Windows. Check both.
+    // Locate bin name after ensuring we have a virtual environment.
+    let mut bin_path = venv_path.clone();
+    if venv_path.join("bin").exists() {
+        bin_path = venv_path.join("bin");
+    } else if venv_path.join("Scripts").exists() {
+        bin_path = venv_path.join("Scripts");
+    } else {
+        exit_early("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder")
+    }
+
     for task in find_tasks(&opt.args).iter() {
         match task {
             Task::Install(packages) => {
-                if let Err(_) = commands::install(&venv_name, packages, false) {
+                if let Err(_) = commands::install(&bin_path, packages, false) {
                     exit_early("Problem installing packages");
                 }
                 add_dependencies(cfg_filename, packages);
@@ -894,7 +909,7 @@ fn main() {
                 }
             }
             Task::InstallAll => {
-                if let Err(_) = commands::install(&venv_name, &cfg.dependencies, false) {
+                if let Err(_) = commands::install(&bin_path, &cfg.dependencies, false) {
                     exit_early("Problem installing packages");
                 }
                 //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
@@ -904,7 +919,7 @@ fn main() {
             }
             Task::Uninstall(packages) => {
                 // todo: Display which packages?
-                match commands::install(&venv_name, packages, true) {
+                match commands::install(&bin_path, packages, true) {
                     Ok(_) => (),
                     Err(_) => exit_early("Problem uninstalling packages"),
                 }
@@ -916,7 +931,7 @@ fn main() {
                 }
             }
             Task::UninstallAll => {
-                commands::install(&venv_name, &cfg.dependencies, true)
+                commands::install(&bin_path, &cfg.dependencies, true)
                     .expect("Problem uninstalling packages");
                 //                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
                 match write_lock(lock_filename, &Lock::default()) {
@@ -924,32 +939,32 @@ fn main() {
                     Err(e) => exit_early("Problem writing the lock file"),
                 }
             }
-            Task::Python(args) => commands::run_python(&venv_name, args, false),
-            Task::IPython(args) => {
-                let mut ipython_installed = false;
+            Task::Python(args) => commands::run_python(&bin_path, args),
+            Task::CustomBin(name, args) => {
+                let mut bin_package_installed = false;
                 for package in &cfg.dependencies {
-                    if &package.name == "ipython" {
-                        ipython_installed = true;
+                    if &package.name == name {
+                        bin_package_installed = true;
                     }
                 }
 
-                if !ipython_installed {
+                if !bin_package_installed {
                     if let Err(_) = commands::install(
-                        &venv_name,
+                        &bin_path,
                         &[Package {
-                            name: "ipython".to_string(),
+                            name: name.to_string(),
                             version: None,
                             version_type: VersionType::Exact,
                         }],
                         false,
                     ) {
-                        exit_early("Problem installing IPython");
+                        exit_early(&format!("Problem installing {}", name));
                     }
                 }
-                let ipy_venv = path::PathBuf::from(&format!("{}/.venv/bin/ipython", venv_parent));
+                let ipy_venv = path::PathBuf::from(&format!("{}/.venv/bin/{}", venv_parent, name));
 
                 wait_for_dirs(&vec![ipy_venv]).unwrap();
-                commands::run_python(&venv_name, args, true);
+                commands::run_bin(&bin_path, name, args);
             }
             Task::New(name) => {
                 match new(name) {
@@ -960,8 +975,8 @@ fn main() {
                 // todo: Maybe show the path created at.
                 println!("Created a new Python project named {}", name)
             }
-            Task::Package => build::build(&venv_name, &cfg),
-            Task::Publish => build::publish(&venv_name, &cfg),
+            Task::Package => build::build(&bin_path, &cfg),
+            Task::Publish => build::publish(&bin_path, &cfg),
             Task::Help => help(),
             Task::Version => version(),
         }
@@ -985,11 +1000,11 @@ pub mod tests {
         assert_eq!(vec![Task::Python(vec![script])], find_tasks(&args));
     }
 
-    #[test]
-    fn tasks_ipython() {
-        let args = vec![Arg::IPython];
-        assert_eq!(vec![Task::IPython(vec![])], find_tasks(&args));
-    }
+    //    #[test]
+    //    fn tasks_ipython() {
+    //        let args = vec![Arg::IPython];
+    //        assert_eq!(vec![Task::IPython(vec![])], find_tasks(&args));
+    //    }
 
     #[test]
     fn tasks_install_one() {
@@ -1039,19 +1054,19 @@ pub mod tests {
         assert_eq!(vec![Task::InstallAll], find_tasks(&args));
     }
 
-    #[test]
-    fn tasks_install_ipython() {
-        // Needed to make sure this is attempting to install ipython, not install all and run ipython.
-        let args = vec![Arg::Install, Arg::IPython];
-        assert_eq!(
-            vec![Task::Install(vec![Package {
-                name: "ipython".to_string(),
-                version_type: VersionType::Exact,
-                version: None,
-            }])],
-            find_tasks(&args)
-        );
-    }
+    //    #[test]
+    //    fn tasks_install_ipython() {
+    //        // Needed to make sure this is attempting to install ipython, not install all and run ipython.
+    //        let args = vec![Arg::Install, Arg::IPython];
+    //        assert_eq!(
+    //            vec![Task::Install(vec![Package {
+    //                name: "ipython".to_string(),
+    //                version_type: VersionType::Exact,
+    //                version: None,
+    //            }])],
+    //            find_tasks(&args)
+    //        );
+    //    }
 
     #[test]
     fn tasks_uninstall_one() {

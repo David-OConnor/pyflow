@@ -2,16 +2,23 @@
 <project version="4">
   <component name="BookmarkManager">
     <bookmark url="file://$PROJECT_DIR$/src/build.rs" line="16" />
+    <bookmark url="file://$PROJECT_DIR$/src/main.rs" line="1" />
   </component>
   <component name="CargoProjects">
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8e8ec656-42c1-4de6-aedd-231786fe5c7c" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pypackage.lock" beforeDir="false" afterPath="$PROJECT_DIR$/pypackage.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/build.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/build.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/LICENSE" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/test/main.py" beforeDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -21,20 +28,20 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/main.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="411">
-              <caret line="72" column="21" selection-start-line="72" selection-start-column="21" selection-end-line="72" selection-end-column="21" />
+            <state>
+              <caret line="946" column="53" selection-start-line="946" selection-start-column="53" selection-end-line="946" selection-end-column="53" />
               <folding>
-                <element signature="e#9068#9069#0" expanded="true" />
-                <element signature="e#9133#9134#0" expanded="true" />
-                <element signature="e#14224#14225#0" expanded="true" />
-                <element signature="e#14252#14253#0" expanded="true" />
-                <element signature="e#14353#14354#0" expanded="true" />
-                <element signature="e#14397#14398#0" expanded="true" />
-                <element signature="e#35715#35716#0" expanded="true" />
-                <element signature="e#35764#35765#0" expanded="true" />
+                <element signature="e#9174#9175#0" expanded="true" />
+                <element signature="e#9239#9240#0" expanded="true" />
+                <element signature="e#14330#14331#0" expanded="true" />
+                <element signature="e#14358#14359#0" expanded="true" />
+                <element signature="e#14459#14460#0" expanded="true" />
+                <element signature="e#14503#14504#0" expanded="true" />
+                <element signature="e#35850#35851#0" expanded="true" />
+                <element signature="e#35899#35900#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -43,8 +50,14 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/commands.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="156">
-              <caret line="92" selection-start-line="92" selection-end-line="92" />
+            <state relative-caret-position="-69">
+              <caret line="96" column="21" lean-forward="true" selection-start-line="96" selection-start-column="21" selection-end-line="96" selection-end-column="21" />
+              <folding>
+                <element signature="e#224#225#0" expanded="true" />
+                <element signature="e#252#253#0" expanded="true" />
+                <element signature="e#357#358#0" expanded="true" />
+                <element signature="e#401#402#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -61,18 +74,18 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/build.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="270">
-              <caret line="15" column="1" selection-start-line="15" selection-start-column="1" selection-end-line="15" selection-end-column="1" />
+            <state relative-caret-position="-134">
+              <caret line="57" column="17" selection-start-line="57" selection-start-column="17" selection-end-line="57" selection-end-column="17" />
             </state>
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="false">
+      <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/README.md">
           <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
             <state split_layout="SPLIT">
-              <first_editor relative-caret-position="248">
-                <caret line="60" column="66" selection-start-line="60" selection-start-column="66" selection-end-line="60" selection-end-column="66" />
+              <first_editor relative-caret-position="126">
+                <caret line="142" column="18" selection-start-line="142" selection-start-column="18" selection-end-line="142" selection-end-column="18" />
               </first_editor>
               <second_editor />
             </state>
@@ -90,17 +103,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>struct vers</find>
-      <find>self.major</find>
-      <find>.expect</find>
-      <find>.expe</find>
-      <find>proces::</find>
-      <find>pypackages</find>
-      <find>prompt_a</find>
-      <find>problem creating vir</find>
-      <find>problem c</find>
-      <find>problem creating vi</find>
-      <find>.enum</find>
       <find>enter the n</find>
       <find>problem creatin</find>
       <find>create_v</find>
@@ -120,6 +122,17 @@
       <find>err(&quot;timed</find>
       <find>wait_f</find>
       <find>match arg</find>
+      <find>example</find>
+      <find>setting up</find>
+      <find>ipython</find>
+      <find>ipy</find>
+      <find>ipyth</find>
+      <find>venv_path</find>
+      <find>run_py</find>
+      <find>struct alias</find>
+      <find>let bin_</find>
+      <find>bin_p</find>
+      <find>linux</find>
     </findStrings>
     <replaceStrings>
       <replace>pypackage</replace>
@@ -138,13 +151,13 @@
         <option value="$PROJECT_DIR$/script.py" />
         <option value="$PROJECT_DIR$/.gitignore" />
         <option value="$PROJECT_DIR$/src/package.rs" />
-        <option value="$PROJECT_DIR$/src/build.rs" />
         <option value="$PROJECT_DIR$/pyproject.toml" />
         <option value="$PROJECT_DIR$/Cargo.toml" />
         <option value="$PROJECT_DIR$/pypackage.lock" />
-        <option value="$PROJECT_DIR$/README.md" />
+        <option value="$PROJECT_DIR$/src/build.rs" />
         <option value="$PROJECT_DIR$/src/commands.rs" />
         <option value="$PROJECT_DIR$/src/main.rs" />
+        <option value="$PROJECT_DIR$/README.md" />
       </list>
     </option>
   </component>
@@ -152,10 +165,10 @@
     <option name="directoryName" value="XQqpFPMC" />
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="535" />
-    <option name="y" value="31" />
-    <option name="width" value="1385" />
-    <option name="height" value="1026" />
+    <option name="x" value="684" />
+    <option name="y" value="65" />
+    <option name="width" value="1186" />
+    <option name="height" value="971" />
   </component>
   <component name="ProjectView">
     <navigator proportions="" version="1">
@@ -231,18 +244,18 @@
       <workItem from="1563237210438" duration="1939000" />
       <workItem from="1563268767668" duration="29443000" />
       <workItem from="1563334094485" duration="22205000" />
-      <workItem from="1563499042253" duration="9963000" />
+      <workItem from="1563499042253" duration="15074000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="89106000" />
+    <option name="totallyTimeSpent" value="94217000" />
   </component>
   <component name="ToolWindowManager">
-    <frame x="535" y="31" width="1385" height="1026" extended-state="0" />
+    <frame x="684" y="65" width="1186" height="971" extended-state="0" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.14637789" />
+      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.17192982" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
@@ -256,12 +269,12 @@
       <window_info anchor="bottom" id="Version Control" order="8" />
       <window_info anchor="bottom" id="Database Changes" order="9" />
       <window_info anchor="bottom" id="Event Log" order="10" side_tool="true" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="11" visible="true" weight="0.39101124" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="11" visible="true" weight="0.40838322" />
       <window_info anchor="bottom" id="Python Console" order="12" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
-      <window_info anchor="right" id="SciView" order="3" visible="true" weight="0.02240478" />
+      <window_info anchor="right" id="SciView" order="3" visible="true" weight="0.02631579" />
       <window_info anchor="right" id="Cargo" order="4" />
       <window_info anchor="right" id="Database" order="5" />
     </layout>
@@ -313,16 +326,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/README.md">
-      <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
-        <state split_layout="SPLIT">
-          <first_editor relative-caret-position="248">
-            <caret line="60" column="66" selection-start-line="60" selection-start-column="66" selection-end-line="60" selection-end-column="66" />
-          </first_editor>
-          <second_editor />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/pyproject.toml">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="126">
@@ -330,10 +333,33 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/build.rs">
+    <entry file="file://$PROJECT_DIR$/src/commands.rs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="270">
-          <caret line="15" column="1" selection-start-line="15" selection-start-column="1" selection-end-line="15" selection-end-column="1" />
+        <state relative-caret-position="-69">
+          <caret line="96" column="21" lean-forward="true" selection-start-line="96" selection-start-column="21" selection-end-line="96" selection-end-column="21" />
+          <folding>
+            <element signature="e#224#225#0" expanded="true" />
+            <element signature="e#252#253#0" expanded="true" />
+            <element signature="e#357#358#0" expanded="true" />
+            <element signature="e#401#402#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/main.rs">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <caret line="946" column="53" selection-start-line="946" selection-start-column="53" selection-end-line="946" selection-end-column="53" />
+          <folding>
+            <element signature="e#9174#9175#0" expanded="true" />
+            <element signature="e#9239#9240#0" expanded="true" />
+            <element signature="e#14330#14331#0" expanded="true" />
+            <element signature="e#14358#14359#0" expanded="true" />
+            <element signature="e#14459#14460#0" expanded="true" />
+            <element signature="e#14503#14504#0" expanded="true" />
+            <element signature="e#35850#35851#0" expanded="true" />
+            <element signature="e#35899#35900#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
@@ -344,27 +370,20 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/commands.rs">
+    <entry file="file://$PROJECT_DIR$/src/build.rs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="156">
-          <caret line="92" selection-start-line="92" selection-end-line="92" />
+        <state relative-caret-position="-134">
+          <caret line="57" column="17" selection-start-line="57" selection-start-column="17" selection-end-line="57" selection-end-column="17" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/main.rs">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="411">
-          <caret line="72" column="21" selection-start-line="72" selection-start-column="21" selection-end-line="72" selection-end-column="21" />
-          <folding>
-            <element signature="e#9068#9069#0" expanded="true" />
-            <element signature="e#9133#9134#0" expanded="true" />
-            <element signature="e#14224#14225#0" expanded="true" />
-            <element signature="e#14252#14253#0" expanded="true" />
-            <element signature="e#14353#14354#0" expanded="true" />
-            <element signature="e#14397#14398#0" expanded="true" />
-            <element signature="e#35715#35716#0" expanded="true" />
-            <element signature="e#35764#35765#0" expanded="true" />
-          </folding>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="split-provider[text-editor;markdown-preview-editor]">
+        <state split_layout="SPLIT">
+          <first_editor relative-caret-position="126">
+            <caret line="142" column="18" selection-start-line="142" selection-start-column="18" selection-end-line="142" selection-end-column="18" />
+          </first_editor>
+          <second_editor />
         </state>
       </provider>
     </entry>
