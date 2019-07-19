@@ -1,5 +1,5 @@
 use regex::Regex;
-use std::{env, fs, path, process::Command};
+use std::{env, fs, path::PathBuf, process::Command};
 use std::{error::Error, fmt};
 
 #[derive(Debug)]
@@ -21,12 +21,10 @@ impl fmt::Display for ExecutionError {
 
 /// Sets the `PYTHONPATH` environment variable, causing Python to look for
 /// dependencies in `__pypackages__`,
-fn set_pythonpath() {
+fn set_pythonpath(lib_path: &PathBuf) {
     env::set_var(
         "PYTHONPATH",
-        env::current_dir()
-            .expect("Problem finding current directory")
-            .join("__pypackages__/3.7/lib") // todo version hack
+        lib_path
             .to_str()
             .expect("Problem converting current path to string"),
     );
@@ -64,43 +62,80 @@ pub(crate) fn find_py_version(alias: &str) -> Option<crate::Version> {
     }
 }
 
+/// Used for Python versions 3.2 and below, which do not include `venv`.  Note that
+/// this affects files outside the project directory.
+pub(crate) fn install_virtualenv_global(alias: &str) -> Result<(), Box<Error>> {
+    Command::new(alias)
+        .args(&["-m", "pip", "install", "virtualenv"])
+        .status()?;
+
+    Ok(())
+}
+
+/// See note on `install_virtualenv_global
+pub(crate) fn create_legacy_virtualenv(
+    py_alias: &str,
+    lib_path: &PathBuf,
+    name: &str,
+) -> Result<(), Box<Error>> {
+    // While creating the lib path, we're creating the __pypackages__ structure.
+    if !lib_path.exists() {
+        fs::create_dir_all(lib_path).expect("Problem creating __pypackages__ directory");
+    }
+
+    Command::new("virtualenv")
+        .arg(name)
+        .current_dir(lib_path.join("../"))
+        .spawn()?;
+
+    Ok(())
+}
+
 /// Create the virtual env. Assume we're running Python 3.3+, where `venv` is included.
 /// Additionally, create the __pypackages__ directory if not already created.
-pub(crate) fn create_venv(py_alias: &str, directory: &str, name: &str) -> Result<(), Box<Error>> {
-    let lib_path = &format!("{}/lib", directory);
-    if !path::PathBuf::from(lib_path).exists() {
+pub(crate) fn create_venv(
+    py_alias: &str,
+    lib_path: &PathBuf,
+    name: &str,
+) -> Result<(), Box<Error>> {
+    // While creating the lib path, we're creating the __pypackages__ structure.
+    if !lib_path.exists() {
         fs::create_dir_all(lib_path).expect("Problem creating __pypackages__ directory");
     }
 
     Command::new(py_alias)
         .args(&["-m", "venv", name])
-        .current_dir(directory)
+        .current_dir(lib_path.join("../"))
         .spawn()?;
 
     Ok(())
 }
 
 pub(crate) fn install(
-    bin_path: &path::PathBuf,
+    bin_path: &PathBuf,
     packages: &[crate::Package],
     uninstall: bool,
+    bin: bool,
 ) -> Result<(), Box<Error>> {
     // We don't need an alias from the venv's bin directory; we call the
     // executble directly.
     let install = if uninstall { "uninstall" } else { "install" };
 
+    // todo perhaps we can mark in the package if it's bin, and perhaps
+    // todo that's even indicated in a package' sconfig...
     for package in packages {
+        // todo: Perhaps there's a way to install bins to __pypackages__ ?
+        let package_fullname = &package.to_pip_string();
+        let mut args = vec!["-m", "pip", install, package_fullname];
+        if !bin {
+            args.push("--target");
+            args.push("../../lib");
+        }
+
         // Even though `bin` contains `pip`, it doesn't appear to work directly.
         Command::new("./python")
             .current_dir(bin_path)
-            .args(&[
-                "-m",
-                "pip",
-                install,
-                &package.to_pip_string(),
-                "--target",
-                "../../lib",
-            ])
+            .args(args)
             .status()?;
     }
 
@@ -109,8 +144,8 @@ pub(crate) fn install(
 
 // todo have these propogate errors.
 
-pub(crate) fn run_python(bin_path: &path::PathBuf, args: &[String]) {
-    set_pythonpath();
+pub(crate) fn run_python(bin_path: &PathBuf, lib_path: &PathBuf, args: &[String]) {
+    set_pythonpath(lib_path);
 
     Command::new("./python")
         .current_dir(bin_path)
@@ -119,13 +154,14 @@ pub(crate) fn run_python(bin_path: &path::PathBuf, args: &[String]) {
         .expect("Problem running Python");
 }
 
+// todo: Ideally we'd use lib/bin, but unable to get that workign currently.
+// todo instead, we install into the venv directly.
 /// Run a binary installed in the virtual environment, such as `ipython` or `black`.
-pub(crate) fn run_bin(bin_path: &path::PathBuf, name: &str, args: &[String]) {
-    set_pythonpath();
+pub(crate) fn run_bin(bin_path: &PathBuf, lib_path: &PathBuf, name: &str, args: &[String]) {
+    set_pythonpath(lib_path);
 
-    Command::new("./".to_string())
+    Command::new(&format!("./{}", name))
         .current_dir(bin_path)
-        .args(&["-m", name])
         .args(args)
         .status()
         .expect(&format!("Problem running {}", name));

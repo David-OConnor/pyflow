@@ -5,7 +5,9 @@ use std::{
     error::Error,
     fmt, fs,
     io::{self, BufRead, BufReader},
-    num, path, process,
+    num,
+    path::PathBuf,
+    process,
     str::FromStr,
     string::ParseError,
     thread, time,
@@ -13,6 +15,7 @@ use std::{
 use structopt::StructOpt;
 //use textio;
 use std::collections::HashMap;
+use std::process::exit;
 use toml;
 
 mod build;
@@ -22,10 +25,9 @@ mod commands;
 #[derive(Debug)]
 enum Arg {
     Install,
+    InstallBin, // todo temp perhaps
     Uninstall,
     Python,
-    //    IPython,
-    //    Pip,
     List,
     Package,
     Publish,
@@ -41,11 +43,10 @@ impl FromStr for Arg {
     fn from_str(arg: &str) -> Result<Self, Self::Err> {
         let result = match arg.to_string().to_lowercase().as_ref() {
             "install" => Arg::Install,
+            "installbin" => Arg::InstallBin,
             "uninstall" => Arg::Uninstall,
             "python" => Arg::Python,
             "python3" => Arg::Python,
-            //            "ipython" => Arg::IPython,
-            //            "ipython3" => Arg::IPython,
             "list" => Arg::List,
             "package" => Arg::Package,
             "publish" => Arg::Publish,
@@ -65,6 +66,7 @@ enum Task {
     InstallAll,
     UninstallAll,
     Install(Vec<Package>),
+    InstallBin(Vec<Package>), // todo temp perhaps
     Uninstall(Vec<Package>),
     Python(Vec<String>),
     CustomBin(String, Vec<String>), // bin name, args
@@ -407,14 +409,13 @@ impl Config {
             }
         }
 
-        //        println!("cfg: {:?}", &result);
         result
     }
 }
 
 /// Create a template directory for a python project.
 pub(crate) fn new(name: &str) -> Result<(), Box<Error>> {
-    if !path::PathBuf::from(name).exists() {
+    if !PathBuf::from(name).exists() {
         fs::create_dir_all(&format!("{}/{}", name, name))?;
         fs::File::create(&format!("{}/{}/main.py", name, name))?;
         fs::File::create(&format!("{}/README.md", name))?;
@@ -572,9 +573,8 @@ fn find_py_alias(config_ver: Option<Version>) -> Result<(String, Version), Alias
     }
 }
 
-fn venv_exists(venv_path: &path::PathBuf) -> bool {
-    // todo make this more robust
-    venv_path.exists()
+fn venv_exists(bin_path: &PathBuf) -> bool {
+    bin_path.join("python").exists() && bin_path.join("pip").exists()
 }
 
 fn find_sub_dependencies(package: Package) -> Vec<Package> {
@@ -669,6 +669,20 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                     result.push(Task::Install(packages))
                 }
             }
+            Arg::InstallBin => {
+                // todo DRY!
+                let mut packages: Vec<Package> = Vec::new();
+                for i2 in i + 1..args.len() {
+                    let arg2 = &args[i2];
+                    match arg2 {
+                        Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
+                        // Ipython as an arg could mean run ipython, or install it, if post the `install` arg.
+                        //                        Arg::IPython => packages.push(Package::from_str("ipython").unwrap()),
+                        _ => break,
+                    }
+                }
+                result.push(Task::InstallBin(packages))
+            }
             Arg::Uninstall => {
                 // todo DRY
                 let mut packages: Vec<Package> = Vec::new();
@@ -695,33 +709,7 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                 }
                 result.push(Task::Python(args_));
             }
-            //            Arg::IPython => {
-            //                // todo DRY
-            //                let mut args_ = vec![];
-            //                for i2 in i + 1..args.len() {
-            //                    let arg2 = &args[i2];
-            //                    if let Arg::Other(a) = arg2 {
-            //                        args_.push(a.to_string());
-            //                    }
-            //                }
-            //                result.push(Task::IPython(args_));
-            //            }
 
-            //            Arg::Pip => {
-            //                let mut args_ = vec![];
-            //                for i2 in i + 1..args.len() {
-            //                    let arg2 = &args[i2];
-            //                    if let Arg::Other(arg) = arg2 {
-            //                        args_.push(arg.to_string());
-            //                    }
-            //                    // List can be used directly as an arg, or passed to pip normally; handle
-            //                    // the latter case here.
-            //                    if let Arg::List = arg2 {
-            //                        args_.push("list".to_string());
-            //                    }
-            //                }
-            //                result.push(Task::Pip(args_));
-            //            }
             Arg::List => {
                 // todo
 
@@ -745,7 +733,8 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
             Arg::Publish => result.push(Task::Publish),
             Arg::Help => result.push(Task::Help),
             Arg::Version => result.push(Task::Version),
-            Arg::Other(_) => (),
+            // todo pop args for custom!
+            Arg::Other(name) => (result.push(Task::CustomBin(name.to_string(), vec![]))),
         }
     }
     result
@@ -804,9 +793,9 @@ fn remove_dependencies(filename: &str, dependencies: &[Package]) {
 
 /// Wait for directories to be created; required between modifying the filesystem,
 /// and running code that depends on the new files.
-fn wait_for_dirs(dirs: &Vec<path::PathBuf>) -> Result<(), AliasError> {
+fn wait_for_dirs(dirs: &Vec<PathBuf>) -> Result<(), AliasError> {
     // todo: AliasError is a quick fix to avoid creating new error type.
-    let timeout = 10000; // ms
+    let timeout = 1000; // ms
     for i in 0..timeout {
         let mut all_created = true;
         for dir in dirs {
@@ -824,6 +813,44 @@ fn wait_for_dirs(dirs: &Vec<path::PathBuf>) -> Result<(), AliasError> {
     })
 }
 
+fn create_venv(py_v: Option<Version>, lib_path: &PathBuf) {
+    // We only use the alias for creating the virtual environment. After that,
+    // we call our venv's executable directly.
+    let mut alias = String::new();
+    let mut version = Version::new(0, 0, 0);
+    match find_py_alias(py_v) {
+        Ok(a) => {
+            alias = a.0;
+            version = a.1;
+        }
+        Err(_) => exit_early("Unable to find a Python version on the path"),
+    };
+
+    println!("Setting up Python environment...");
+
+    // If the Python version's below 3.3, we must download and install the
+    // `virtualenv` package, since `venv` isn't included.
+    if version < Version::new_short(3, 3) {
+        if let Err(_) = commands::install_virtualenv_global(&alias) {
+            exit_early("Problem installing the virtualenv package, required by Python versions older than 3.3)");
+        }
+        if let Err(_) = commands::create_legacy_virtualenv(&alias, lib_path, ".venv") {
+            exit_early("Problem creating virtual environment");
+        }
+    } else {
+        if let Err(_) = commands::create_venv(&alias, lib_path, ".venv") {
+            exit_early("Problem creating virtual environment");
+        }
+    }
+
+    // Wait until the venv's created before continuing, or we'll get errors
+    // when attempting to use it
+    // todo: These won't work with Scripts ! - pass venv_path et cinstead
+    let py_venv = lib_path.join("../.venv/bin/python");
+    let pip_venv = lib_path.join("../.venv/bin/pip");
+    wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
+}
+
 fn main() {
     let package_dir = "__pypackages__";
     let cfg_filename = "pyproject.toml";
@@ -836,8 +863,13 @@ fn main() {
 
     let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
 
+    // Don't include version patch in the directory name, per PEP 582.
     let venv_path = project_dir.join(&format!(
         "{}/{}.{}/.venv",
+        package_dir, py_version.major, py_version.minor
+    ));
+    let lib_path = project_dir.join(&format!(
+        "{}/{}.{}/lib",
         package_dir, py_version.major, py_version.minor
     ));
 
@@ -849,54 +881,48 @@ fn main() {
         Err(_) => Lock::default(),
     };
 
-    println!("LOCK!: {:?}", lock);
-
-    // todo version QC
-    // venv_parent is where the venv will be created
-    let venv_parent = &format!("{}/{}.{}", package_dir, py_version.major, py_version.minor);
-
-    if !venv_exists(&venv_path) {
-        // We only use the alias for creating the virtual environment. After that,
-        // we call our venv's executable directly.
-        let alias = find_py_alias(cfg.py_version);
-
-        println!("Setting up Python environment...");
-        match alias {
-            Ok((alias, py_version)) => {
-                if let Err(_) = commands::create_venv(
-                    &alias,
-                    // Don't include version patch in the directory name, per PEP 582.
-                    venv_parent,
-                    ".venv",
-                ) {
-                    exit_early("Problem creating virtual environment");
-                }
-            }
-            Err(_) => exit_early("Unable to find a Python version on the path"),
-        }
-
-        // Wait until the venv's created before continuing, or we'll get errors
-        // when attempting to use it
-        let py_venv = path::PathBuf::from(&format!("{}/.venv/bin/python", venv_parent));
-        let pip_venv = path::PathBuf::from(&format!("{}/.venv/bin/pip", venv_parent));
-        wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
+    // todo: Doesn't work with Scripts
+    let bin_path_temp = venv_path.join("bin");
+    if !venv_exists(&bin_path_temp) {
+        // todo fix this check for the venv existing.
+        create_venv(cfg.py_version, &venv_path);
     }
 
     // The bin name should be `bin` on Linux, and `Scripts` on Windows. Check both.
     // Locate bin name after ensuring we have a virtual environment.
     let mut bin_path = venv_path.clone();
+    // It appears that 'binary' scripts are installed in the `lib` directory's bin folder when
+    // using the --target arg, instead of the one directly in the env.
+    let mut custom_bin_path = venv_path.clone();
     if venv_path.join("bin").exists() {
         bin_path = venv_path.join("bin");
+        // We assume that the name applies to both the directory in the virtual env, and in `lib`.
+        custom_bin_path = lib_path.join("bin");
     } else if venv_path.join("Scripts").exists() {
         bin_path = venv_path.join("Scripts");
+        custom_bin_path = lib_path.join("bin");
     } else {
-        exit_early("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder")
+        exit_early("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder)")
     }
 
     for task in find_tasks(&opt.args).iter() {
         match task {
             Task::Install(packages) => {
-                if let Err(_) = commands::install(&bin_path, packages, false) {
+                if let Err(_) = commands::install(&bin_path, packages, false, false) {
+                    exit_early("Problem installing packages");
+                }
+                add_dependencies(cfg_filename, packages);
+
+                lock.add_packages(packages);
+
+                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+                if let Err(_) = write_lock(lock_filename, &lock) {
+                    exit_early("Problem writing the lock file");
+                }
+            }
+            Task::InstallBin(packages) => {
+                // todo DRY
+                if let Err(_) = commands::install(&bin_path, packages, false, true) {
                     exit_early("Problem installing packages");
                 }
                 add_dependencies(cfg_filename, packages);
@@ -909,7 +935,7 @@ fn main() {
                 }
             }
             Task::InstallAll => {
-                if let Err(_) = commands::install(&bin_path, &cfg.dependencies, false) {
+                if let Err(_) = commands::install(&bin_path, &cfg.dependencies, false, false) {
                     exit_early("Problem installing packages");
                 }
                 //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
@@ -919,7 +945,7 @@ fn main() {
             }
             Task::Uninstall(packages) => {
                 // todo: Display which packages?
-                match commands::install(&bin_path, packages, true) {
+                match commands::install(&bin_path, packages, true, false) {
                     Ok(_) => (),
                     Err(_) => exit_early("Problem uninstalling packages"),
                 }
@@ -931,7 +957,7 @@ fn main() {
                 }
             }
             Task::UninstallAll => {
-                commands::install(&bin_path, &cfg.dependencies, true)
+                commands::install(&bin_path, &cfg.dependencies, true, false)
                     .expect("Problem uninstalling packages");
                 //                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
                 match write_lock(lock_filename, &Lock::default()) {
@@ -939,32 +965,34 @@ fn main() {
                     Err(e) => exit_early("Problem writing the lock file"),
                 }
             }
-            Task::Python(args) => commands::run_python(&bin_path, args),
+            Task::Python(args) => commands::run_python(&bin_path, &lib_path, args),
             Task::CustomBin(name, args) => {
-                let mut bin_package_installed = false;
-                for package in &cfg.dependencies {
-                    if &package.name == name {
-                        bin_package_installed = true;
-                    }
-                }
-
-                if !bin_package_installed {
-                    if let Err(_) = commands::install(
-                        &bin_path,
-                        &[Package {
-                            name: name.to_string(),
-                            version: None,
-                            version_type: VersionType::Exact,
-                        }],
-                        false,
-                    ) {
-                        exit_early(&format!("Problem installing {}", name));
-                    }
-                }
-                let ipy_venv = path::PathBuf::from(&format!("{}/.venv/bin/{}", venv_parent, name));
-
-                wait_for_dirs(&vec![ipy_venv]).unwrap();
-                commands::run_bin(&bin_path, name, args);
+                // todo put this back.
+                //
+                //                let mut bin_package_installed = false;
+                //                for package in &cfg.dependencies {
+                //                    if &package.name == name {
+                //                        bin_package_installed = true;
+                //                    }
+                //                }
+                //
+                //                if !bin_package_installed {
+                //                    if let Err(_) = commands::install(
+                //                        &bin_path,
+                //                        &[Package {
+                //                            name: name.to_string(),
+                //                            version: None,
+                //                            version_type: VersionType::Exact,
+                //                        }],
+                //                        false,
+                //                        true,
+                //                    ) {
+                //                        exit_early(&format!("Problem installing {}", name));
+                //                    }
+                //                }
+                //                wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
+                //                commands::run_bin(&custom_bin_path, &lib_path, name, args);
+                commands::run_bin(&bin_path, &lib_path, name, args);
             }
             Task::New(name) => {
                 match new(name) {

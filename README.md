@@ -10,7 +10,6 @@ The virtual environment is created in the same diretory as `lib`.
 This is a new project undergoing active development: expect breaking changes
 in the near future. 
 
-Python 3.3 or newer currently required; this may change later.
 
 ## Installation
 There are 2 main ways to install:
