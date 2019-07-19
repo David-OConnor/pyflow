@@ -1,11 +1,11 @@
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-    env,
+    cmp, env,
     error::Error,
     fmt, fs,
     io::{self, BufRead, BufReader},
-    num, path,
+    num, path, process,
     str::FromStr,
     string::ParseError,
 };
@@ -29,6 +29,8 @@ enum Arg {
     Package,
     Publish,
     New,
+    Help,
+    Version,
     Other(String), // eg a script file, or package name to install.
 }
 
@@ -49,6 +51,8 @@ impl FromStr for Arg {
             "package" => Arg::Package,
             "publish" => Arg::Publish,
             "new" => Arg::New,
+            "help" => Arg::Help,
+            "version" => Arg::Version,
             _ => Arg::Other(arg.into()),
         };
 
@@ -70,6 +74,8 @@ enum Task {
     New(String), // holds the project name.
     Package,
     Publish,
+    Help,
+    Version,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -150,6 +156,20 @@ impl FromStr for Version {
             minor,
             patch,
         })
+    }
+}
+
+impl PartialOrd for Version {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        if self.major != self.major {
+            Some(self.major.cmp(&other.major))
+        } else if self.minor != other.minor {
+            Some(self.minor.cmp(&other.minor))
+        } else {
+            let self_patch = self.patch.unwrap_or(0);
+            let other_patch = other.patch.unwrap_or(0);
+            Some(self_patch.cmp(&other_patch))
+        }
     }
 }
 
@@ -435,6 +455,14 @@ author = ""
     Ok(())
 }
 
+/// A convenience function
+fn exit_early(message: &str) {
+    {
+        println!("{}", message);
+        process::exit(1)
+    }
+}
+
 /// Prompt which Python alias to use, if multiple are found.
 fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
     // Todo: Overall, the API here is inelegant.
@@ -486,6 +514,17 @@ impl fmt::Display for AliasError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.details)
     }
+}
+
+/// Help for this tool
+fn help() {
+    // todo: Use a pre-built help from a CLI crate?
+    // todo
+}
+
+/// Version info about this tool
+fn version() {
+    // todo
 }
 
 /// Make an educated guess at the command needed to execute python the
@@ -568,12 +607,12 @@ impl Lock {
             let lock_package = LockPackage {
                 name: package.name.clone(),
                 version: package.version.unwrap_or(Version::new(0, 0, 0)).to_string(), // todo ensure 3-digit.
-                source: None,                         // todo
-                dependencies: None,                   // todo
+                source: None,                                                          // todo
+                dependencies: None,                                                    // todo
             };
 
             match &mut self.package {
-                Some(p) => {p.push(lock_package)}
+                Some(p) => p.push(lock_package),
                 None => self.package = Some(vec![lock_package]),
             }
         }
@@ -697,6 +736,8 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
             }
             Arg::Package => result.push(Task::Package),
             Arg::Publish => result.push(Task::Publish),
+            Arg::Help => result.push(Task::Help),
+            Arg::Version => result.push(Task::Version),
             Arg::Other(_) => (),
         }
     }
@@ -755,6 +796,7 @@ fn remove_dependencies(filename: &str, dependencies: &[Package]) {
 }
 
 fn main() {
+    let package_dir = "__pypackages__";
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pypackage.lock";
 
@@ -765,8 +807,8 @@ fn main() {
 
     let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
     let venv_name = &format!(
-        "__pypackages__/{}.{}/.venv",
-        py_version.major, py_version.minor
+        "{}/{}.{}/.venv",
+        package_dir, py_version.major, py_version.minor
     );
     let venv_path = project_dir.join(venv_name);
 
@@ -787,7 +829,15 @@ fn main() {
         // todo version QC
         match alias {
             Ok((alias, py_version)) => {
-                commands::create_venv(&alias, "__pypackages__/3.7", ".venv", py_version);
+                match commands::create_venv(
+                    &alias,
+                    &format!("{}/{}", package_dir, py_version.to_string()),
+                    ".venv",
+                    py_version,
+                ) {
+                    Ok(_) => (),
+                    Err(_) => exit_early("Problem creating virtual environment"),
+                }
             }
             Err(e) => panic!(e),
         }
@@ -796,28 +846,55 @@ fn main() {
     for task in find_tasks(&opt.args).iter() {
         match task {
             Task::Install(packages) => {
-                commands::install(&venv_name, packages, false);
+                match commands::install(&venv_name, packages, false){
+                    Ok(_) => (),
+                    Err(_) => exit_early("Problem installing packages"),
+                }
                 add_dependencies(cfg_filename, packages);
 
                 lock.add_packages(packages);
 
-                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+                match write_lock(lock_filename, &lock) {
+                    Ok(_) => (),
+                    Err(_) => exit_early("Problem writing the lock file"),
+                }
             }
             Task::InstallAll => {
-                commands::install(&venv_name, &cfg.dependencies, false);
-                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+                match commands::install(&venv_name, &cfg.dependencies, false) {
+                    Ok(_) => (),
+                    Err(_) => {
+                        println!("Problem installing packages");
+                        process::exit(1)
+                    }
+                }
+                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+                match write_lock(lock_filename, &lock) {
+                    Ok(_) => (),
+                    Err(_) => exit_early("Problem writing the lock file"),
+                }
             }
             Task::Uninstall(packages) => {
                 // todo: Display which packages?
-                commands::install(&venv_name, packages, true)
-                    .expect("Problem uninstalling packages");
+                match commands::install(&venv_name, packages, true) {
+                    Ok(_) => (),
+                    Err(_) => exit_early("Problem uninstalling packages"),
+                }
                 remove_dependencies(cfg_filename, packages);
-                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+                match write_lock(lock_filename, &lock) {
+                    Ok(_) => (),
+                    Err(_) => exit_early("Problem writing the lock file"),
+                }
             }
             Task::UninstallAll => {
                 commands::install(&venv_name, &cfg.dependencies, true)
                     .expect("Problem uninstalling packages");
-                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
+                //                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
+                match write_lock(lock_filename, &Lock::default()) {
+                    Ok(_) => (),
+                    Err(e) => exit_early("Problem writing the lock file"),
+                }
             }
             Task::Python(args) => commands::run_python(&venv_name, args, false),
             Task::IPython(args) => {
@@ -850,13 +927,18 @@ fn main() {
             }
             //            Task::Pip(args) => commands::run_pip(&venv_name, args),
             Task::New(name) => {
-                new(name).expect("Problem creating project");
+                match new(name) {
+                    Ok(_) => (),
+                    Err(_) => exit_early("Problem creating project"),
+                }
+                //                new(name).expect("Problem creating project");
                 // todo: Maybe show the path created at.
                 println!("Created a new Python project named {}", name)
             }
             Task::Package => build::build(&venv_name, &cfg),
             Task::Publish => build::publish(&venv_name, &cfg),
-            //            Task::General(args) => (),
+            Task::Help => help(),
+            Task::Version => version(),
         }
     }
 }
@@ -1067,5 +1149,16 @@ pub mod tests {
                 version_type: VersionType::Tilde,
             }
         )
+    }
+
+    #[test]
+    fn version_ordering() {
+        let a = Version::new(4, 9, 4);
+        let b = Version::new(4, 8, 0);
+        let c = Version::new(3, 3, 6);
+        let d = Version::new(3, 3, 5);
+        let e = Version::new(3, 3, 0);
+
+        assert!(a > b && b > c && c > d && d > e);
     }
 }
