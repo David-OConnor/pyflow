@@ -1,5 +1,4 @@
 use crate::package_types::{Package, Version, VersionType};
-use clap;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -22,95 +21,39 @@ mod commands;
 mod package_types;
 mod util;
 
-/// Categorize arguments parsed from the command line.
-#[derive(Debug)]
-enum Arg {
-    Install,
-    InstallBin, // todo temp perhaps
-    Uninstall,
-    Python,
-    List,
-    Package,
-    Publish,
-    New,
-    Help,
-    Version,
-    Other(String), // eg a script file, or package name to install.
-}
-
-impl FromStr for Arg {
-    type Err = ParseError;
-
-    fn from_str(arg: &str) -> Result<Self, Self::Err> {
-        let result = match arg.to_string().to_lowercase().as_ref() {
-            "install" => Arg::Install,
-            "installbin" => Arg::InstallBin,
-            "uninstall" => Arg::Uninstall,
-            "python" => Arg::Python,
-            "python3" => Arg::Python,
-            "list" => Arg::List,
-            "package" => Arg::Package,
-            "publish" => Arg::Publish,
-            "new" => Arg::New,
-            "help" => Arg::Help,
-            "version" => Arg::Version,
-            _ => Arg::Other(arg.into()),
-        };
-
-        Ok(result)
-    }
-}
-
-/// Similar to Arg, but grouped.
-#[derive(Debug, PartialEq)]
-enum Task {
-    New(String), // holds the project name.
-    InstallAll,
-    UninstallAll,
-    Install(Vec<Package>),
-    InstallBin(Vec<Package>), // todo temp perhaps
-    Uninstall(Vec<Package>),
-    Python(Vec<String>),
-    CustomBin(String, Vec<String>), // bin name, args
-
-    // todo: Instead of special ipython here, should have a type for running any
-    // todo custom executable for Python that ends up in the bin/Scripts folder.
-    // todo eg Black.
-
-    //    IPython(Vec<String>),
-    //    Pip(Vec<String>), // If if we want pip list etc
-    //    General(Vec<String>),
-    Package,
-    Publish,
-    Help,
-    Version,
-}
-
-// todo: Another string parser to package, from pip fmt ie == / >=
-
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Pypackage", about = "Python packaging and publishing")]
 struct Opt {
     #[structopt(subcommand)]
     subcmds: SubCommand,
-     #[structopt(name = "custom_bin")]
+    #[structopt(name = "custom_bin")]
     custom_bin: Option<String>,
 }
 
+#[derive(StructOpt, Debug)]
 enum SubCommand {
     #[structopt(name = "new")]
-    New(String), // holds the project name.
+    New {
+        #[structopt(name = "name")]
+        name: String,
+    },
+    // holds the project name.
     #[structopt(name = "install")]
-    Install(Vec<Package>),
-//    InstallBin(Vec<Package>), // todo temp perhaps
-//    Uninstall(Vec<Package>),
+    Install {
+        #[structopt(name = "packages")]
+        packages: Vec<String>,
+    },
+
+    //    InstallBin(Vec<Package>), // todo temp perhaps
+    //    Uninstall(Vec<Package>),
     #[structopt(name = "python")]
-    Python(Vec<String>),
-//    CustomBin(String, Vec<String>), // bin name, args
-//    Package,
-//    Publish,
-//    Help,
-//    Version,
+    Python {
+        #[structopt(name = "args")]
+        args: Vec<String>,
+    },
+    //    CustomBin(String, Vec<String>), // bin name, args
+    //    Package,
+    //    Publish,
 }
 
 /// A config, parsed from pyproject.toml
@@ -411,120 +354,6 @@ fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-/// Categorize CLI arguments.
-fn find_tasks(args: &[Arg]) -> Vec<Task> {
-    // We want to match args as appropriate. Ie, `python main.py`, and
-    // `pip install django requests` are parsed as separate args,
-    //but should be treated as single items.
-    let mut result = vec![];
-
-    // todo: Figure out a better way than the messy, repetative sub-iteting,
-    // todo for finding grouped args.
-
-    let mut i = 0;
-    //    for (i, arg) in args.iter().enumerate() {
-    //    for for i in 0..args.len() {
-    while i < args.len() {
-        match args.get(i).expect("Can't find arg by index") {
-            // Non-custom args are things like Python, Install etc;
-            // start a new group.
-            Arg::Install => {
-                let mut packages: Vec<Package> = Vec::new();
-                for i2 in i + 1..args.len() {
-                    let arg2 = &args[i2];
-                    match arg2 {
-                        Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
-                        _ => {
-                            i = i2; // Next loop, skip over the package-args we added.
-                            break;
-                        }
-                    }
-                }
-                if packages.is_empty() {
-                    result.push(Task::InstallAll);
-                } else {
-                    result.push(Task::Install(packages))
-                }
-            }
-            Arg::InstallBin => {
-                // todo DRY!
-                let mut packages: Vec<Package> = Vec::new();
-                for i2 in i + 1..args.len() {
-                    let arg2 = &args[i2];
-                    match arg2 {
-                        Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
-                        // Ipython as an arg could mean run ipython, or install it, if post the `install` arg.
-                        //                        Arg::IPython => packages.push(Package::from_str("ipython").unwrap()),
-                        _ => {
-                            i = i2;
-                            break;
-                        }
-                    }
-                }
-                result.push(Task::InstallBin(packages))
-            }
-            Arg::Uninstall => {
-                // todo DRY
-                let mut packages: Vec<Package> = Vec::new();
-                for i2 in i + 1..args.len() {
-                    let arg2 = &args[i2];
-                    match arg2 {
-                        Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
-                        _ => {
-                            i = i2;
-                            break;
-                        }
-                    }
-                }
-                if packages.is_empty() {
-                    result.push(Task::UninstallAll);
-                } else {
-                    result.push(Task::Uninstall(packages))
-                }
-            }
-            Arg::Python => {
-                let mut args_ = vec![];
-                for i2 in i + 1..args.len() {
-                    let arg2 = &args[i2];
-                    if let Arg::Other(a) = arg2 {
-                        args_.push(a.to_string());
-                    }
-                }
-                result.push(Task::Python(args_));
-            }
-
-            Arg::List => {
-                // todo
-
-            }
-            Arg::New => {
-                // Exactly one arg is allowed following New.
-                let name = match args.get(i + 1) {
-                    Some(a) => {
-                        match a {
-                            Arg::Other(name) => {
-                                result.push(Task::New(name.into()));
-                                break
-                            },
-                            // todo: Allow other arg types
-                            _ => util::exit_early("Please pick a different name")
-                        }
-                    },
-                    None => util::exit_early("Please specify a name for the projct, and try again. Eg: pyproject new myproj")
-                };
-            }
-            Arg::Package => result.push(Task::Package),
-            Arg::Publish => result.push(Task::Publish),
-            Arg::Help => result.push(Task::Help),
-            Arg::Version => result.push(Task::Version),
-            // todo pop args for custom!
-            Arg::Other(name) => (result.push(Task::CustomBin(name.to_string(), vec![]))),
-        }
-        i += 1;
-    }
-    result
-}
-
 /// Write dependencies to pyproject.toml
 fn add_dependencies(filename: &str, dependencies: &[Package]) {
     //        let data = fs::read_to_string("pyproject.toml")
@@ -688,70 +517,15 @@ fn main() {
     }
 
     let opt = Opt::from_args();
-//
-//    let arg_matches = clap::App::new("Pypackage")
-//        .version("0.0.1")
-//        .author("David O'Connor <david.alan.oconnor@gmail.com>")
-//        .about("A package and publishing program for Python")
-//        //        .arg(clap::Arg::with_name("new")
-//        //            .short("n")
-//        //            .long("new")
-//        //            .value_name("name")
-//        //            .help("Create a new project directory")
-//        //            .takes_value(true))
-//        //        .arg(clap::Arg::with_name("install")
-//        //            .help("Install one or more Python packages"))
-//        .subcommand(
-//            clap::SubCommand::with_name("new")
-//                .about("Create a new project directory")
-//                .arg(clap::Arg::with_name("name")),
-//        )
-//        .subcommand(
-//            clap::SubCommand::with_name("install")
-//                .about("Install one or more Python packages")
-//                .arg(clap::Arg::with_name("name")),
-//        )
-//        .get_matches();
-//
-//        if let Some(m) = arg_matches.subcommand_matches("new") {
-//            if let Some(name) = m.value_of("name") {
-//                println!("NAME: {}", name);
-//            }
-//        }
-//
-//
-//        return
 
-        for task in find_tasks(&opt.args).iter() {
-        match task {
-            Task::Install(packages) => {
-                if let Err(_) = commands::install(&bin_path, packages, false, false) {
-                    util::exit_early("Problem installing packages");
-                }
-                add_dependencies(cfg_filename, packages);
-
-                lock.add_packages(packages);
-
-                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-                if let Err(_) = write_lock(lock_filename, &lock) {
-                    util::exit_early("Problem writing the lock file");
-                }
-            }
-            Task::InstallBin(packages) => {
-                // todo DRY
-                if let Err(_) = commands::install(&bin_path, packages, false, true) {
-                    util::exit_early("Problem installing packages");
-                }
-                add_dependencies(cfg_filename, packages);
-
-                lock.add_packages(packages);
-
-                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-                if let Err(_) = write_lock(lock_filename, &lock) {
-                    util::exit_early("Problem writing the lock file");
-                }
-            }
-            Task::InstallAll => {
+    match opt.subcmds {
+        SubCommand::New { name } => {
+            new(&name).expect("Problem creating project");
+            //                // todo: Maybe show the path created at.
+            println!("Created a new Python project named {}", name)
+        }
+        SubCommand::Install { packages } => {
+            if packages.is_empty() {
                 if let Err(_) = commands::install(&bin_path, &cfg.dependencies, false, false) {
                     util::exit_early("Problem installing packages");
                 }
@@ -759,231 +533,150 @@ fn main() {
                 if let Err(_) = write_lock(lock_filename, &lock) {
                     util::exit_early("Problem writing the lock file");
                 }
-            }
-            Task::Uninstall(packages) => {
-                // todo: Display which packages?
-                match commands::install(&bin_path, packages, true, false) {
-                    Ok(_) => (),
-                    Err(_) => util::exit_early("Problem uninstalling packages"),
+            } else {
+                // Install all from `pyproject.toml`.
+                let packages: Vec<Package> = packages
+                    .into_iter()
+                    .map(|p| Package::from_str(&p).unwrap())
+                    .collect();
+
+                if let Err(_) = commands::install(&bin_path, &packages, false, false) {
+                    util::exit_early("Problem installing packages");
                 }
-                remove_dependencies(cfg_filename, packages);
+                add_dependencies(cfg_filename, &packages);
+
+                lock.add_packages(&packages);
+
                 //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-                match write_lock(lock_filename, &lock) {
-                    Ok(_) => (),
-                    Err(_) => util::exit_early("Problem writing the lock file"),
+                if let Err(_) = write_lock(lock_filename, &lock) {
+                    util::exit_early("Problem writing the lock file");
                 }
             }
-            Task::UninstallAll => {
-                commands::install(&bin_path, &cfg.dependencies, true, false)
-                    .expect("Problem uninstalling packages");
-                //                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
-                match write_lock(lock_filename, &Lock::default()) {
-                    Ok(_) => (),
-                    Err(e) => util::exit_early("Problem writing the lock file"),
-                }
-            }
-            Task::Python(args) => commands::run_python(&bin_path, &lib_path, args),
-            Task::CustomBin(name, args) => {
-                // todo put this back.
-                //
-                //                let mut bin_package_installed = false;
-                //                for package in &cfg.dependencies {
-                //                    if &package.name == name {
-                //                        bin_package_installed = true;
-                //                    }
-                //                }
-                //
-                //                if !bin_package_installed {
-                //                    if let Err(_) = commands::install(
-                //                        &bin_path,
-                //                        &[Package {
-                //                            name: name.to_string(),
-                //                            version: None,
-                //                            version_type: VersionType::Exact,
-                //                        }],
-                //                        false,
-                //                        true,
-                //                    ) {
-                //                        util::exit_early(&format!("Problem installing {}", name));
-                //                    }
-                //                }
-                //                wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
-                //                commands::run_bin(&custom_bin_path, &lib_path, name, args);
-                commands::run_bin(&bin_path, &lib_path, name, args);
-            }
-            Task::New(name) => {
-                match new(name) {
-                    Ok(_) => (),
-                    Err(_) => util::exit_early("Problem creating project"),
-                }
-                //                new(name).expect("Problem creating project");
-                // todo: Maybe show the path created at.
-                println!("Created a new Python project named {}", name)
-            }
-            Task::Package => build::build(&bin_path, &cfg),
-            Task::Publish => build::publish(&bin_path, &cfg),
-            Task::Help => help(),
-            Task::Version => version(),
         }
-    };
+        SubCommand::Python { args } => commands::run_python(&bin_path, &lib_path, &args),
+    }
+
+    //
+    //    let arg_matches = clap::App::new("Pypackage")
+    //        .version("0.0.1")
+    //        .author("David O'Connor <david.alan.oconnor@gmail.com>")
+    //        .about("A package and publishing program for Python")
+    //        //        .arg(clap::Arg::with_name("new")
+    //        //            .short("n")
+    //        //            .long("new")
+    //        //            .value_name("name")
+    //        //            .help("Create a new project directory")
+    //        //            .takes_value(true))
+    //        //        .arg(clap::Arg::with_name("install")
+    //        //            .help("Install one or more Python packages"))
+    //        .subcommand(
+    //            clap::SubCommand::with_name("new")
+    //                .about("Create a new project directory")
+    //                .arg(clap::Arg::with_name("name")),
+    //        )
+    //        .subcommand(
+    //            clap::SubCommand::with_name("install")
+    //                .about("Install one or more Python packages")
+    //                .arg(clap::Arg::with_name("name")),
+    //        )
+    //        .get_matches();
+    //
+    //        if let Some(m) = arg_matches.subcommand_matches("new") {
+    //            if let Some(name) = m.value_of("name") {
+    //                println!("NAME: {}", name);
+    //            }
+    //        }
+    //
+    //
+    //        return
+    //
+    //        for task in find_tasks(&opt.args).iter() {
+    //        match task {
+
+    //            Task::InstallBin(packages) => {
+    //                // todo DRY
+    //                if let Err(_) = commands::install(&bin_path, packages, false, true) {
+    //                    util::exit_early("Problem installing packages");
+    //                }
+    //                add_dependencies(cfg_filename, packages);
+    //
+    //                lock.add_packages(packages);
+    //
+    //                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+    //                if let Err(_) = write_lock(lock_filename, &lock) {
+    //                    util::exit_early("Problem writing the lock file");
+    //                }
+    //            }
+    //            Task::InstallAll => {
+    //                if let Err(_) = commands::install(&bin_path, &cfg.dependencies, false, false) {
+    //                    util::exit_early("Problem installing packages");
+    //                }
+    //                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+    //                if let Err(_) = write_lock(lock_filename, &lock) {
+    //                    util::exit_early("Problem writing the lock file");
+    //                }
+    //            }
+    //            Task::Uninstall(packages) => {
+    //                // todo: Display which packages?
+    //                match commands::install(&bin_path, packages, true, false) {
+    //                    Ok(_) => (),
+    //                    Err(_) => util::exit_early("Problem uninstalling packages"),
+    //                }
+    //                remove_dependencies(cfg_filename, packages);
+    //                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+    //                match write_lock(lock_filename, &lock) {
+    //                    Ok(_) => (),
+    //                    Err(_) => util::exit_early("Problem writing the lock file"),
+    //                }
+    //            }
+    //            Task::UninstallAll => {
+    //                commands::install(&bin_path, &cfg.dependencies, true, false)
+    //                    .expect("Problem uninstalling packages");
+    //                //                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
+    //                match write_lock(lock_filename, &Lock::default()) {
+    //                    Ok(_) => (),
+    //                    Err(e) => util::exit_early("Problem writing the lock file"),
+    //                }
+    //            }
+    //            Task::CustomBin(name, args) => {
+    //                // todo put this back.
+    //                //
+    //                //                let mut bin_package_installed = false;
+    //                //                for package in &cfg.dependencies {
+    //                //                    if &package.name == name {
+    //                //                        bin_package_installed = true;
+    //                //                    }
+    //                //                }
+    //                //
+    //                //                if !bin_package_installed {
+    //                //                    if let Err(_) = commands::install(
+    //                //                        &bin_path,
+    //                //                        &[Package {
+    //                //                            name: name.to_string(),
+    //                //                            version: None,
+    //                //                            version_type: VersionType::Exact,
+    //                //                        }],
+    //                //                        false,
+    //                //                        true,
+    //                //                    ) {
+    //                //                        util::exit_early(&format!("Problem installing {}", name));
+    //                //                    }
+    //                //                }
+    //                //                wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
+    //                //                commands::run_bin(&custom_bin_path, &lib_path, name, args);
+    //                commands::run_bin(&bin_path, &lib_path, name, args);
+    //            }
+
+    //            Task::Package => build::build(&bin_path, &cfg),
+    //            Task::Publish => build::publish(&bin_path, &cfg),
+    //        }
+    //    };
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
     use crate::package_types::{Package, Version, VersionType};
-
-    #[test]
-    fn tasks_python() {
-        let args = vec![Arg::Python];
-        assert_eq!(vec![Task::Python(vec![])], find_tasks(&args));
-    }
-
-    #[test]
-    fn tasks_python_with_script() {
-        let script = "main.py".to_string();
-        let args = vec![Arg::Python, Arg::Other(script.clone())];
-        assert_eq!(vec![Task::Python(vec![script])], find_tasks(&args));
-    }
-
-    //    #[test]
-    //    fn tasks_ipython() {
-    //        let args = vec![Arg::IPython];
-    //        assert_eq!(vec![Task::IPython(vec![])], find_tasks(&args));
-    //    }
-
-    #[test]
-    fn tasks_install_one() {
-        let name = "requests".to_string();
-        let args = vec![Arg::Install, Arg::Other(name.clone())];
-
-        assert_eq!(
-            vec![Task::Install(vec![Package {
-                name,
-                version_type: VersionType::Exact,
-                version: None,
-                bin: false,
-            }])],
-            find_tasks(&args)
-        );
-    }
-
-    #[test]
-    fn tasks_install_several() {
-        let name1 = "numpy".to_string();
-        let name2 = "scipy".to_string();
-        let args = vec![
-            Arg::Install,
-            Arg::Other(name1.clone()),
-            Arg::Other(name2.clone()),
-        ];
-
-        assert_eq!(
-            vec![Task::Install(vec![
-                Package {
-                    name: name1,
-                    version_type: VersionType::Exact,
-                    version: None,
-                    bin: false,
-                },
-                Package {
-                    name: name2,
-                    version_type: VersionType::Exact,
-                    version: None,
-                    bin: false,
-                }
-            ])],
-            find_tasks(&args)
-        );
-    }
-
-    #[test]
-    fn tasks_install_all() {
-        let args = vec![Arg::Install];
-        assert_eq!(vec![Task::InstallAll], find_tasks(&args));
-    }
-
-    //    #[test]
-    //    fn tasks_install_ipython() {
-    //        // Needed to make sure this is attempting to install ipython, not install all and run ipython.
-    //        let args = vec![Arg::Install, Arg::IPython];
-    //        assert_eq!(
-    //            vec![Task::Install(vec![Package {
-    //                name: "ipython".to_string(),
-    //                version_type: VersionType::Exact,
-    //                version: None,
-    //            }])],
-    //            find_tasks(&args)
-    //        );
-    //    }
-
-    #[test]
-    fn tasks_uninstall_one() {
-        let name = "requests".to_string();
-        let args = vec![Arg::Uninstall, Arg::Other(name.clone())];
-
-        assert_eq!(
-            vec![Task::Uninstall(vec![Package {
-                name,
-                version_type: VersionType::Exact,
-                version: None,
-                bin: false,
-            }])],
-            find_tasks(&args)
-        );
-    }
-
-    #[test]
-    fn tasks_uninstall_several() {
-        let name1 = "numpy".to_string();
-        let name2 = "scipy".to_string();
-        let args = vec![
-            Arg::Uninstall,
-            Arg::Other(name1.clone()),
-            Arg::Other(name2.clone()),
-        ];
-
-        assert_eq!(
-            vec![Task::Uninstall(vec![
-                Package {
-                    name: name1,
-                    version_type: VersionType::Exact,
-                    version: None,
-                    bin: false,
-                },
-                Package {
-                    name: name2,
-                    version_type: VersionType::Exact,
-                    version: None,
-                    bin: false,
-                }
-            ])],
-            find_tasks(&args)
-        );
-    }
-
-    #[test]
-    fn tasks_uninstall_all() {
-        let args = vec![Arg::Uninstall];
-        assert_eq!(vec![Task::UninstallAll], find_tasks(&args));
-    }
-
-    //    #[test]
-    //    fn tasks_pip() {
-    //        let args = vec![Arg::Pip, Arg::Other("list".into())];
-    //        assert_eq!(vec![Task::Pip(vec!["list".into()])], find_tasks(&args));
-    //    }
-
-    //    #[test]
-    //    fn tasks_general() {
-    //        let name1 = "pip".to_string();
-    //        let name2 = "list".to_string();
-    //        let args = vec![Arg::Other(name1.clone()), Arg::Other(name2.clone())];
-    //        assert_eq!(vec![Task::General(vec![name1, name2])], find_tasks(&args));
-    //    }
-
-    // todo: Invalid or non-standard task arg combos for tasks
-    // todo: Versioned tasks.
 
     #[test]
     fn valid_version() {
