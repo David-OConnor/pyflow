@@ -127,7 +127,7 @@ pub(crate) fn install(
         // todo: Perhaps there's a way to install bins to __pypackages__ ?
         let package_fullname = &package.to_pip_string();
         let mut args = vec!["-m", "pip", install, package_fullname];
-        if !bin {
+        if !bin && !package.bin {
             args.push("--target");
             args.push("../../lib");
         }
@@ -159,6 +159,8 @@ pub(crate) fn run_python(bin_path: &PathBuf, lib_path: &PathBuf, args: &[String]
 /// Run a binary installed in the virtual environment, such as `ipython` or `black`.
 pub(crate) fn run_bin(bin_path: &PathBuf, lib_path: &PathBuf, name: &str, args: &[String]) {
     set_pythonpath(lib_path);
+
+    println!("bp{:?}", bin_path);
 
     Command::new(&format!("./{}", name))
         .current_dir(bin_path)

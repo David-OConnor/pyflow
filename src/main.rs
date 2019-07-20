@@ -1,25 +1,27 @@
+use clap;
+use crate::package_types::{Package, Version, VersionType};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
-    cmp, env,
+    collections::HashMap,
+    env,
     error::Error,
     fmt, fs,
     io::{self, BufRead, BufReader},
-    num,
     path::PathBuf,
     process,
-    str::FromStr,
     string::ParseError,
+    str::FromStr,
     thread, time,
 };
 use structopt::StructOpt;
 //use textio;
-use std::collections::HashMap;
-use std::process::exit;
 use toml;
 
 mod build;
 mod commands;
+mod package_types;
+mod util;
 
 /// Categorize arguments parsed from the command line.
 #[derive(Debug)]
@@ -85,239 +87,7 @@ enum Task {
     Version,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-enum VersionType {
-    Exact,
-    Carot,
-    Tilde,
-}
 
-impl ToString for VersionType {
-    fn to_string(&self) -> String {
-        match self {
-            VersionType::Exact => "==".into(),
-            // todo this isn't quite a valid mapping.
-            VersionType::Carot => ">=".into(),
-            VersionType::Tilde => ">=".into(),
-        }
-    }
-}
-
-impl VersionType {
-    pub fn toml_string(&self) -> String {
-        match self {
-            VersionType::Exact => "".into(),
-            VersionType::Carot => "^".into(),
-            VersionType::Tilde => "~".into(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
-struct Version {
-    // Attempted to use the semvar crate, but fuctionality/docs are lacking.
-    // todo wildcard
-    major: u32,
-    minor: u32,
-    patch: Option<u32>,
-}
-
-impl Version {
-    fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self {
-            major,
-            minor,
-            patch: Some(patch),
-        }
-    }
-
-    /// No patch specified.
-    fn new_short(major: u32, minor: u32) -> Self {
-        Self {
-            major,
-            minor,
-            patch: None,
-        }
-    }
-}
-
-impl FromStr for Version {
-    type Err = num::ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?$").unwrap();
-        let caps = re
-            .captures(s)
-            .expect(&format!("Problem parsing version: {}", s));
-
-        let major = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
-        let minor = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
-
-        let patch = match caps.get(3) {
-            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
-            None => None,
-        };
-
-        Ok(Self {
-            major,
-            minor,
-            patch,
-        })
-    }
-}
-
-impl PartialOrd for Version {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        if self.major != self.major {
-            Some(self.major.cmp(&other.major))
-        } else if self.minor != other.minor {
-            Some(self.minor.cmp(&other.minor))
-        } else {
-            let self_patch = self.patch.unwrap_or(0);
-            let other_patch = other.patch.unwrap_or(0);
-            Some(self_patch.cmp(&other_patch))
-        }
-    }
-}
-
-impl ToString for Version {
-    fn to_string(&self) -> String {
-        match self.patch {
-            Some(patch) => format!("{}.{}.{}", self.major, self.minor, patch),
-            None => format!("{}.{}", self.major, self.minor),
-        }
-    }
-}
-
-/// This is a thinly-wrapped tuple, which exists so we can implement
-/// serialization for the lock file.
-struct LockVersion {
-    major: u32,
-    minor: u32,
-    patch: u32,
-}
-
-//impl Serialize for ExactVersion {
-//    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//    where
-//        S: Serializer,
-//    {
-//        // 3 is the number of fields in the struct.
-//        let mut s = serializer.serialize_struct("Person", 3)?;
-//        state.serialize_field("r", &self.r)?;
-//        state.serialize_field("g", &self.g)?;
-//        state.serialize_field("b", &self.b)?;
-//        state.end()
-//    }
-//}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-struct Package {
-    name: String,
-    version_type: VersionType, // Not used if version not specified.
-    // None on version means not specified
-    version: Option<Version>, // https://semver.org
-}
-
-impl Package {
-    /// eg `saturn>=0.3.1`
-    pub fn to_pip_string(&self) -> String {
-        match self.version {
-            Some(version) => {
-                self.name.clone() + &self.version_type.to_string() + &version.to_string()
-            }
-            None => self.name.clone(),
-        }
-    }
-
-    /// eg `saturn = "^0.3.1"`
-    pub fn to_toml_string(&self) -> String {
-        match self.version {
-            Some(version) => format!(
-                "{} = \"{}{}\"",
-                self.name.clone(),
-                self.version_type.toml_string(),
-                version.to_string()
-            ),
-            None => self.name.clone(),
-        }
-    }
-}
-
-impl FromStr for Package {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // todo: Wildcard
-        let re = Regex::new(
-            r#"^(.+?)(?:\s*=\s*"([\^\~]?)(\d{1,4})(?:\.(\d{1,4}?))?(?:\.(\d{1,4})")?)?$"#,
-        )
-        .unwrap();
-
-        let caps = re
-            .captures(s)
-            .expect(&format!("Problem parsing dependency: {}. Skipping", s));
-
-        let name = caps.get(1).unwrap().as_str();
-
-        let prefix = match caps.get(2) {
-            Some(p) => Some(p.as_str()),
-            None => None,
-        };
-
-        let major = match caps.get(3) {
-            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
-            None => None,
-        };
-
-        let mut minor = match caps.get(4) {
-            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
-            None => None,
-        };
-
-        let mut patch = match caps.get(5) {
-            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
-            None => None,
-        };
-
-        // If the version has 2 numbers, eg 4.3, the regex is picking up the second
-        // as patch and None for minor.
-        // todo: Ideally, fix the regex instead of using this workaround.
-        if let Some(p) = patch {
-            if minor.is_none() {
-                minor = Some(p);
-                patch = None;
-            }
-        }
-
-        // If no major, Version is None
-        let version = match major {
-            Some(ma) => Some(Version {
-                major: ma,
-                minor: minor.unwrap_or(0),
-                patch,
-            }),
-            None => None,
-        };
-
-        Ok(Self {
-            name: name.to_string(),
-            version,
-            version_type: match prefix {
-                Some(t) => {
-                    if t.is_empty() {
-                        VersionType::Exact
-                    } else if t == "^" {
-                        VersionType::Carot
-                    } else {
-                        VersionType::Tilde
-                    }
-                }
-                None => VersionType::Exact,
-            },
-        })
-    }
-}
 
 // todo: Another string parser to package, from pip fmt ie == / >=
 
@@ -461,13 +231,7 @@ author = ""
     Ok(())
 }
 
-/// A convenience function
-fn exit_early(message: &str) {
-    {
-        println!("{}", message);
-        process::exit(1)
-    }
-}
+
 
 /// Prompt which Python alias to use, if multiple are found.
 fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
@@ -573,10 +337,6 @@ fn find_py_alias(config_ver: Option<Version>) -> Result<(String, Version), Alias
     }
 }
 
-fn venv_exists(bin_path: &PathBuf) -> bool {
-    bin_path.join("python").exists() && bin_path.join("pip").exists()
-}
-
 fn find_sub_dependencies(package: Package) -> Vec<Package> {
     // todo: This will be useful for dependency resolution, and removing packages
     // todo no longer needed when running install.
@@ -644,12 +404,15 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
     // `pip install django requests` are parsed as separate args,
     //but should be treated as single items.
     let mut result = vec![];
-    // let mut current_task = vec![];
 
     // todo: Figure out a better way than the messy, repetative sub-iteting,
     // todo for finding grouped args.
-    for (i, arg) in args.iter().enumerate() {
-        match arg {
+
+    let mut i = 0;
+//    for (i, arg) in args.iter().enumerate() {
+//    for for i in 0..args.len() {
+    while i < args.len() {
+        match args.get([i]).expect("Can't find arg by index") {
             // Non-custom args are things like Python, Install etc;
             // start a new group.
             Arg::Install => {
@@ -658,9 +421,10 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                     let arg2 = &args[i2];
                     match arg2 {
                         Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
-                        // Ipython as an arg could mean run ipython, or install it, if post the `install` arg.
-                        //                        Arg::IPython => packages.push(Package::from_str("ipython").unwrap()),
-                        _ => break,
+                        _ => {
+                            i = i2;  // Next loop, skip over the package-args we added.
+                            break
+                        },
                     }
                 }
                 if packages.is_empty() {
@@ -678,7 +442,10 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                         Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
                         // Ipython as an arg could mean run ipython, or install it, if post the `install` arg.
                         //                        Arg::IPython => packages.push(Package::from_str("ipython").unwrap()),
-                        _ => break,
+                        _ => {
+                            i = i2;
+                            break
+                        },
                     }
                 }
                 result.push(Task::InstallBin(packages))
@@ -690,7 +457,10 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                     let arg2 = &args[i2];
                     match arg2 {
                         Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
-                        _ => break,
+                        _ => {
+                            i = i2;
+                            break
+                        },
                     }
                 }
                 if packages.is_empty() {
@@ -715,19 +485,21 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
 
             }
             Arg::New => {
-                // todo DRY
-                let mut found_name = false;
-                for i2 in i + 1..args.len() {
-                    let arg2 = &args[i2];
-                    if let Arg::Other(name) = arg2 {
-                        result.push(Task::New(name.to_string()));
-                        found_name = true;
-                        break;
-                    }
-                }
-                if !found_name {
-                    panic!("Please specify a name for the projct, and try again. Eg: pyproject new myproj");
-                }
+                // Exactly one arg is allowed following New.
+                let name = match args.get(i + 1) {
+                    Some(a) => {
+                        match a {
+                            Arg::Other(name) => {
+                                result.push(Task::New(name.into()));
+                                break
+                            },
+                            // todo: Allow other arg types
+                            _ => util::exit_early("Please pick a different name")
+                        }
+                    },
+                    None => util::exit_early("Please specify a name for the projct, and try again. Eg: pyproject new myproj")
+                };
+
             }
             Arg::Package => result.push(Task::Package),
             Arg::Publish => result.push(Task::Publish),
@@ -736,6 +508,7 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
             // todo pop args for custom!
             Arg::Other(name) => (result.push(Task::CustomBin(name.to_string(), vec![]))),
         }
+        i += 1;
     }
     result
 }
@@ -823,7 +596,7 @@ fn create_venv(py_v: Option<Version>, lib_path: &PathBuf) {
             alias = a.0;
             version = a.1;
         }
-        Err(_) => exit_early("Unable to find a Python version on the path"),
+        Err(_) => util::exit_early("Unable to find a Python version on the path"),
     };
 
     println!("Setting up Python environment...");
@@ -832,14 +605,14 @@ fn create_venv(py_v: Option<Version>, lib_path: &PathBuf) {
     // `virtualenv` package, since `venv` isn't included.
     if version < Version::new_short(3, 3) {
         if let Err(_) = commands::install_virtualenv_global(&alias) {
-            exit_early("Problem installing the virtualenv package, required by Python versions older than 3.3)");
+            util::exit_early("Problem installing the virtualenv package, required by Python versions older than 3.3)");
         }
         if let Err(_) = commands::create_legacy_virtualenv(&alias, lib_path, ".venv") {
-            exit_early("Problem creating virtual environment");
+            util::exit_early("Problem creating virtual environment");
         }
     } else {
         if let Err(_) = commands::create_venv(&alias, lib_path, ".venv") {
-            exit_early("Problem creating virtual environment");
+            util::exit_early("Problem creating virtual environment");
         }
     }
 
@@ -856,12 +629,10 @@ fn main() {
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pypackage.lock";
 
-    let opt = Opt::from_args();
-    let cfg = Config::from_file(cfg_filename);
-
     let project_dir = env::current_dir().expect("Can't find current path");
-
     let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
+
+    let cfg = Config::from_file(cfg_filename);
 
     // Don't include version patch in the directory name, per PEP 582.
     let venv_path = project_dir.join(&format!(
@@ -883,7 +654,7 @@ fn main() {
 
     // todo: Doesn't work with Scripts
     let bin_path_temp = venv_path.join("bin");
-    if !venv_exists(&bin_path_temp) {
+    if !util::venv_exists(&bin_path_temp) {
         // todo fix this check for the venv existing.
         create_venv(cfg.py_version, &venv_path);
     }
@@ -902,14 +673,16 @@ fn main() {
         bin_path = venv_path.join("Scripts");
         custom_bin_path = lib_path.join("bin");
     } else {
-        exit_early("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder)")
+        util::exit_early("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder)")
     }
+
+    let opt = Opt::from_args();
 
     for task in find_tasks(&opt.args).iter() {
         match task {
             Task::Install(packages) => {
                 if let Err(_) = commands::install(&bin_path, packages, false, false) {
-                    exit_early("Problem installing packages");
+                    util::exit_early("Problem installing packages");
                 }
                 add_dependencies(cfg_filename, packages);
 
@@ -917,13 +690,13 @@ fn main() {
 
                 //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
                 if let Err(_) = write_lock(lock_filename, &lock) {
-                    exit_early("Problem writing the lock file");
+                    util::exit_early("Problem writing the lock file");
                 }
             }
             Task::InstallBin(packages) => {
                 // todo DRY
                 if let Err(_) = commands::install(&bin_path, packages, false, true) {
-                    exit_early("Problem installing packages");
+                    util::exit_early("Problem installing packages");
                 }
                 add_dependencies(cfg_filename, packages);
 
@@ -931,29 +704,29 @@ fn main() {
 
                 //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
                 if let Err(_) = write_lock(lock_filename, &lock) {
-                    exit_early("Problem writing the lock file");
+                    util::exit_early("Problem writing the lock file");
                 }
             }
             Task::InstallAll => {
                 if let Err(_) = commands::install(&bin_path, &cfg.dependencies, false, false) {
-                    exit_early("Problem installing packages");
+                    util::exit_early("Problem installing packages");
                 }
                 //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
                 if let Err(_) = write_lock(lock_filename, &lock) {
-                    exit_early("Problem writing the lock file");
+                    util::exit_early("Problem writing the lock file");
                 }
             }
             Task::Uninstall(packages) => {
                 // todo: Display which packages?
                 match commands::install(&bin_path, packages, true, false) {
                     Ok(_) => (),
-                    Err(_) => exit_early("Problem uninstalling packages"),
+                    Err(_) => util::exit_early("Problem uninstalling packages"),
                 }
                 remove_dependencies(cfg_filename, packages);
                 //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
                 match write_lock(lock_filename, &lock) {
                     Ok(_) => (),
-                    Err(_) => exit_early("Problem writing the lock file"),
+                    Err(_) => util::exit_early("Problem writing the lock file"),
                 }
             }
             Task::UninstallAll => {
@@ -962,7 +735,7 @@ fn main() {
                 //                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
                 match write_lock(lock_filename, &Lock::default()) {
                     Ok(_) => (),
-                    Err(e) => exit_early("Problem writing the lock file"),
+                    Err(e) => util::exit_early("Problem writing the lock file"),
                 }
             }
             Task::Python(args) => commands::run_python(&bin_path, &lib_path, args),
@@ -987,7 +760,7 @@ fn main() {
                 //                        false,
                 //                        true,
                 //                    ) {
-                //                        exit_early(&format!("Problem installing {}", name));
+                //                        util::exit_early(&format!("Problem installing {}", name));
                 //                    }
                 //                }
                 //                wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
@@ -997,7 +770,7 @@ fn main() {
             Task::New(name) => {
                 match new(name) {
                     Ok(_) => (),
-                    Err(_) => exit_early("Problem creating project"),
+                    Err(_) => util::exit_early("Problem creating project"),
                 }
                 //                new(name).expect("Problem creating project");
                 // todo: Maybe show the path created at.
@@ -1014,6 +787,7 @@ fn main() {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::package_types::{Package, Version, VersionType};
 
     #[test]
     fn tasks_python() {
@@ -1044,6 +818,7 @@ pub mod tests {
                 name,
                 version_type: VersionType::Exact,
                 version: None,
+                bin: false,
             }])],
             find_tasks(&args)
         );
@@ -1065,11 +840,13 @@ pub mod tests {
                     name: name1,
                     version_type: VersionType::Exact,
                     version: None,
+                    bin: false,
                 },
                 Package {
                     name: name2,
                     version_type: VersionType::Exact,
                     version: None,
+                    bin: false,
                 }
             ])],
             find_tasks(&args)
@@ -1106,6 +883,7 @@ pub mod tests {
                 name,
                 version_type: VersionType::Exact,
                 version: None,
+                bin: false,
             }])],
             find_tasks(&args)
         );
@@ -1127,11 +905,13 @@ pub mod tests {
                     name: name1,
                     version_type: VersionType::Exact,
                     version: None,
+                    bin: false,
                 },
                 Package {
                     name: name2,
                     version_type: VersionType::Exact,
                     version: None,
+                    bin: false,
                 }
             ])],
             find_tasks(&args)
@@ -1190,6 +970,7 @@ pub mod tests {
                 name: "saturn".into(),
                 version: None,
                 version_type: VersionType::Exact,
+                bin: false,
             }
         )
     }
@@ -1203,6 +984,7 @@ pub mod tests {
                 name: "bolt".into(),
                 version: Some(Version::new(3, 1, 4)),
                 version_type: VersionType::Exact,
+                bin: false,
             }
         )
     }
@@ -1216,6 +998,7 @@ pub mod tests {
                 name: "chord".into(),
                 version: Some(Version::new(2, 7, 18)),
                 version_type: VersionType::Carot,
+                bin: false,
             }
         )
     }
@@ -1229,6 +1012,7 @@ pub mod tests {
                 name: "sphere".into(),
                 version: Some(Version::new_short(6, 7)),
                 version_type: VersionType::Tilde,
+                bin: false,
             }
         )
     }

@@ -83,3 +83,31 @@ version = "0.0.0"
 [[package]]
 name = "numpy"
 version = "0.0.0"
+
+[[package]]
+name = "black"
+version = "0.0.0"
+
+[[package]]
+name = "ipython"
+version = "0.0.0"
+
+[[package]]
+name = "ipython"
+version = "0.0.0"
+
+[[package]]
+name = "black"
+version = "0.0.0"
+
+[[package]]
+name = "black"
+version = "0.0.0"
+
+[[package]]
+name = "ipython"
+version = "0.0.0"
+
+[[package]]
+name = "ipython"
+version = "0.0.0"
