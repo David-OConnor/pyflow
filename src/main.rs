@@ -1,5 +1,5 @@
-use clap;
 use crate::package_types::{Package, Version, VersionType};
+use clap;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -9,9 +9,8 @@ use std::{
     fmt, fs,
     io::{self, BufRead, BufReader},
     path::PathBuf,
-    process,
-    string::ParseError,
     str::FromStr,
+    string::ParseError,
     thread, time,
 };
 use structopt::StructOpt;
@@ -65,6 +64,7 @@ impl FromStr for Arg {
 /// Similar to Arg, but grouped.
 #[derive(Debug, PartialEq)]
 enum Task {
+    New(String), // holds the project name.
     InstallAll,
     UninstallAll,
     Install(Vec<Package>),
@@ -80,22 +80,37 @@ enum Task {
     //    IPython(Vec<String>),
     //    Pip(Vec<String>), // If if we want pip list etc
     //    General(Vec<String>),
-    New(String), // holds the project name.
     Package,
     Publish,
     Help,
     Version,
 }
 
-
-
 // todo: Another string parser to package, from pip fmt ie == / >=
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "basic")]
+#[structopt(name = "Pypackage", about = "Python packaging and publishing")]
 struct Opt {
-    #[structopt(name = "args")]
-    args: Vec<Arg>, // ie "install", "python" etc.
+    #[structopt(subcommand)]
+    subcmds: SubCommand,
+     #[structopt(name = "custom_bin")]
+    custom_bin: Option<String>,
+}
+
+enum SubCommand {
+    #[structopt(name = "new")]
+    New(String), // holds the project name.
+    #[structopt(name = "install")]
+    Install(Vec<Package>),
+//    InstallBin(Vec<Package>), // todo temp perhaps
+//    Uninstall(Vec<Package>),
+    #[structopt(name = "python")]
+    Python(Vec<String>),
+//    CustomBin(String, Vec<String>), // bin name, args
+//    Package,
+//    Publish,
+//    Help,
+//    Version,
 }
 
 /// A config, parsed from pyproject.toml
@@ -230,8 +245,6 @@ author = ""
 
     Ok(())
 }
-
-
 
 /// Prompt which Python alias to use, if multiple are found.
 fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
@@ -409,10 +422,10 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
     // todo for finding grouped args.
 
     let mut i = 0;
-//    for (i, arg) in args.iter().enumerate() {
-//    for for i in 0..args.len() {
+    //    for (i, arg) in args.iter().enumerate() {
+    //    for for i in 0..args.len() {
     while i < args.len() {
-        match args.get([i]).expect("Can't find arg by index") {
+        match args.get(i).expect("Can't find arg by index") {
             // Non-custom args are things like Python, Install etc;
             // start a new group.
             Arg::Install => {
@@ -422,9 +435,9 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                     match arg2 {
                         Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
                         _ => {
-                            i = i2;  // Next loop, skip over the package-args we added.
-                            break
-                        },
+                            i = i2; // Next loop, skip over the package-args we added.
+                            break;
+                        }
                     }
                 }
                 if packages.is_empty() {
@@ -444,8 +457,8 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                         //                        Arg::IPython => packages.push(Package::from_str("ipython").unwrap()),
                         _ => {
                             i = i2;
-                            break
-                        },
+                            break;
+                        }
                     }
                 }
                 result.push(Task::InstallBin(packages))
@@ -459,8 +472,8 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                         Arg::Other(name) => packages.push(Package::from_str(name).unwrap()),
                         _ => {
                             i = i2;
-                            break
-                        },
+                            break;
+                        }
                     }
                 }
                 if packages.is_empty() {
@@ -499,7 +512,6 @@ fn find_tasks(args: &[Arg]) -> Vec<Task> {
                     },
                     None => util::exit_early("Please specify a name for the projct, and try again. Eg: pyproject new myproj")
                 };
-
             }
             Arg::Package => result.push(Task::Package),
             Arg::Publish => result.push(Task::Publish),
@@ -630,9 +642,8 @@ fn main() {
     let lock_filename = "pypackage.lock";
 
     let project_dir = env::current_dir().expect("Can't find current path");
-    let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
-
     let cfg = Config::from_file(cfg_filename);
+    let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
 
     // Don't include version patch in the directory name, per PEP 582.
     let venv_path = project_dir.join(&format!(
@@ -677,8 +688,41 @@ fn main() {
     }
 
     let opt = Opt::from_args();
+//
+//    let arg_matches = clap::App::new("Pypackage")
+//        .version("0.0.1")
+//        .author("David O'Connor <david.alan.oconnor@gmail.com>")
+//        .about("A package and publishing program for Python")
+//        //        .arg(clap::Arg::with_name("new")
+//        //            .short("n")
+//        //            .long("new")
+//        //            .value_name("name")
+//        //            .help("Create a new project directory")
+//        //            .takes_value(true))
+//        //        .arg(clap::Arg::with_name("install")
+//        //            .help("Install one or more Python packages"))
+//        .subcommand(
+//            clap::SubCommand::with_name("new")
+//                .about("Create a new project directory")
+//                .arg(clap::Arg::with_name("name")),
+//        )
+//        .subcommand(
+//            clap::SubCommand::with_name("install")
+//                .about("Install one or more Python packages")
+//                .arg(clap::Arg::with_name("name")),
+//        )
+//        .get_matches();
+//
+//        if let Some(m) = arg_matches.subcommand_matches("new") {
+//            if let Some(name) = m.value_of("name") {
+//                println!("NAME: {}", name);
+//            }
+//        }
+//
+//
+//        return
 
-    for task in find_tasks(&opt.args).iter() {
+        for task in find_tasks(&opt.args).iter() {
         match task {
             Task::Install(packages) => {
                 if let Err(_) = commands::install(&bin_path, packages, false, false) {
@@ -781,7 +825,7 @@ fn main() {
             Task::Help => help(),
             Task::Version => version(),
         }
-    }
+    };
 }
 
 #[cfg(test)]

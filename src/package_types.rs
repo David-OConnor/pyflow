@@ -1,8 +1,8 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{cmp, num, string::ParseError, str::FromStr};
+use std::{cmp, num, str::FromStr, string::ParseError};
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub enum VersionType {
     Exact,
     Carot,
