@@ -13,7 +13,6 @@ use std::{
 use structopt::StructOpt;
 //use textio;
 use crate::util::abort;
-use toml;
 
 mod build;
 mod commands;
@@ -51,8 +50,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-        name = "install",
-        help = "
+    name = "install",
+    help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -353,7 +352,7 @@ struct LockPackage {
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct Lock {
     package: Option<Vec<LockPackage>>,
-    metadata: Option<String>, // todo unimplemented
+    metadata: Option<String>, // ie checksums
 }
 
 impl Lock {
@@ -374,6 +373,48 @@ impl Lock {
                 Some(p) => p.push(lock_package),
                 None => self.package = Some(vec![lock_package]),
             }
+        }
+    }
+
+    /// Create a lock from dependencies.
+    fn from_dependencies(dependencies: &[Dependency]) -> Self {
+        let mut lock_packs = vec![];
+        for dep in dependencies {
+            match util::get_warehouse_data(&dep.name) {
+                Ok(data) => {
+                    let warehouse_versions: Vec<Version> = data
+                        .releases
+                        .keys()
+                        .map(|v| Version::from_str2(&v))
+                        .collect();
+                    match dep.best_match(&warehouse_versions) {
+                        Some(best) => {
+                            lock_packs.push(
+                                LockPackage {
+                                    name: dep.name.clone(),
+                                    version: best.to_string(),
+                                    source: None,  // todo
+                                    dependencies: None // todo
+                                }
+                            )
+                        }
+                        None => abort(&format!("Unable to find a matching dependency for {}", dep.to_toml_string())),
+                    }
+
+
+
+                    //                    for (v, release) in data.releases {
+                    //                        let vers = Version::from_str2(&v);
+                    //                        if
+                    //                    }
+                }
+                Err(_) => abort(&format!("Problem getting warehouse data for {}", dep.name)),
+            }
+        }
+
+        Self {
+            metadata: None,
+            package: Some(lock_packs),
         }
     }
 }
@@ -405,11 +446,9 @@ fn add_dependencies(filename: &str, dependencies: &[Dependency]) {
     let file = fs::File::open(filename).expect("cannot open pyproject.toml");
 
     let mut in_dep = false;
-
     let sect_re = Regex::new(r"\[.*\]").unwrap();
 
     let result = String::new();
-
     for line in BufReader::new(file).lines() {
         //    for line in data.lines() {
         if let Ok(l) = line {
@@ -542,7 +581,7 @@ fn install(
         if let Err(_) = commands::install(&bin_path, &packages, false, bin) {
             util::abort("Problem installing packages");
         }
-        add_dependencies(cfg_filename, &packages);
+        //        add_dependencies(cfg_filename, &packages);
 
         lock.add_packages(&packages);
 
@@ -629,40 +668,17 @@ py_version = \"3.7\"",
 
     let opt = Opt::from_args();
 
-    //    if let Some(args) = opt.custom_bin {
-
-    //        let mut bin_package_installed = false;
-    //        for package in &cfg.dependencies {
-    //            if &package.name == name {
-    //                bin_package_installed = true;
-    //            }
-    //        }
-    //
-    //        if !bin_package_installed {
-    //            if let Err(_) = commands::install(
-    //                &bin_path,
-    //                &[Package {
-    //                    name: name.to_string(),
-    //                    version: None,
-    //                    version_type: VersionType::Exact,
-    //                }],
-    //                false,
-    //                true,
-    //            ) {
-    //                util::exit_early(&format!("Problem installing {}", name));
-    //            }
-    //        }
-
-    //        util::wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
-
     let args = opt.custom_bin;
     if !args.is_empty() {
         // todo better handling, eg abort
         let name = args.get(0).expect("Missing first arg").clone();
         let args: Vec<String> = args.into_iter().skip(1).collect();
         if let Err(_) = commands::run_bin(&bin_path, &lib_path, &name, &args) {
-            abort(&format!("Problem running the binary script {}. Is it installed? \
-            Try running `pypackage install {} -b`", name, name));
+            abort(&format!(
+                "Problem running the binary script {}. Is it installed? \
+                 Try running `pypackage install {} -b`",
+                name, name
+            ));
         }
 
         return;
@@ -680,27 +696,40 @@ py_version = \"3.7\"",
             println!("Created a new Python project named {}", name)
         }
 
+        // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
+        // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
-            let mut p = Vec::new();
-            if packages.is_empty() {
-                p = cfg.dependencies.clone();
-            } else {
-                p = packages
-                    .into_iter()
-                    .map(|p| Dependency::from_str(&p).unwrap())
-                    .collect();
-            }
+            let new_deps: Vec<Dependency> = packages
+                .into_iter()
+                .map(|p| Dependency::from_str(&p).unwrap())
+                .collect();
 
-            install(
-                &p,
-                &[],
-                &mut lock,
-                lock_filename,
-                cfg_filename,
-                &bin_path,
-                InstallType::Install,
-                bin,
-            );
+            add_dependencies(cfg_filename, &new_deps);
+
+            //            let mut p = Vec::new();
+            //            if packages.is_empty() {
+            //                p = cfg.dependencies.clone();
+            //            } else {
+            //                p = packages
+            //                    .into_iter()
+            //                    .map(|p| Dependency::from_str(&p).unwrap())
+            //                    .collect();
+            //            }
+
+            let lock = Lock::from_dependencies(&cfg.dependencies);
+            println!("LOCK: {:?}", lock);
+            write_lock(lock_filename, &lock);
+
+            //            install(
+            //                &p,
+            //                &[],
+            //                &mut lock,
+            //                lock_filename,
+            //                cfg_filename,
+            //                &bin_path,
+            //                InstallType::Install,
+            //                bin,
+            //            );
         }
         SubCommand::Uninstall { packages } => {
             // todo: DRY with Install
@@ -729,7 +758,7 @@ py_version = \"3.7\"",
             if let Err(_) = commands::run_python(&bin_path, &lib_path, &args) {
                 abort("Problem running Python");
             }
-        },
+        }
         SubCommand::Package {} => build::build(&bin_path, &lib_path, &cfg),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
         SubCommand::Init {} => abort("Init not yet implemented"),

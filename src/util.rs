@@ -1,10 +1,7 @@
 use crate::package_types::Version;
-use std::{env, path::PathBuf, process, thread, time};
-
-pub fn get_pypi_metadata(name: &str) {
-    // todo this may not have entry pts...
-    let url = format!("https://pypi.org/pypi/{}/json", name);
-}
+use serde::Deserialize;
+use std::error::Error;
+use std::{collections::HashMap, env, path::PathBuf, process, thread, time};
 
 /// A convenience function
 pub fn abort(message: &str) {
@@ -84,4 +81,52 @@ pub(crate) fn set_pythonpath(lib_path: &PathBuf) {
             .to_str()
             .expect("Problem converting current path to string"),
     );
+}
+
+#[derive(Debug, Deserialize)]
+struct WarehouseInfo {
+    requires_dist: Option<String>,
+    requires_python: Option<String>,
+    version: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct WarehouseRelease {
+    // Could use digests field, which has sha256 as well as md5.
+    // md5 is faster, and should be good enough.
+    pub has_sig: bool,
+    pub md5_digest: String,
+    pub packagetype: String,
+    pub python_version: String,
+    pub requires_python: Option<String>,
+    pub url: String,
+}
+
+//#[derive(Debug, Deserialize)]
+//struct WarehouseUrl {
+//    // Could use digests field, which has sha256 as well as md5.
+//    // md5 is faster, and should be good enough.
+//    has_sig: bool,
+//    md5_digest: String,
+//    packagetype: String,
+//    python_version: String,
+//    requires_python: Option<String>,
+//    url: String,
+//}
+
+/// Only deserialize the info we need to resolve dependencies etc.
+#[derive(Debug, Deserialize)]
+pub(crate) struct WarehouseData {
+    //    info: WarehouseInfo,
+    //    releases: Vec<WarehouseRelease>,
+    pub releases: HashMap<String, Vec<WarehouseRelease>>,
+    //    urls: Vec<WarehouseUrl>,
+}
+
+/// Fetch data about a package from the Pypi Warehouse.
+/// https://warehouse.pypa.io/api-reference/json/
+pub(crate) fn get_warehouse_data(name: &str) -> Result<(WarehouseData), Box<Error>> {
+    let url = format!("https://pypi.org/pypi/{}/json", name);
+    let resp: WarehouseData = reqwest::get(&url)?.json()?;
+    Ok(resp)
 }

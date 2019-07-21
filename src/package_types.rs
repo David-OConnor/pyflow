@@ -37,7 +37,7 @@ impl VersionType {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct Version {
     // Attempted to use the semvar crate, but fuctionality/docs are lacking.
     // todo wildcard
@@ -112,17 +112,23 @@ impl FromStr for Version {
     }
 }
 
-impl PartialOrd for Version {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+impl Ord for Version {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
         if self.major != self.major {
-            Some(self.major.cmp(&other.major))
+            self.major.cmp(&other.major)
         } else if self.minor != other.minor {
-            Some(self.minor.cmp(&other.minor))
+            self.minor.cmp(&other.minor)
         } else {
             let self_patch = self.patch.unwrap_or(0);
             let other_patch = other.patch.unwrap_or(0);
-            Some(self_patch.cmp(&other_patch))
+            self_patch.cmp(&other_patch)
         }
+    }
+}
+
+impl PartialOrd for Version {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -171,6 +177,40 @@ pub struct Dependency {
 }
 
 impl Dependency {
+    /// Find the version from a selection that's most compatible with this
+    /// dependency's requirements.
+    pub fn best_match(&self, versions: &[Version]) -> Option<Version> {
+        // If no version specified, use the highest available.
+        if self.version.is_none() {
+            // This logic has to do with derefing the interior of Option.
+            return match versions.into_iter().max() {
+                Some(v) => Some(v.clone()),
+                None => None,
+            }
+        }
+
+        match self.version_type {
+            // For an exact version type, there's only one correct answer.
+            VersionType::Exact => {
+                let result = versions
+                    .into_iter()
+                    .filter(|v| *v == &self.version.unwrap())
+                    .collect::<Vec<&Version>>();
+
+                let b = result.get(0);
+
+                match b {
+                    Some(v) => Some(*v.clone()),
+                    None => None,
+                }
+
+            },
+            // todo implement later.
+            VersionType::Tilde => None,
+            VersionType::Carot => None,
+        }
+    }
+
     /// eg `saturn>=0.3.1`
     pub fn to_pip_string(&self) -> String {
         match self.version {
@@ -203,7 +243,7 @@ impl FromStr for Dependency {
         let re = Regex::new(
             r#"^(.+?)(?:\s*=\s*"([\^\~]?)(\d{1,4})(?:\.(\d{1,4}?))?(?:\.(\d{1,4})")?)?$"#,
         )
-        .unwrap();
+            .unwrap();
 
         let caps = re
             .captures(s)

@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 regex = "^1.1.9"
+reqwest = "^0.9.19"
 structopt = "^0.2.18"
 serde = {version = "^1.0.92", features = ["derive"]}
 toml = "^0.5.1"

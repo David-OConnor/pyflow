@@ -1,31 +1,7 @@
 [[package]]
 name = "siunits"
-version = "0.0.0"
+version = "0.0.3"
 
 [[package]]
-name = "siunits"
-version = "0.0.0"
-
-[[package]]
-name = "siunits"
-version = "0.0.0"
-
-[[package]]
-name = "siunits"
-version = "0.0.0"
-
-[[package]]
-name = "siunits"
-version = "0.0.0"
-
-[[package]]
-name = "siunits"
-version = "0.0.0"
-
-[[package]]
-name = "black"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
+name = "saturn"
+version = "0.3.4"

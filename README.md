@@ -75,6 +75,13 @@ a project: a readme, pyproject.toml, and directory for source code
 - `pypackage version` - Get the current version of this tool
 - `pypackage help` Get help, including a list of available commands
 
+## How dependencies are resolved
+Running `pypackage install` loads the project's requirements from `pyproject.toml`. (adding a
+package name, eg `pypackage install matplotlib` simply adds that requirement before proceeding)
+compatible versions of dependencies (and their dependencies) are determined using info from 
+the [PyPi Warehosue](https://github.com/pypa/warehouse). They're downloaded, verified using
+hashes, and the exact versions are stored in a lock file.
+
 ## Why?
 Using a Python installation directly when installing dependencies can become messy.
 If using a system-level Python, which is ubiqutious in Linux, altering dependencies
@@ -181,3 +188,10 @@ or submit a PR.
 - Make sure the `pypackage` binary is accessible in your path. If installing
 via `Cargo`, this should be set up automatically.
 - Make sure `__pypackages__` and `.venv` are in your `.gitignore` file.
+
+# References
+- [PEP 582 - Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
+- [Pep 518 - pyproject.toml](https://www.python.org/dev/peps/pep-518/)
+- [Semantic versioning](https://semver.org/)
+- [Specifying dependencies in Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
+- [Predictable dependency management blog entry](https://blog.rust-lang.org/2016/05/05/cargo-pillars.html)
