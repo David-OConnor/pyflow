@@ -26,6 +26,7 @@ run `cargo install pypackage`.
 Example contents:
 ```toml
 [tool.pypackage]
+py_version = "3.7"
 name = "runcible"
 version = "0.1.0"
 author = " John Hackworth"

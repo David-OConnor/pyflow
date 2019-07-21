@@ -113,7 +113,7 @@ pub(crate) fn create_venv(
 
 pub(crate) fn install(
     bin_path: &PathBuf,
-    packages: &[crate::Package],
+    packages: &[crate::Dependency],
     uninstall: bool,
     bin: bool,
 ) -> Result<(), Box<Error>> {

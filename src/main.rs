@@ -1,4 +1,4 @@
-use crate::package_types::{Package, Version, VersionType};
+use crate::package_types::{Dependency, Version, VersionType};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -9,11 +9,11 @@ use std::{
     io::{self, BufRead, BufReader},
     path::PathBuf,
     str::FromStr,
-    string::ParseError,
     thread, time,
 };
 use structopt::StructOpt;
 //use textio;
+use crate::util::exit_early;
 use toml;
 
 mod build;
@@ -26,41 +26,65 @@ mod util;
 struct Opt {
     #[structopt(subcommand)]
     subcmds: SubCommand,
+
+    //    custom_bin: Option<Vec<String>>
+    //    #[structopt(name = "custom_bin")]
+    //    #[structopt(subcommand)]
+    //    custom_bin: CustomBin,
     #[structopt(name = "custom_bin")]
-    custom_bin: Option<String>,
+    custom_bin: Vec<String>,
 }
+
+///// eg `ipython`, `black` etc.
+//#[derive(StructOpt, Debug)]
+//struct CustomBin {
+//    test: bool,
+////    #[structopt(name = "name")]
+////    name: String,
+////    #[structopt(name = "args")]
+////    args: Vec<String>,
+//}
 
 #[derive(StructOpt, Debug)]
 enum SubCommand {
     #[structopt(name = "new")]
     New {
         #[structopt(name = "name")]
-        name: String,
+        name: String, // holds the project name.
     },
-    // holds the project name.
+
     #[structopt(name = "install")]
     Install {
         #[structopt(name = "packages")]
         packages: Vec<String>,
+        #[structopt(short = "b", long = "binary")]
+        bin: bool,
     },
-
-    //    InstallBin(Vec<Package>), // todo temp perhaps
-    //    Uninstall(Vec<Package>),
+    #[structopt(name = "uninstall")]
+    Uninstall {
+        #[structopt(name = "packages")]
+        packages: Vec<String>,
+    },
     #[structopt(name = "python")]
     Python {
         #[structopt(name = "args")]
         args: Vec<String>,
     },
-    //    CustomBin(String, Vec<String>), // bin name, args
-    //    Package,
-    //    Publish,
+    #[structopt(name = "package")]
+    Package,
+    #[structopt(name = "publish")]
+    Publish,
+    /// Designed to be run inside a project directory; creates a `pyproject.toml`
+    /// from requirements.txt, pipfile etc, setup.py etc.
+    #[structopt(name = "init")]
+    Init,
 }
 
 /// A config, parsed from pyproject.toml
 #[derive(Debug, Default, Deserialize)]
 struct Config {
     py_version: Option<Version>,
-    dependencies: Vec<Package>,
+    dependencies: Vec<Dependency>,
     name: Option<String>,
     version: Option<Version>,
     author: Option<String>,
@@ -124,14 +148,14 @@ impl Config {
                             result.description = Some(n.as_str().to_string());
                         }
                     }
-                //                    if let Some(n2) = key_re("version").captures(&l) {
-                //                        if let Some(n) = n2.get(1) {
-                //                            result.version = Some(Version::from_str(n.as_str()).unwrap());
-                //                        }
-                //                    }
+                    //                    if let Some(n2) = key_re("version").captures(&l) {
+                    //                        if let Some(n) = n2.get(1) {
+                    //                            result.version = Some(Version::from_str(n.as_str()).unwrap());
+                    //                        }
+                    //                    }
                 } else if in_dep {
                     if !l.is_empty() {
-                        result.dependencies.push(Package::from_str(&l).unwrap());
+                        result.dependencies.push(Dependency::from_str(&l).unwrap());
                     }
                 }
             }
@@ -256,7 +280,7 @@ fn version() {
 /// Make an educated guess at the command needed to execute python the
 /// current system.  An alternative approach is trying to find python
 /// installations.
-fn find_py_alias(config_ver: Option<Version>) -> Result<(String, Version), AliasError> {
+fn find_py_alias() -> Result<(String, Version), AliasError> {
     // todo expand, and iterate over versions.
     let possible_aliases = &[
         "python3.9",
@@ -293,7 +317,7 @@ fn find_py_alias(config_ver: Option<Version>) -> Result<(String, Version), Alias
     }
 }
 
-fn find_sub_dependencies(package: Package) -> Vec<Package> {
+fn find_sub_dependencies(package: Dependency) -> Vec<Dependency> {
     // todo: This will be useful for dependency resolution, and removing packages
     // todo no longer needed when running install.
     vec![]
@@ -319,7 +343,7 @@ struct Lock {
 }
 
 impl Lock {
-    fn add_packages(&mut self, packages: &[Package]) {
+    fn add_packages(&mut self, packages: &[Dependency]) {
         // todo: Write tests for this.
 
         for package in packages {
@@ -355,7 +379,7 @@ fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
 }
 
 /// Write dependencies to pyproject.toml
-fn add_dependencies(filename: &str, dependencies: &[Package]) {
+fn add_dependencies(filename: &str, dependencies: &[Dependency]) {
     //        let data = fs::read_to_string("pyproject.toml")
     //            .expect("Unable to read pyproject.toml while attempting to add a dependency");
     let file = fs::File::open(filename).expect("cannot open pyproject.toml");
@@ -394,7 +418,7 @@ fn add_dependencies(filename: &str, dependencies: &[Package]) {
 }
 
 /// Remove dependencies from pyproject.toml
-fn remove_dependencies(filename: &str, dependencies: &[Package]) {
+fn remove_dependencies(filename: &str, dependencies: &[Dependency]) {
     let data = fs::read_to_string("pyproject.toml")
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 
@@ -427,18 +451,9 @@ fn wait_for_dirs(dirs: &Vec<PathBuf>) -> Result<(), AliasError> {
     })
 }
 
-fn create_venv(py_v: Option<Version>, lib_path: &PathBuf) {
+fn create_venv(alias: &str, lib_path: &PathBuf) {
     // We only use the alias for creating the virtual environment. After that,
     // we call our venv's executable directly.
-    let mut alias = String::new();
-    let mut version = Version::new(0, 0, 0);
-    match find_py_alias(py_v) {
-        Ok(a) => {
-            alias = a.0;
-            version = a.1;
-        }
-        Err(_) => util::exit_early("Unable to find a Python version on the path"),
-    };
 
     println!("Setting up Python environment...");
 
@@ -465,24 +480,108 @@ fn create_venv(py_v: Option<Version>, lib_path: &PathBuf) {
     wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
 }
 
+enum InstallType {
+    Install,
+    Uninstall,
+}
+
+/// Helper function to reduce repetition between installing and uninstalling
+fn install(
+    packages: &[Dependency],
+    installed_packages: &[Dependency],
+    lock: &mut Lock,
+    lock_filename: &str,
+    cfg_filename: &str,
+    bin_path: &PathBuf,
+    type_: InstallType,
+    bin: bool,
+) {
+    if packages.is_empty() {
+        // Install all from `pyproject.toml`.
+        if let Err(_) = commands::install(&bin_path, installed_packages, false, false) {
+            util::exit_early("Problem installing packages");
+        }
+        //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+        if let Err(_) = write_lock(lock_filename, lock) {
+            util::exit_early("Problem writing the lock file");
+        }
+    } else {
+        if let Err(_) = commands::install(&bin_path, &packages, false, bin) {
+            util::exit_early("Problem installing packages");
+        }
+        add_dependencies(cfg_filename, &packages);
+
+        lock.add_packages(&packages);
+
+        //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
+        if let Err(_) = write_lock(lock_filename, lock) {
+            util::exit_early("Problem writing the lock file");
+        }
+    }
+}
+
 fn main() {
-    let package_dir = "__pypackages__";
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pypackage.lock";
 
-    let project_dir = env::current_dir().expect("Can't find current path");
+    let pypackage_dir = env::current_dir()
+        .expect("Can't find current path")
+        .join("__pypackages__");
     let cfg = Config::from_file(cfg_filename);
-    let py_version = cfg.py_version.unwrap_or(Version::new_short(3, 7)); // todo better default
+    let py_version_cfg = cfg.py_version;
+
+    // Note that we rely on the proper folder name, vice inspecting the binary.
+    // ie: could also check `bin/python --version`.
+    let venv_versions_found: Vec<Version> = util::possible_py_versions()
+        .into_iter()
+        .filter(|v| {
+            let bin_path = pypackage_dir.join(&format!("{}.{}/.venv/bin", v.major, v.minor));
+            util::venv_exists(&bin_path)
+        })
+        .collect();
+
+    let py_version = match py_version_cfg {
+        // The version's explicitly specified; use that.
+        Some(v) => v,
+        // If not, we'll have to guess.
+        None => match venv_versions_found.len() {
+            0 => None,
+            1 => Some(venv_versions_found[0]),
+            _ => {
+                exit_early(
+                    "Multiple Python environments found
+                for this project; specify the desired one in `pyproject.toml`. Example:
+[tool.pyproject]
+py_version = \"3.7\"");
+                None //  Required by compiler
+            }
+        },
+    };
 
     // Don't include version patch in the directory name, per PEP 582.
-    let venv_path = project_dir.join(&format!(
-        "{}/{}.{}/.venv",
-        package_dir, py_version.major, py_version.minor
-    ));
-    let lib_path = project_dir.join(&format!(
-        "{}/{}.{}/lib",
-        package_dir, py_version.major, py_version.minor
-    ));
+
+    let vers_path = pypackage_dir.join(&format!("{}.{}", py_version.major, py_version.minor));
+    let venv_path = vers_path.join(".venv");
+    let lib_path = vers_path.join("lib");
+
+    if !util::venv_exists(&vers_path) {
+        //    let mut alias = String::new();
+//    let mut version = Version::new(0, 0, 0);
+        let (alias, py_version_from_alias) = match find_py_alias() {
+            Ok(a) => a,
+            Err(_) => util::exit_early("Unable to find a Python version on the path"),
+        };
+
+        if let Some(py_v) = py_version {
+            if py_v != py_version_from_alias {
+                util::exit_early("The python version specified doesn't match the alias you selected.");
+            }
+        }
+
+        create_venv(&alias, &venv_path);
+    }
+
+    let (bin_path, lib_path) = util::find_bin_path(&venv_path, &lib_path);
 
     let mut lock = match read_lock(lock_filename) {
         Ok(l) => {
@@ -492,191 +591,92 @@ fn main() {
         Err(_) => Lock::default(),
     };
 
-    // todo: Doesn't work with Scripts
-    let bin_path_temp = venv_path.join("bin");
-    if !util::venv_exists(&bin_path_temp) {
-        // todo fix this check for the venv existing.
-        create_venv(cfg.py_version, &venv_path);
-    }
-
-    // The bin name should be `bin` on Linux, and `Scripts` on Windows. Check both.
-    // Locate bin name after ensuring we have a virtual environment.
-    let mut bin_path = venv_path.clone();
-    // It appears that 'binary' scripts are installed in the `lib` directory's bin folder when
-    // using the --target arg, instead of the one directly in the env.
-    let mut custom_bin_path = venv_path.clone();
-    if venv_path.join("bin").exists() {
-        bin_path = venv_path.join("bin");
-        // We assume that the name applies to both the directory in the virtual env, and in `lib`.
-        custom_bin_path = lib_path.join("bin");
-    } else if venv_path.join("Scripts").exists() {
-        bin_path = venv_path.join("Scripts");
-        custom_bin_path = lib_path.join("bin");
-    } else {
-        util::exit_early("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder)")
-    }
-
     let opt = Opt::from_args();
 
+    //    if let Some(args) = opt.custom_bin {
+    //        let mut bin_package_installed = false;
+    //        for package in &cfg.dependencies {
+    //            if &package.name == name {
+    //                bin_package_installed = true;
+    //            }
+    //        }
+    //
+    //        if !bin_package_installed {
+    //            if let Err(_) = commands::install(
+    //                &bin_path,
+    //                &[Package {
+    //                    name: name.to_string(),
+    //                    version: None,
+    //                    version_type: VersionType::Exact,
+    //                }],
+    //                false,
+    //                true,
+    //            ) {
+    //                util::exit_early(&format!("Problem installing {}", name));
+    //            }
+    //        }
+    //        wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
+
+    //        // todo better handling, eg exit early.
+    //        let name = args.get(1).expect("Missing first arg");
+    //        let args: Vec<String> = args.iter().skip(1).collect();
+    //
+    //        commands::run_bin(&custom_bin_path, &lib_path, name, &args);
+    //        commands::run_bin(&bin_path, &lib_path, name, &args);
+    //    }
     match opt.subcmds {
         SubCommand::New { name } => {
             new(&name).expect("Problem creating project");
             //                // todo: Maybe show the path created at.
             println!("Created a new Python project named {}", name)
         }
-        SubCommand::Install { packages } => {
-            if packages.is_empty() {
-                if let Err(_) = commands::install(&bin_path, &cfg.dependencies, false, false) {
-                    util::exit_early("Problem installing packages");
-                }
-                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-                if let Err(_) = write_lock(lock_filename, &lock) {
-                    util::exit_early("Problem writing the lock file");
-                }
-            } else {
-                // Install all from `pyproject.toml`.
-                let packages: Vec<Package> = packages
-                    .into_iter()
-                    .map(|p| Package::from_str(&p).unwrap())
-                    .collect();
 
-                if let Err(_) = commands::install(&bin_path, &packages, false, false) {
-                    util::exit_early("Problem installing packages");
-                }
-                add_dependencies(cfg_filename, &packages);
+        SubCommand::Install { packages, bin } => {
+            let packages: Vec<Dependency> = packages
+                .into_iter()
+                .map(|p| Dependency::from_str(&p).unwrap())
+                .collect();
 
-                lock.add_packages(&packages);
-
-                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-                if let Err(_) = write_lock(lock_filename, &lock) {
-                    util::exit_early("Problem writing the lock file");
-                }
-            }
+            install(
+                &packages,
+                &[],
+                &mut lock,
+                lock_filename,
+                cfg_filename,
+                &bin_path,
+                InstallType::Install,
+                bin,
+            );
         }
+        SubCommand::Uninstall { packages } => {
+            let packages: Vec<Dependency> = packages
+                .into_iter()
+                .map(|p| Dependency::from_str(&p).unwrap())
+                .collect();
+
+            install(
+                &packages,
+                &cfg.dependencies,
+                &mut lock,
+                lock_filename,
+                cfg_filename,
+                &bin_path,
+                InstallType::Uninstall,
+                false,
+            );
+        }
+
         SubCommand::Python { args } => commands::run_python(&bin_path, &lib_path, &args),
+        SubCommand::Package {} => build::build(&bin_path, &cfg),
+        SubCommand::Publish {} => build::publish(&bin_path, &cfg),
+        SubCommand::Init {} => exit_early("Init not yet implemented"),
     }
-
-    //
-    //    let arg_matches = clap::App::new("Pypackage")
-    //        .version("0.0.1")
-    //        .author("David O'Connor <david.alan.oconnor@gmail.com>")
-    //        .about("A package and publishing program for Python")
-    //        //        .arg(clap::Arg::with_name("new")
-    //        //            .short("n")
-    //        //            .long("new")
-    //        //            .value_name("name")
-    //        //            .help("Create a new project directory")
-    //        //            .takes_value(true))
-    //        //        .arg(clap::Arg::with_name("install")
-    //        //            .help("Install one or more Python packages"))
-    //        .subcommand(
-    //            clap::SubCommand::with_name("new")
-    //                .about("Create a new project directory")
-    //                .arg(clap::Arg::with_name("name")),
-    //        )
-    //        .subcommand(
-    //            clap::SubCommand::with_name("install")
-    //                .about("Install one or more Python packages")
-    //                .arg(clap::Arg::with_name("name")),
-    //        )
-    //        .get_matches();
-    //
-    //        if let Some(m) = arg_matches.subcommand_matches("new") {
-    //            if let Some(name) = m.value_of("name") {
-    //                println!("NAME: {}", name);
-    //            }
-    //        }
-    //
-    //
-    //        return
-    //
-    //        for task in find_tasks(&opt.args).iter() {
-    //        match task {
-
-    //            Task::InstallBin(packages) => {
-    //                // todo DRY
-    //                if let Err(_) = commands::install(&bin_path, packages, false, true) {
-    //                    util::exit_early("Problem installing packages");
-    //                }
-    //                add_dependencies(cfg_filename, packages);
-    //
-    //                lock.add_packages(packages);
-    //
-    //                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-    //                if let Err(_) = write_lock(lock_filename, &lock) {
-    //                    util::exit_early("Problem writing the lock file");
-    //                }
-    //            }
-    //            Task::InstallAll => {
-    //                if let Err(_) = commands::install(&bin_path, &cfg.dependencies, false, false) {
-    //                    util::exit_early("Problem installing packages");
-    //                }
-    //                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-    //                if let Err(_) = write_lock(lock_filename, &lock) {
-    //                    util::exit_early("Problem writing the lock file");
-    //                }
-    //            }
-    //            Task::Uninstall(packages) => {
-    //                // todo: Display which packages?
-    //                match commands::install(&bin_path, packages, true, false) {
-    //                    Ok(_) => (),
-    //                    Err(_) => util::exit_early("Problem uninstalling packages"),
-    //                }
-    //                remove_dependencies(cfg_filename, packages);
-    //                //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-    //                match write_lock(lock_filename, &lock) {
-    //                    Ok(_) => (),
-    //                    Err(_) => util::exit_early("Problem writing the lock file"),
-    //                }
-    //            }
-    //            Task::UninstallAll => {
-    //                commands::install(&bin_path, &cfg.dependencies, true, false)
-    //                    .expect("Problem uninstalling packages");
-    //                //                write_lock(lock_filename, &Lock::default()).expect("Problem writing lock.");
-    //                match write_lock(lock_filename, &Lock::default()) {
-    //                    Ok(_) => (),
-    //                    Err(e) => util::exit_early("Problem writing the lock file"),
-    //                }
-    //            }
-    //            Task::CustomBin(name, args) => {
-    //                // todo put this back.
-    //                //
-    //                //                let mut bin_package_installed = false;
-    //                //                for package in &cfg.dependencies {
-    //                //                    if &package.name == name {
-    //                //                        bin_package_installed = true;
-    //                //                    }
-    //                //                }
-    //                //
-    //                //                if !bin_package_installed {
-    //                //                    if let Err(_) = commands::install(
-    //                //                        &bin_path,
-    //                //                        &[Package {
-    //                //                            name: name.to_string(),
-    //                //                            version: None,
-    //                //                            version_type: VersionType::Exact,
-    //                //                        }],
-    //                //                        false,
-    //                //                        true,
-    //                //                    ) {
-    //                //                        util::exit_early(&format!("Problem installing {}", name));
-    //                //                    }
-    //                //                }
-    //                //                wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
-    //                //                commands::run_bin(&custom_bin_path, &lib_path, name, args);
-    //                commands::run_bin(&bin_path, &lib_path, name, args);
-    //            }
-
-    //            Task::Package => build::build(&bin_path, &cfg),
-    //            Task::Publish => build::publish(&bin_path, &cfg),
-    //        }
-    //    };
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::package_types::{Package, Version, VersionType};
+    use crate::package_types::{Dependency, Version, VersionType};
 
     #[test]
     fn valid_version() {
@@ -700,10 +700,10 @@ pub mod tests {
 
     #[test]
     fn parse_package_novers() {
-        let p = Package::from_str("saturn").unwrap();
+        let p = Dependency::from_str("saturn").unwrap();
         assert_eq!(
             p,
-            Package {
+            Dependency {
                 name: "saturn".into(),
                 version: None,
                 version_type: VersionType::Exact,
@@ -714,10 +714,10 @@ pub mod tests {
 
     #[test]
     fn parse_package_withvers() {
-        let p = Package::from_str("bolt = \"3.1.4\"").unwrap();
+        let p = Dependency::from_str("bolt = \"3.1.4\"").unwrap();
         assert_eq!(
             p,
-            Package {
+            Dependency {
                 name: "bolt".into(),
                 version: Some(Version::new(3, 1, 4)),
                 version_type: VersionType::Exact,
@@ -728,10 +728,10 @@ pub mod tests {
 
     #[test]
     fn parse_package_carot() {
-        let p = Package::from_str("chord = \"^2.7.18\"").unwrap();
+        let p = Dependency::from_str("chord = \"^2.7.18\"").unwrap();
         assert_eq!(
             p,
-            Package {
+            Dependency {
                 name: "chord".into(),
                 version: Some(Version::new(2, 7, 18)),
                 version_type: VersionType::Carot,
@@ -742,10 +742,10 @@ pub mod tests {
 
     #[test]
     fn parse_package_tilde_short() {
-        let p = Package::from_str("sphere = \"~6.7\"").unwrap();
+        let p = Dependency::from_str("sphere = \"~6.7\"").unwrap();
         assert_eq!(
             p,
-            Package {
+            Dependency {
                 name: "sphere".into(),
                 version: Some(Version::new_short(6, 7)),
                 version_type: VersionType::Tilde,

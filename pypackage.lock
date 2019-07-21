@@ -115,3 +115,27 @@ version = "0.0.0"
 [[package]]
 name = "fplot"
 version = "0.0.0"
+
+[[package]]
+name = "scinot"
+version = "0.0.0"
+
+[[package]]
+name = "ipyton"
+version = "0.0.0"
+
+[[package]]
+name = "ipyton"
+version = "0.0.0"
+
+[[package]]
+name = "ipython"
+version = "0.0.0"
+
+[[package]]
+name = "ipython"
+version = "0.0.0"
+
+[[package]]
+name = "ipython"
+version = "0.0.0"

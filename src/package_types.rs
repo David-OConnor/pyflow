@@ -9,6 +9,13 @@ pub enum VersionType {
     Tilde,
 }
 
+/// Specifies what range of versions is acceptable for a dependency requirement.
+#[derive(Debug)]
+pub struct VersionReq {
+    pub min: Option<Version>,
+    pub max: Option<Version>,
+}
+
 impl ToString for VersionType {
     fn to_string(&self) -> String {
         match self {
@@ -54,6 +61,28 @@ impl Version {
             major,
             minor,
             patch: None,
+        }
+    }
+
+    // todo Notsure why I need this; FromStr's doesn't always work.
+    pub fn from_str2(s: &str) -> Self {
+        let re = Regex::new(r"^(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?$").unwrap();
+        let caps = re
+            .captures(s)
+            .expect(&format!("Problem parsing version: {}", s));
+
+        let major = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
+        let minor = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
+
+        let patch = match caps.get(3) {
+            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+            None => None,
+        };
+
+        Self {
+            major,
+            minor,
+            patch,
         }
     }
 }
@@ -128,8 +157,9 @@ pub struct LockVersion {
 //    }
 //}
 
+/// Includes information for describing a `Python` dependency
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct Package {
+pub struct Dependency {
     pub name: String,
     pub version_type: VersionType, // Not used if version not specified.
     // None on version means not specified
@@ -140,7 +170,7 @@ pub struct Package {
     pub bin: bool,
 }
 
-impl Package {
+impl Dependency {
     /// eg `saturn>=0.3.1`
     pub fn to_pip_string(&self) -> String {
         match self.version {
@@ -165,7 +195,7 @@ impl Package {
     }
 }
 
-impl FromStr for Package {
+impl FromStr for Dependency {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
