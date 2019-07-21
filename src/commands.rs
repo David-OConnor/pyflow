@@ -1,6 +1,7 @@
+use crate::util;
 use regex::Regex;
-use std::{env, fs, path::PathBuf, process::Command};
 use std::{error::Error, fmt};
+use std::{path::PathBuf, process::Command};
 
 #[derive(Debug)]
 struct ExecutionError {
@@ -17,17 +18,6 @@ impl fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.details)
     }
-}
-
-/// Sets the `PYTHONPATH` environment variable, causing Python to look for
-/// dependencies in `__pypackages__`,
-fn set_pythonpath(lib_path: &PathBuf) {
-    env::set_var(
-        "PYTHONPATH",
-        lib_path
-            .to_str()
-            .expect("Problem converting current path to string"),
-    );
 }
 
 /// Find the py_version from the `python --py_version` command. Eg: "Python 3.7".
@@ -79,10 +69,6 @@ pub(crate) fn create_legacy_virtualenv(
     name: &str,
 ) -> Result<(), Box<Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
-    if !lib_path.exists() {
-        fs::create_dir_all(lib_path).expect("Problem creating __pypackages__ directory");
-    }
-
     Command::new("virtualenv")
         .arg(name)
         .current_dir(lib_path.join("../"))
@@ -99,10 +85,6 @@ pub(crate) fn create_venv(
     name: &str,
 ) -> Result<(), Box<Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
-    if !lib_path.exists() {
-        fs::create_dir_all(lib_path).expect("Problem creating __pypackages__ directory");
-    }
-
     Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))
@@ -130,12 +112,14 @@ pub(crate) fn install(
         if !bin && !package.bin {
             args.push("--target");
             args.push("../../lib");
+            //            args.push("--install-option=\"--install-scripts=../../lib/bin2\"");
         }
 
         // Even though `bin` contains `pip`, it doesn't appear to work directly.
         Command::new("./python")
             .current_dir(bin_path)
             .args(args)
+            .arg("--upgrade")
             .status()?;
     }
 
@@ -144,27 +128,37 @@ pub(crate) fn install(
 
 // todo have these propogate errors.
 
-pub(crate) fn run_python(bin_path: &PathBuf, lib_path: &PathBuf, args: &[String]) {
-    set_pythonpath(lib_path);
+pub(crate) fn run_python(
+    bin_path: &PathBuf,
+    lib_path: &PathBuf,
+    args: &[String],
+) -> Result<(), Box<Error>> {
+    util::set_pythonpath(lib_path);
 
-    Command::new("./python")
-        .current_dir(bin_path)
+    // Run this way instead of setting current_dir, so we can load files from the right place.
+    Command::new(format!("{}/python", bin_path.to_str().unwrap()))
         .args(args)
-        .status()
-        .expect("Problem running Python");
+        .status()?;
+
+    Ok(())
 }
 
 // todo: Ideally we'd use lib/bin, but unable to get that workign currently.
 // todo instead, we install into the venv directly.
 /// Run a binary installed in the virtual environment, such as `ipython` or `black`.
-pub(crate) fn run_bin(bin_path: &PathBuf, lib_path: &PathBuf, name: &str, args: &[String]) {
-    set_pythonpath(lib_path);
+pub(crate) fn run_bin(
+    bin_path: &PathBuf,
+    lib_path: &PathBuf,
+    name: &str,
+    args: &[String],
+) -> Result<(), Box<Error>> {
+    util::set_pythonpath(lib_path);
 
     println!("bp{:?}", bin_path);
 
-    Command::new(&format!("./{}", name))
-        .current_dir(bin_path)
+    Command::new(format!("{}/{}", bin_path.to_str().unwrap(), name))
         .args(args)
-        .status()
-        .expect(&format!("Problem running {}", name));
+        .status()?;
+
+    Ok(())
 }

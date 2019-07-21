@@ -9,7 +9,6 @@ use std::{
     io::{self, BufRead, BufReader},
     path::PathBuf,
     str::FromStr,
-    thread, time,
 };
 use structopt::StructOpt;
 //use textio;
@@ -25,13 +24,9 @@ mod util;
 #[structopt(name = "Pypackage", about = "Python packaging and publishing")]
 struct Opt {
     #[structopt(subcommand)]
-    subcmds: SubCommand,
-
-    //    custom_bin: Option<Vec<String>>
-    //    #[structopt(name = "custom_bin")]
-    //    #[structopt(subcommand)]
-    //    custom_bin: CustomBin,
+    subcmds: Option<SubCommand>,
     #[structopt(name = "custom_bin")]
+    //    custom_bin: Vec<String>,
     custom_bin: Vec<String>,
 }
 
@@ -47,41 +42,54 @@ struct Opt {
 
 #[derive(StructOpt, Debug)]
 enum SubCommand {
+    /// Create a project folder with the basics
     #[structopt(name = "new")]
     New {
         #[structopt(name = "name")]
         name: String, // holds the project name.
     },
 
-    #[structopt(name = "install")]
+    /// Install packages from `pyproject.toml`, or ones specified
+    #[structopt(
+        name = "install",
+        help = "
+Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
+
+`pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
+`pypackage install numpy scipy`: install `numpy` and `scipy`.
+"
+    )]
     Install {
         #[structopt(name = "packages")]
         packages: Vec<String>,
         #[structopt(short = "b", long = "binary")]
         bin: bool,
     },
+    /// Uninstall all packages, or ones specified
     #[structopt(name = "uninstall")]
     Uninstall {
         #[structopt(name = "packages")]
         packages: Vec<String>,
     },
+    /// Run python
     #[structopt(name = "python")]
     Python {
         #[structopt(name = "args")]
         args: Vec<String>,
     },
+    /// Build the package, wrapping `setuptools`
     #[structopt(name = "package")]
     Package,
+    /// Publish to `pypi`
     #[structopt(name = "publish")]
     Publish,
-    /// Designed to be run inside a project directory; creates a `pyproject.toml`
-    /// from requirements.txt, pipfile etc, setup.py etc.
+    /// Create a `pyproject.toml` from requirements.txt, pipfile etc, setup.py etc
     #[structopt(name = "init")]
     Init,
 }
 
 /// A config, parsed from pyproject.toml
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 // todo: Auto-desr some of these!
 struct Config {
     py_version: Option<Version>,
@@ -380,6 +388,12 @@ fn read_lock(filename: &str) -> Result<(Lock), Box<Error>> {
 /// Write dependency data to a lock file.
 fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
     let data = toml::to_string(data)?;
+    //    let f = fs::File::open(filename).expect("cannot open pypackage.lock");
+
+    // Wipe the existing data
+    //    f.set_len(0).unwrap();
+    //    fs::remove_file(filename).unwrap();
+
     fs::write(filename, data)?;
     Ok(())
 }
@@ -435,28 +449,6 @@ fn remove_dependencies(filename: &str, dependencies: &[Dependency]) {
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 }
 
-/// Wait for directories to be created; required between modifying the filesystem,
-/// and running code that depends on the new files.
-fn wait_for_dirs(dirs: &Vec<PathBuf>) -> Result<(), AliasError> {
-    // todo: AliasError is a quick fix to avoid creating new error type.
-    let timeout = 1000; // ms
-    for i in 0..timeout {
-        let mut all_created = true;
-        for dir in dirs {
-            if !dir.exists() {
-                all_created = false;
-            }
-        }
-        if all_created {
-            return Ok(());
-        }
-        thread::sleep(time::Duration::from_millis(10));
-    }
-    Err(AliasError {
-        details: "Timed out attempting to create a directory".to_string(),
-    })
-}
-
 fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     // We only use the alias for creating the virtual environment. After that,
     // we call our venv's executable directly.
@@ -471,20 +463,30 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
         }
     };
 
+    let lib_path = pyypackage_dir.join(format!(
+        "{}.{}/lib",
+        py_ver_from_alias.major, py_ver_from_alias.minor
+    ));
+    if !lib_path.exists() {
+        fs::create_dir_all(&lib_path).expect("Problem creating __pypackages__ directory");
+    }
+
     if let Some(c_v) = cfg_v {
-        if c_v != &py_ver_from_alias {
-            abort(
-                "The Python version you selected doesn't match the one specified in `pyprojecttoml`",
+        // We don't expect the config version to specify a patch, but if it does, take it
+        // into account.
+        let versions_match = match c_v.patch {
+            Some(p) => c_v == &py_ver_from_alias,
+            None => c_v.major == py_ver_from_alias.major && c_v.minor == py_ver_from_alias.minor,
+        };
+        if !versions_match {
+            println!("{:?}, {:?}", c_v, &py_ver_from_alias);
+            abort(&format!("The Python version you selected ({}) doesn't match the one specified in `pyprojecttoml` ({})",
+                           py_ver_from_alias.to_string(), c_v.to_string())
             );
         }
     }
 
     println!("Setting up Python environment...");
-
-    let lib_path = pyypackage_dir.join(format!(
-        "{}.{}/lib",
-        py_ver_from_alias.major, py_ver_from_alias.minor
-    ));
 
     // If the Python version's below 3.3, we must download and install the
     // `virtualenv` package, since `venv` isn't included.
@@ -506,7 +508,7 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     // todo: These won't work with Scripts ! - pass venv_path et cinstead
     let py_venv = lib_path.join("../.venv/bin/python");
     let pip_venv = lib_path.join("../.venv/bin/pip");
-    wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
+    util::wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
 
     py_ver_from_alias
 }
@@ -571,13 +573,9 @@ fn main() {
             // is setup.  // todo: Confirm using --version on the python bin, instead of relying on folder name.
 
             // Don't include version patch in the directory name, per PEP 582.
-            println!("CFG: {:?}", cfg_v);
             vers_path = pypackage_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor));
 
-            // todo: Explicitly display if req that we found an env, but it doesn't match the vers.
-            let (bin_p, _) = util::find_bin_path(&vers_path);
-
-            if !util::venv_exists(&bin_p) {
+            if !util::venv_exists(&vers_path.join(".venv")) {
                 let created_vers = create_venv(Some(&cfg_v), &pypackage_dir);
             }
         }
@@ -618,7 +616,8 @@ py_version = \"3.7\"",
         }
     };
 
-    let (bin_path, lib_path) = util::find_bin_path(&vers_path);
+    let lib_path = vers_path.join("lib");
+    let (bin_path, lib_bin_path) = util::find_bin_path(&vers_path);
 
     let mut lock = match read_lock(lock_filename) {
         Ok(l) => {
@@ -631,6 +630,7 @@ py_version = \"3.7\"",
     let opt = Opt::from_args();
 
     //    if let Some(args) = opt.custom_bin {
+
     //        let mut bin_package_installed = false;
     //        for package in &cfg.dependencies {
     //            if &package.name == name {
@@ -652,16 +652,28 @@ py_version = \"3.7\"",
     //                util::exit_early(&format!("Problem installing {}", name));
     //            }
     //        }
-    //        wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
 
-    //        // todo better handling, eg exit early.
-    //        let name = args.get(1).expect("Missing first arg");
-    //        let args: Vec<String> = args.iter().skip(1).collect();
-    //
-    //        commands::run_bin(&custom_bin_path, &lib_path, name, &args);
-    //        commands::run_bin(&bin_path, &lib_path, name, &args);
-    //    }
-    match opt.subcmds {
+    //        util::wait_for_dirs(&vec![bin_path.join(name)]).unwrap();
+
+    let args = opt.custom_bin;
+    if !args.is_empty() {
+        // todo better handling, eg abort
+        let name = args.get(0).expect("Missing first arg").clone();
+        let args: Vec<String> = args.into_iter().skip(1).collect();
+        if let Err(_) = commands::run_bin(&bin_path, &lib_path, &name, &args) {
+            abort(&format!("Problem running the binary script {}. Is it installed? \
+            Try running `pypackage install {} -b`", name, name));
+        }
+
+        return;
+    }
+
+    let subcmd = match opt.subcmds {
+        Some(sc) => sc,
+        None => return,
+    };
+
+    match subcmd {
         SubCommand::New { name } => {
             new(&name).expect("Problem creating project");
             //                // todo: Maybe show the path created at.
@@ -713,8 +725,12 @@ py_version = \"3.7\"",
             );
         }
 
-        SubCommand::Python { args } => commands::run_python(&bin_path, &lib_path, &args),
-        SubCommand::Package {} => build::build(&bin_path, &cfg),
+        SubCommand::Python { args } => {
+            if let Err(_) = commands::run_python(&bin_path, &lib_path, &args) {
+                abort("Problem running Python");
+            }
+        },
+        SubCommand::Package {} => build::build(&bin_path, &lib_path, &cfg),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
         SubCommand::Init {} => abort("Init not yet implemented"),
     }

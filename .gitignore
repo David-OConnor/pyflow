@@ -1,8 +1,10 @@
 /target
 **/*.rs.bk
 
-.venv
-Python.toml
 pyproject.toml
 /__pypackages__
 script.py
+
+# Prevent generated files from being committed
+setup.py
+

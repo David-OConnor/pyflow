@@ -1,74 +1,4 @@
 [[package]]
-name = "numpy"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "siunits"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "fplot"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "matplotlib"
-version = "0.0.0"
-
-[[package]]
-name = "matplotlib"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "black"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "si_units"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "black"
-version = "0.0.0"
-
-[[package]]
-name = "black"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
 name = "siunits"
 version = "0.0.0"
 
@@ -77,71 +7,7 @@ name = "siunits"
 version = "0.0.0"
 
 [[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "numpy"
-version = "0.0.0"
-
-[[package]]
-name = "black"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "black"
-version = "0.0.0"
-
-[[package]]
-name = "black"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "fplot"
-version = "0.0.0"
-
-[[package]]
-name = "scinot"
-version = "0.0.0"
-
-[[package]]
-name = "ipyton"
-version = "0.0.0"
-
-[[package]]
-name = "ipyton"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "ipython"
-version = "0.0.0"
-
-[[package]]
-name = "fplot"
+name = "siunits"
 version = "0.0.0"
 
 [[package]]
@@ -154,8 +20,12 @@ version = "0.0.0"
 
 [[package]]
 name = "siunits"
-version = "0.0.4"
+version = "0.0.0"
 
 [[package]]
-name = "saturn"
-version = "0.3.4"
+name = "black"
+version = "0.0.0"
+
+[[package]]
+name = "ipython"
+version = "0.0.0"

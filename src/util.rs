@@ -1,5 +1,5 @@
 use crate::package_types::Version;
-use std::{path::PathBuf, process};
+use std::{env, path::PathBuf, process, thread, time};
 
 pub fn get_pypi_metadata(name: &str) {
     // todo this may not have entry pts...
@@ -24,8 +24,9 @@ pub fn possible_py_versions() -> Vec<Version> {
     .collect()
 }
 
-pub fn venv_exists(bin_path: &PathBuf) -> bool {
-    bin_path.join("python").exists() && bin_path.join("pip").exists()
+pub fn venv_exists(venv_path: &PathBuf) -> bool {
+    (venv_path.join("bin/python").exists() && venv_path.join("bin/pip").exists())
+        || (venv_path.join("Scripts/python").exists() && venv_path.join("Scripts/pip").exists())
 }
 
 /// Checks whether the path is under `/bin` (Linux generally) or `/Scripts` (Windows generally)
@@ -45,8 +46,42 @@ pub fn find_bin_path(vers_path: &PathBuf) -> (PathBuf, PathBuf) {
             vers_path.join("lib/Scripts"),
         )
     } else {
+        println!("{:?}", vers_path);
         // todo: YOu sould probably propogate this as an Error instead of handlign here.
         abort("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder)");
         (vers_path.clone(), vers_path.clone()) // Never executed; used to prevent compile errors.
     }
+}
+
+/// Wait for directories to be created; required between modifying the filesystem,
+/// and running code that depends on the new files.
+pub(crate) fn wait_for_dirs(dirs: &Vec<PathBuf>) -> Result<(), crate::AliasError> {
+    // todo: AliasError is a quick fix to avoid creating new error type.
+    let timeout = 1000; // ms
+    for i in 0..timeout {
+        let mut all_created = true;
+        for dir in dirs {
+            if !dir.exists() {
+                all_created = false;
+            }
+        }
+        if all_created {
+            return Ok(());
+        }
+        thread::sleep(time::Duration::from_millis(10));
+    }
+    Err(crate::AliasError {
+        details: "Timed out attempting to create a directory".to_string(),
+    })
+}
+
+/// Sets the `PYTHONPATH` environment variable, causing Python to look for
+/// dependencies in `__pypackages__`,
+pub(crate) fn set_pythonpath(lib_path: &PathBuf) {
+    env::set_var(
+        "PYTHONPATH",
+        lib_path
+            .to_str()
+            .expect("Problem converting current path to string"),
+    );
 }

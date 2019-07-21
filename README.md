@@ -53,11 +53,15 @@ how to specify dependencies in this `Cargo.toml`-inspired
 and will be added to `pyproject.toml`.
 - `pypackage install numpy==1.16.4 matplotlib>=3.1.` - Example with multiple dependencies, and specified versions
 - `pypackage uninstall toolz` - Remove a dependency
+- `pypackage install ipython -b` - Install a dependency which includes a binary script. 
+(eg `ipython`, `black`, `mypy`, `poetry` etc). These won't work properly if you don't include 
+the `-b` or `--bin` flag.
+
 
 ### Running REPL and Python files in the environment:
 - `pypackage python` - Run a Python REPL
-- `pypackage ipython` - Run an IPython (AKA Jupyter) REPL
 - `pypackage python main.py` - Run a python file
+- `pypackage black`, `pypackage ipython` etc - Run a custom binary, if it's installed.
 
 ### Building and publishing:
 - `pypackage package` - Package for distribution (uses setuptools internally, and 
