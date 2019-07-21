@@ -7,7 +7,7 @@ pub fn get_pypi_metadata(name: &str) {
 }
 
 /// A convenience function
-pub fn exit_early(message: &str) {
+pub fn abort(message: &str) {
     {
         println!("{}", message);
         process::exit(1)
@@ -30,20 +30,23 @@ pub fn venv_exists(bin_path: &PathBuf) -> bool {
 
 /// Checks whether the path is under `/bin` (Linux generally) or `/Scripts` (Windows generally)
 /// Returns the primary bin path (ie under the venv), and the custom one (under `Lib`) as a Tuple.
-pub fn find_bin_path(venv_path: &PathBuf, lib_path: &PathBuf) -> (PathBuf, PathBuf) {
+pub fn find_bin_path(vers_path: &PathBuf) -> (PathBuf, PathBuf) {
     // The bin name should be `bin` on Linux, and `Scripts` on Windows. Check both.
     // Locate bin name after ensuring we have a virtual environment.
     // It appears that 'binary' scripts are installed in the `lib` directory's bin folder when
     // using the --target arg, instead of the one directly in the env.
 
-    if venv_path.join("bin").exists() {
-        (venv_path.join("bin"), lib_path.join("bin"))
-    } else if venv_path.join("Scripts").exists() {
+    if vers_path.join(".venv/bin").exists() {
+        (vers_path.join(".venv/bin"), vers_path.join("lib/bin"))
+    } else if vers_path.join(".venv/Scripts").exists() {
         // todo: Perhasp the lib path may not be the same.
-        (venv_path.join("Scripts"), lib_path.join("bin"))
+        (
+            vers_path.join(".venv/Scripts"),
+            vers_path.join("lib/Scripts"),
+        )
     } else {
         // todo: YOu sould probably propogate this as an Error instead of handlign here.
-        exit_early("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder)");
-        (venv_path.clone(), lib_path.clone())  // Never executed; used to prevent compile errors.
+        abort("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder)");
+        (vers_path.clone(), vers_path.clone()) // Never executed; used to prevent compile errors.
     }
 }

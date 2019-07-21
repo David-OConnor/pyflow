@@ -13,7 +13,7 @@ use std::{
 };
 use structopt::StructOpt;
 //use textio;
-use crate::util::exit_early;
+use crate::util::abort;
 use toml;
 
 mod build;
@@ -82,6 +82,7 @@ enum SubCommand {
 
 /// A config, parsed from pyproject.toml
 #[derive(Debug, Default, Deserialize)]
+// todo: Auto-desr some of these!
 struct Config {
     py_version: Option<Version>,
     dependencies: Vec<Dependency>,
@@ -148,11 +149,16 @@ impl Config {
                             result.description = Some(n.as_str().to_string());
                         }
                     }
-                    //                    if let Some(n2) = key_re("version").captures(&l) {
-                    //                        if let Some(n) = n2.get(1) {
-                    //                            result.version = Some(Version::from_str(n.as_str()).unwrap());
-                    //                        }
-                    //                    }
+                    if let Some(n2) = key_re("version").captures(&l) {
+                        if let Some(n) = n2.get(1) {
+                            result.version = Some(Version::from_str(n.as_str()).unwrap());
+                        }
+                    }
+                    if let Some(n2) = key_re("py_version").captures(&l) {
+                        if let Some(n) = n2.get(1) {
+                            result.py_version = Some(Version::from_str(n.as_str()).unwrap());
+                        }
+                    }
                 } else if in_dep {
                     if !l.is_empty() {
                         result.dependencies.push(Dependency::from_str(&l).unwrap());
@@ -451,24 +457,47 @@ fn wait_for_dirs(dirs: &Vec<PathBuf>) -> Result<(), AliasError> {
     })
 }
 
-fn create_venv(alias: &str, lib_path: &PathBuf) {
+fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     // We only use the alias for creating the virtual environment. After that,
     // we call our venv's executable directly.
 
+    // todo perhaps move alias finding back into create_venv, or make a
+    // todo create_venv_if_doesnt_exist fn.
+    let (alias, py_ver_from_alias) = match find_py_alias() {
+        Ok(a) => a,
+        Err(_) => {
+            abort("Unable to find a Python version on the path");
+            ("".to_string(), Version::new_short(0, 0)) // Required for compiler
+        }
+    };
+
+    if let Some(c_v) = cfg_v {
+        if c_v != &py_ver_from_alias {
+            abort(
+                "The Python version you selected doesn't match the one specified in `pyprojecttoml`",
+            );
+        }
+    }
+
     println!("Setting up Python environment...");
+
+    let lib_path = pyypackage_dir.join(format!(
+        "{}.{}/lib",
+        py_ver_from_alias.major, py_ver_from_alias.minor
+    ));
 
     // If the Python version's below 3.3, we must download and install the
     // `virtualenv` package, since `venv` isn't included.
-    if version < Version::new_short(3, 3) {
+    if py_ver_from_alias < Version::new_short(3, 3) {
         if let Err(_) = commands::install_virtualenv_global(&alias) {
-            util::exit_early("Problem installing the virtualenv package, required by Python versions older than 3.3)");
+            util::abort("Problem installing the virtualenv package, required by Python versions older than 3.3)");
         }
-        if let Err(_) = commands::create_legacy_virtualenv(&alias, lib_path, ".venv") {
-            util::exit_early("Problem creating virtual environment");
+        if let Err(_) = commands::create_legacy_virtualenv(&alias, &lib_path, ".venv") {
+            util::abort("Problem creating virtual environment");
         }
     } else {
-        if let Err(_) = commands::create_venv(&alias, lib_path, ".venv") {
-            util::exit_early("Problem creating virtual environment");
+        if let Err(_) = commands::create_venv(&alias, &lib_path, ".venv") {
+            util::abort("Problem creating virtual environment");
         }
     }
 
@@ -478,6 +507,8 @@ fn create_venv(alias: &str, lib_path: &PathBuf) {
     let py_venv = lib_path.join("../.venv/bin/python");
     let pip_venv = lib_path.join("../.venv/bin/pip");
     wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
+
+    py_ver_from_alias
 }
 
 enum InstallType {
@@ -499,15 +530,15 @@ fn install(
     if packages.is_empty() {
         // Install all from `pyproject.toml`.
         if let Err(_) = commands::install(&bin_path, installed_packages, false, false) {
-            util::exit_early("Problem installing packages");
+            util::abort("Problem installing packages");
         }
         //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
         if let Err(_) = write_lock(lock_filename, lock) {
-            util::exit_early("Problem writing the lock file");
+            util::abort("Problem writing the lock file");
         }
     } else {
         if let Err(_) = commands::install(&bin_path, &packages, false, bin) {
-            util::exit_early("Problem installing packages");
+            util::abort("Problem installing packages");
         }
         add_dependencies(cfg_filename, &packages);
 
@@ -515,7 +546,7 @@ fn install(
 
         //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
         if let Err(_) = write_lock(lock_filename, lock) {
-            util::exit_early("Problem writing the lock file");
+            util::abort("Problem writing the lock file");
         }
     }
 }
@@ -530,58 +561,64 @@ fn main() {
     let cfg = Config::from_file(cfg_filename);
     let py_version_cfg = cfg.py_version;
 
-    // Note that we rely on the proper folder name, vice inspecting the binary.
-    // ie: could also check `bin/python --version`.
-    let venv_versions_found: Vec<Version> = util::possible_py_versions()
-        .into_iter()
-        .filter(|v| {
-            let bin_path = pypackage_dir.join(&format!("{}.{}/.venv/bin", v.major, v.minor));
-            util::venv_exists(&bin_path)
-        })
-        .collect();
+    // Check for environments. Create one if none exist. Set `vers_path`.
+    let mut vers_path = PathBuf::new();
+    match py_version_cfg {
+        // The version's explicitly specified; check if an environment for that version
+        // exists. If not, create one, and make sure it's the right version.
+        Some(cfg_v) => {
+            // The version's specified in the config. Ensure a virtualenv for this
+            // is setup.  // todo: Confirm using --version on the python bin, instead of relying on folder name.
 
-    let py_version = match py_version_cfg {
-        // The version's explicitly specified; use that.
-        Some(v) => v,
-        // If not, we'll have to guess.
-        None => match venv_versions_found.len() {
-            0 => None,
-            1 => Some(venv_versions_found[0]),
-            _ => {
-                exit_early(
+            // Don't include version patch in the directory name, per PEP 582.
+            println!("CFG: {:?}", cfg_v);
+            vers_path = pypackage_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor));
+
+            // todo: Explicitly display if req that we found an env, but it doesn't match the vers.
+            let (bin_p, _) = util::find_bin_path(&vers_path);
+
+            if !util::venv_exists(&bin_p) {
+                let created_vers = create_venv(Some(&cfg_v), &pypackage_dir);
+            }
+        }
+        // The version's not specified in the config; Search for existing environments, and create
+        // one if we can't find any.
+        None => {
+            // Note that we rely on the proper folder name, vice inspecting the binary.
+            // ie: could also check `bin/python --version`.
+            let venv_versions_found: Vec<Version> = util::possible_py_versions()
+                .into_iter()
+                .filter(|v| {
+                    // todo: Missses `Scripts`!
+                    let bin_path =
+                        pypackage_dir.join(&format!("{}.{}/.venv/bin", v.major, v.minor));
+                    util::venv_exists(&bin_path)
+                })
+                .collect();
+
+            match venv_versions_found.len() {
+                0 => {
+                    let created_vers = create_venv(None, &pypackage_dir);
+                    vers_path = pypackage_dir
+                        .join(&format!("{}.{}", created_vers.major, created_vers.minor));
+                }
+                1 => {
+                    vers_path = pypackage_dir.join(&format!(
+                        "{}.{}",
+                        venv_versions_found[0].major, venv_versions_found[0].minor
+                    ));
+                }
+                _ => abort(
                     "Multiple Python environments found
                 for this project; specify the desired one in `pyproject.toml`. Example:
 [tool.pyproject]
-py_version = \"3.7\"");
-                None //  Required by compiler
-            }
-        },
-    };
-
-    // Don't include version patch in the directory name, per PEP 582.
-
-    let vers_path = pypackage_dir.join(&format!("{}.{}", py_version.major, py_version.minor));
-    let venv_path = vers_path.join(".venv");
-    let lib_path = vers_path.join("lib");
-
-    if !util::venv_exists(&vers_path) {
-        //    let mut alias = String::new();
-//    let mut version = Version::new(0, 0, 0);
-        let (alias, py_version_from_alias) = match find_py_alias() {
-            Ok(a) => a,
-            Err(_) => util::exit_early("Unable to find a Python version on the path"),
-        };
-
-        if let Some(py_v) = py_version {
-            if py_v != py_version_from_alias {
-                util::exit_early("The python version specified doesn't match the alias you selected.");
+py_version = \"3.7\"",
+                ),
             }
         }
+    };
 
-        create_venv(&alias, &venv_path);
-    }
-
-    let (bin_path, lib_path) = util::find_bin_path(&venv_path, &lib_path);
+    let (bin_path, lib_path) = util::find_bin_path(&vers_path);
 
     let mut lock = match read_lock(lock_filename) {
         Ok(l) => {
@@ -632,13 +669,18 @@ py_version = \"3.7\"");
         }
 
         SubCommand::Install { packages, bin } => {
-            let packages: Vec<Dependency> = packages
-                .into_iter()
-                .map(|p| Dependency::from_str(&p).unwrap())
-                .collect();
+            let mut p = Vec::new();
+            if packages.is_empty() {
+                p = cfg.dependencies.clone();
+            } else {
+                p = packages
+                    .into_iter()
+                    .map(|p| Dependency::from_str(&p).unwrap())
+                    .collect();
+            }
 
             install(
-                &packages,
+                &p,
                 &[],
                 &mut lock,
                 lock_filename,
@@ -649,13 +691,18 @@ py_version = \"3.7\"");
             );
         }
         SubCommand::Uninstall { packages } => {
-            let packages: Vec<Dependency> = packages
-                .into_iter()
-                .map(|p| Dependency::from_str(&p).unwrap())
-                .collect();
-
+            // todo: DRY with Install
+            let mut p = Vec::new();
+            if packages.is_empty() {
+                p = cfg.dependencies.clone();
+            } else {
+                p = packages
+                    .into_iter()
+                    .map(|p| Dependency::from_str(&p).unwrap())
+                    .collect();
+            }
             install(
-                &packages,
+                &p,
                 &cfg.dependencies,
                 &mut lock,
                 lock_filename,
@@ -669,7 +716,7 @@ py_version = \"3.7\"");
         SubCommand::Python { args } => commands::run_python(&bin_path, &lib_path, &args),
         SubCommand::Package {} => build::build(&bin_path, &cfg),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
-        SubCommand::Init {} => exit_early("Init not yet implemented"),
+        SubCommand::Init {} => abort("Init not yet implemented"),
     }
 }
 
