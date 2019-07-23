@@ -1,4 +1,4 @@
-use crate::package_types::{Dependency, Version, VersionType};
+use crate::dep_types::{Dependency, ReqType, Version};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,7 +16,7 @@ use crate::util::abort;
 
 mod build;
 mod commands;
-mod package_types;
+mod dep_types;
 mod util;
 
 #[derive(StructOpt, Debug)]
@@ -50,8 +50,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-    name = "install",
-    help = "
+        name = "install",
+        help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -339,13 +339,18 @@ fn find_sub_dependencies(package: Dependency) -> Vec<Dependency> {
 /// Similar to that used by Cargo.lock
 #[derive(Debug, Deserialize, Serialize)]
 struct LockPackage {
+    // We use Strings here instead of types like Version to make it easier to
+    // serialize and deserialize.
     name: String,
-    // We use a tuple for version instead of Version, since the lock
-    // uses exact, 3-number versions only.
-    //    version: Option<LockVersion>,  // todo not sure how to implement
     version: String,
     source: Option<String>,
     dependencies: Option<Vec<String>>, // todo option self
+}
+
+impl LockPackage {
+    pub fn to_pip_string(&self) -> String {
+        format!("{}={}", self.name, self.version)
+    }
 }
 
 /// Modelled after [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)
@@ -376,32 +381,32 @@ impl Lock {
         }
     }
 
-    /// Create a lock from dependencies.
+    /// Create a lock from dependencies; resolve them and their sub-dependencies. Find conflicts.
     fn from_dependencies(dependencies: &[Dependency]) -> Self {
-        let mut lock_packs = vec![];
         for dep in dependencies {
             match util::get_warehouse_data(&dep.name) {
                 Ok(data) => {
                     let warehouse_versions: Vec<Version> = data
                         .releases
                         .keys()
-                        .map(|v| Version::from_str2(&v))
+                        // Don't include release candidate and beta; they'll be None when parsing the string.
+                        .filter(|v| Version::from_str2(&v).is_some())
+                        .map(|v| Version::from_str2(&v).unwrap())
                         .collect();
-                    match dep.best_match(&warehouse_versions) {
-                        Some(best) => {
-                            lock_packs.push(
-                                LockPackage {
-                                    name: dep.name.clone(),
-                                    version: best.to_string(),
-                                    source: None,  // todo
-                                    dependencies: None // todo
-                                }
-                            )
-                        }
-                        None => abort(&format!("Unable to find a matching dependency for {}", dep.to_toml_string())),
-                    }
 
-
+                    //                    match dep.best_match(&warehouse_versions) {
+                    //                        Some(best) => {
+                    //                            lock_packs.push(
+                    //                                LockPackage {
+                    //                                    name: dep.name.clone(),
+                    //                                    version: best.to_string(),
+                    //                                    source: None,  // todo
+                    //                                    dependencies: None // todo
+                    //                                }
+                    //                            )
+                    //                        }
+                    //                        None => abort(&format!("Unable to find a matching dependency for {}", dep.to_toml_string())),
+                    //                    }
 
                     //                    for (v, release) in data.releases {
                     //                        let vers = Version::from_str2(&v);
@@ -411,6 +416,7 @@ impl Lock {
                 Err(_) => abort(&format!("Problem getting warehouse data for {}", dep.name)),
             }
         }
+        let lock_packs = vec![];
 
         Self {
             metadata: None,
@@ -448,10 +454,14 @@ fn add_dependencies(filename: &str, dependencies: &[Dependency]) {
     let mut in_dep = false;
     let sect_re = Regex::new(r"\[.*\]").unwrap();
 
-    let result = String::new();
+    // todo: use this? https://doc.rust-lang.org/std/macro.writeln.html
+
+    let mut result = String::new();
     for line in BufReader::new(file).lines() {
         //    for line in data.lines() {
         if let Ok(l) = line {
+            result.push_str(&l);
+            result.push_str("\n");
             // todo replace this with something that clips off
             // todo post-# part of strings; not just ignores ones starting with #
             if l.starts_with('#') {
@@ -466,14 +476,14 @@ fn add_dependencies(filename: &str, dependencies: &[Dependency]) {
                 continue;
             }
 
-            if in_dep {}
+            if in_dep {
+                //                result.push_str()
+            }
         }
     }
 
-    //    let new_data = data;
-
-    //    fs::write("pyproject.toml", new_data)
-    //        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+    fs::write("pyproject.toml", result)
+        .expect("Unable to read pyproject.toml while attempting to add a dependency");
 }
 
 /// Remove dependencies from pyproject.toml
@@ -557,39 +567,12 @@ enum InstallType {
     Uninstall,
 }
 
-/// Helper function to reduce repetition between installing and uninstalling
-fn install(
-    packages: &[Dependency],
-    installed_packages: &[Dependency],
-    lock: &mut Lock,
-    lock_filename: &str,
-    cfg_filename: &str,
-    bin_path: &PathBuf,
-    type_: InstallType,
-    bin: bool,
-) {
-    if packages.is_empty() {
-        // Install all from `pyproject.toml`.
-        if let Err(_) = commands::install(&bin_path, installed_packages, false, false) {
-            util::abort("Problem installing packages");
-        }
-        //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-        if let Err(_) = write_lock(lock_filename, lock) {
-            util::abort("Problem writing the lock file");
-        }
-    } else {
-        if let Err(_) = commands::install(&bin_path, &packages, false, bin) {
-            util::abort("Problem installing packages");
-        }
-        //        add_dependencies(cfg_filename, &packages);
-
-        lock.add_packages(&packages);
-
-        //                write_lock(lock_filename, &lock).expect("Problem writing lock.");
-        if let Err(_) = write_lock(lock_filename, lock) {
-            util::abort("Problem writing the lock file");
-        }
+fn make_dependency_graph(deps: &Vec<Dependency>) -> petgraph::Graph<Dependency, &str> {
+    let mut graph = petgraph::Graph::<&str, &str>::new();
+    for dep in deps {
+        graph.add_node(dep)
     }
+    graph
 }
 
 fn main() {
@@ -599,7 +582,7 @@ fn main() {
     let pypackage_dir = env::current_dir()
         .expect("Can't find current path")
         .join("__pypackages__");
-    let cfg = Config::from_file(cfg_filename);
+    let mut cfg = Config::from_file(cfg_filename);
     let py_version_cfg = cfg.py_version;
 
     // Check for environments. Create one if none exist. Set `vers_path`.
@@ -699,11 +682,12 @@ py_version = \"3.7\"",
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
-            let new_deps: Vec<Dependency> = packages
+            let mut new_deps: Vec<Dependency> = packages
                 .into_iter()
                 .map(|p| Dependency::from_str(&p).unwrap())
                 .collect();
 
+            // todo: Compare to existing listed deps and merge appropriately.
             add_dependencies(cfg_filename, &new_deps);
 
             //            let mut p = Vec::new();
@@ -716,43 +700,37 @@ py_version = \"3.7\"",
             //                    .collect();
             //            }
 
-            let lock = Lock::from_dependencies(&cfg.dependencies);
-            println!("LOCK: {:?}", lock);
-            write_lock(lock_filename, &lock);
+            cfg.dependencies.append(&mut new_deps);
+            let dep_graph = make_dependency_graph(&cfg.dependencies);
 
-            //            install(
-            //                &p,
-            //                &[],
-            //                &mut lock,
-            //                lock_filename,
-            //                cfg_filename,
-            //                &bin_path,
-            //                InstallType::Install,
-            //                bin,
-            //            );
-        }
-        SubCommand::Uninstall { packages } => {
-            // todo: DRY with Install
-            let mut p = Vec::new();
-            if packages.is_empty() {
-                p = cfg.dependencies.clone();
+            //            let lock = Lock::from_dependencies(&cfg.dependencies);
+            let lock = Lock {
+                metadata: None,
+                package: vec![],
+            }; // todo temp
+            println!("LOCK: {:#?}", lock);
+
+            if let Some(deps) = &lock.package {
+                for lock_pack in deps {
+                    let d = Dependency {
+                        name: lock_pack.name.clone(),
+                        version: Some(Version::from_str2(&lock_pack.version).unwrap()),
+                        version_type: ReqType::Exact,
+                        bin: false,
+                    };
+                    if let Err(_) = commands::install(&bin_path, &vec![d], false, d.bin) {
+                        abort("Problem installing packages");
+                    }
+                }
             } else {
-                p = packages
-                    .into_iter()
-                    .map(|p| Dependency::from_str(&p).unwrap())
-                    .collect();
+                println!("Found no dependencies in `pyproject.toml` to install")
             }
-            install(
-                &p,
-                &cfg.dependencies,
-                &mut lock,
-                lock_filename,
-                cfg_filename,
-                &bin_path,
-                InstallType::Uninstall,
-                false,
-            );
+
+            if let Err(_) = write_lock(lock_filename, &lock) {
+                abort("Problem writing lock file");
+            }
         }
+        SubCommand::Uninstall { packages } => {}
 
         SubCommand::Python { args } => {
             if let Err(_) = commands::run_python(&bin_path, &lib_path, &args) {
@@ -768,92 +746,5 @@ py_version = \"3.7\"",
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::package_types::{Dependency, Version, VersionType};
 
-    #[test]
-    fn valid_version() {
-        assert_eq!(
-            Version::from_str("3.7").unwrap(),
-            Version {
-                major: 3,
-                minor: 7,
-                patch: None
-            }
-        );
-        assert_eq!(Version::from_str("3.12.5").unwrap(), Version::new(3, 12, 5));
-        assert_eq!(Version::from_str("0.1.0").unwrap(), Version::new(0, 1, 0));
-    }
-
-    #[test]
-    #[should_panic(expected = "Problem parsing version: 3-7")]
-    fn bad_version() {
-        Version::from_str("3-7").unwrap();
-    }
-
-    #[test]
-    fn parse_package_novers() {
-        let p = Dependency::from_str("saturn").unwrap();
-        assert_eq!(
-            p,
-            Dependency {
-                name: "saturn".into(),
-                version: None,
-                version_type: VersionType::Exact,
-                bin: false,
-            }
-        )
-    }
-
-    #[test]
-    fn parse_package_withvers() {
-        let p = Dependency::from_str("bolt = \"3.1.4\"").unwrap();
-        assert_eq!(
-            p,
-            Dependency {
-                name: "bolt".into(),
-                version: Some(Version::new(3, 1, 4)),
-                version_type: VersionType::Exact,
-                bin: false,
-            }
-        )
-    }
-
-    #[test]
-    fn parse_package_carot() {
-        let p = Dependency::from_str("chord = \"^2.7.18\"").unwrap();
-        assert_eq!(
-            p,
-            Dependency {
-                name: "chord".into(),
-                version: Some(Version::new(2, 7, 18)),
-                version_type: VersionType::Carot,
-                bin: false,
-            }
-        )
-    }
-
-    #[test]
-    fn parse_package_tilde_short() {
-        let p = Dependency::from_str("sphere = \"~6.7\"").unwrap();
-        assert_eq!(
-            p,
-            Dependency {
-                name: "sphere".into(),
-                version: Some(Version::new_short(6, 7)),
-                version_type: VersionType::Tilde,
-                bin: false,
-            }
-        )
-    }
-
-    #[test]
-    fn version_ordering() {
-        let a = Version::new(4, 9, 4);
-        let b = Version::new(4, 8, 0);
-        let c = Version::new(3, 3, 6);
-        let d = Version::new(3, 3, 5);
-        let e = Version::new(3, 3, 0);
-
-        assert!(a > b && b > c && c > d && d > e);
-    }
 }

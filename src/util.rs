@@ -1,4 +1,4 @@
-use crate::package_types::Version;
+use crate::dep_types::Version;
 use serde::Deserialize;
 use std::error::Error;
 use std::{collections::HashMap, env, path::PathBuf, process, thread, time};
@@ -17,7 +17,7 @@ pub fn possible_py_versions() -> Vec<Version> {
         "3.8", "3.9", "3.10", "3.11", "3.12",
     ]
     .into_iter()
-    .map(|v| Version::from_str2(v))
+    .map(|v| Version::from_str2(v).unwrap())
     .collect()
 }
 
@@ -100,6 +100,7 @@ pub(crate) struct WarehouseRelease {
     pub python_version: String,
     pub requires_python: Option<String>,
     pub url: String,
+    pub dependencies: Vec<String>, // Not in warehouse; we pull from a custom cached database.
 }
 
 //#[derive(Debug, Deserialize)]
@@ -127,6 +128,17 @@ pub(crate) struct WarehouseData {
 /// https://warehouse.pypa.io/api-reference/json/
 pub(crate) fn get_warehouse_data(name: &str) -> Result<(WarehouseData), Box<Error>> {
     let url = format!("https://pypi.org/pypi/{}/json", name);
-    let resp: WarehouseData = reqwest::get(&url)?.json()?;
+    let resp = reqwest::get(&url)?.json()?;
+    Ok(resp)
+}
+
+/// Fetch dependency data from our database, where it's cached.
+pub(crate) fn get_dep_data(name: &str, version: &Version) -> Result<(Vec<String>), Box<Error>> {
+    let url = format!(
+        "https://pydeps.herokuapp.com/{}/{}",
+        name,
+        version.to_string()
+    );
+    let resp = reqwest::get(&url)?.json()?;
     Ok(resp)
 }

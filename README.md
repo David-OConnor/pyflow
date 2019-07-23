@@ -76,11 +76,18 @@ a project: a readme, pyproject.toml, and directory for source code
 - `pypackage help` Get help, including a list of available commands
 
 ## How dependencies are resolved
-Running `pypackage install` loads the project's requirements from `pyproject.toml`. (adding a
-package name, eg `pypackage install matplotlib` simply adds that requirement before proceeding)
-compatible versions of dependencies (and their dependencies) are determined using info from 
-the [PyPi Warehosue](https://github.com/pypa/warehouse). They're downloaded, verified using
-hashes, and the exact versions are stored in a lock file.
+Running `pypackage install` loads the project's requirements from `pyproject.toml`. Adding a
+package name, eg `pypackage install matplotlib` simply adds that requirement before proceeding.
+Compatible versions of dependencies are determined using info from 
+the [PyPi Warehosue](https://github.com/pypa/warehouse) (available versions, and hash info), 
+and the `pydeps` database (dependency requirements). A dependency graph is built
+using a cached database online. They're downloaded using pip, verified using
+hashes, and the exact versions usedare stored in a lock file.
+
+Important caveat: There appears to be no way install multiple versions of a package
+simultaneously without renaming them; this is a factor when encountering incompatible sub-dependencies.
+Perhaps this can be sorted around through behind-the-scenes renaming and import-line
+edits. 
 
 ## Why?
 Using a Python installation directly when installing dependencies can become messy.
@@ -124,6 +131,9 @@ traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`
 - It keeps dependencies in the project directory, in `__pypackages__`, and
 doesn't modify files outside
 the project directory.
+
+- It's dependency resolution and locking is much faster due to using a cached
+database of dependencies, vice downloading and checking each package.
 
 - By not requiring Python to install or run, it remains intallation-agnostic.
 This is especially important on Linux, where there may be several versions
@@ -195,3 +205,4 @@ via `Cargo`, this should be set up automatically.
 - [Semantic versioning](https://semver.org/)
 - [Specifying dependencies in Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
 - [Predictable dependency management blog entry](https://blog.rust-lang.org/2016/05/05/cargo-pillars.html)
+- [Blog on why Pyhon dependencies are hard to determine](https://dustingram.com/articles/2018/03/05/why-pypi-doesnt-know-dependencies/)
