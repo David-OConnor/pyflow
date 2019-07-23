@@ -55,7 +55,7 @@ pub fn find_bin_path(vers_path: &PathBuf) -> (PathBuf, PathBuf) {
 pub(crate) fn wait_for_dirs(dirs: &Vec<PathBuf>) -> Result<(), crate::AliasError> {
     // todo: AliasError is a quick fix to avoid creating new error type.
     let timeout = 1000; // ms
-    for i in 0..timeout {
+    for _ in 0..timeout {
         let mut all_created = true;
         for dir in dirs {
             if !dir.exists() {

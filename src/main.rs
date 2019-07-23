@@ -1,4 +1,4 @@
-use crate::dep_types::{Dependency, ReqType, Version};
+use crate::dep_types::{Dependency, Package, Version};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -340,18 +340,19 @@ fn find_sub_dependencies(package: Dependency) -> Vec<Dependency> {
 #[derive(Debug, Deserialize, Serialize)]
 struct LockPackage {
     // We use Strings here instead of types like Version to make it easier to
-    // serialize and deserialize.
+    // serialize and deserialize
+    // todo: We have an analog Package type; perhaps just figure out how to serialize that.
     name: String,
     version: String,
     source: Option<String>,
-    dependencies: Option<Vec<String>>, // todo option self
+    dependencies: Option<Vec<String>>,
 }
 
-impl LockPackage {
-    pub fn to_pip_string(&self) -> String {
-        format!("{}={}", self.name, self.version)
-    }
-}
+//impl LockPackage {
+//    pub fn to_pip_string(&self) -> String {
+//        format!("{}={}", self.name, self.version)
+//    }
+//}
 
 /// Modelled after [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -361,17 +362,18 @@ struct Lock {
 }
 
 impl Lock {
-    fn add_packages(&mut self, packages: &[Dependency]) {
+    fn add_packages(&mut self, packages: &[Package]) {
         // todo: Write tests for this.
 
         for package in packages {
             // Use the actual version installed, not the requirement!
             // todo: reconsider your package etc structs
+            // todo: Perhaps impl to_lockpack etc from Package.
             let lock_package = LockPackage {
                 name: package.name.clone(),
-                version: package.version.unwrap_or(Version::new(0, 0, 0)).to_string(), // todo ensure 3-digit.
-                source: None,                                                          // todo
-                dependencies: None,                                                    // todo
+                version: package.version.to_string(),
+                source: package.source.clone(),
+                dependencies: None,
             };
 
             match &mut self.package {
@@ -523,11 +525,7 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     if let Some(c_v) = cfg_v {
         // We don't expect the config version to specify a patch, but if it does, take it
         // into account.
-        let versions_match = match c_v.patch {
-            Some(p) => c_v == &py_ver_from_alias,
-            None => c_v.major == py_ver_from_alias.major && c_v.minor == py_ver_from_alias.minor,
-        };
-        if !versions_match {
+        if c_v != &py_ver_from_alias {
             println!("{:?}, {:?}", c_v, &py_ver_from_alias);
             abort(&format!("The Python version you selected ({}) doesn't match the one specified in `pyprojecttoml` ({})",
                            py_ver_from_alias.to_string(), c_v.to_string())
@@ -568,9 +566,11 @@ enum InstallType {
 }
 
 fn make_dependency_graph(deps: &Vec<Dependency>) -> petgraph::Graph<Dependency, &str> {
-    let mut graph = petgraph::Graph::<&str, &str>::new();
+    let deps = deps.clone();  // todo do we want this?
+
+    let mut graph = petgraph::Graph::<Dependency, &str>::new();
     for dep in deps {
-        graph.add_node(dep)
+        graph.add_node(dep);
     }
     graph
 }
@@ -687,7 +687,7 @@ py_version = \"3.7\"",
                 .map(|p| Dependency::from_str(&p).unwrap())
                 .collect();
 
-            // todo: Compare to existing listed deps and merge appropriately.
+            // todo: Compare to existing listed lock_packs and merge appropriately.
             add_dependencies(cfg_filename, &new_deps);
 
             //            let mut p = Vec::new();
@@ -706,19 +706,20 @@ py_version = \"3.7\"",
             //            let lock = Lock::from_dependencies(&cfg.dependencies);
             let lock = Lock {
                 metadata: None,
-                package: vec![],
-            }; // todo temp
-            println!("LOCK: {:#?}", lock);
+                package: None,
+            }; // todo temp so it'll compile while we work around things.
 
-            if let Some(deps) = &lock.package {
-                for lock_pack in deps {
-                    let d = Dependency {
+            if let Some(lock_packs) = &lock.package {
+                for lock_pack in lock_packs {
+                    // todo: methods to convert between LockPack and Package, since they're analogous
+                    let p = Package {
                         name: lock_pack.name.clone(),
-                        version: Some(Version::from_str2(&lock_pack.version).unwrap()),
-                        version_type: ReqType::Exact,
-                        bin: false,
+                        version: Version::from_str2(&lock_pack.version).unwrap(),
+                        deps: vec![],
+                        source: None,
+
                     };
-                    if let Err(_) = commands::install(&bin_path, &vec![d], false, d.bin) {
+                    if let Err(_) = commands::install(&bin_path, &vec![p], false, false) {
                         abort("Problem installing packages");
                     }
                 }

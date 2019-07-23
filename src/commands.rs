@@ -95,7 +95,7 @@ pub(crate) fn create_venv(
 
 pub(crate) fn install(
     bin_path: &PathBuf,
-    packages: &[crate::Dependency],
+    packages: &[crate::dep_types::Package],
     uninstall: bool,
     bin: bool,
 ) -> Result<(), Box<Error>> {
@@ -109,7 +109,7 @@ pub(crate) fn install(
         // todo: Perhaps there's a way to install bins to __pypackages__ ?
         let package_fullname = &package.to_pip_string();
         let mut args = vec!["-m", "pip", install, package_fullname];
-        if !bin && !package.bin {
+        if !bin {
             args.push("--target");
             args.push("../../lib");
             //            args.push("--install-option=\"--install-scripts=../../lib/bin2\"");
