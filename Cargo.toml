@@ -1,13 +1,18 @@
 [package]
-name = "pypackages"
+name = "pypackage"
 version = "0.0.1"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
+license = "MIT"
+repository = "https://www.github.com/David-OConnor/pypackage"
+readme = "README.md"
 edition = "2018"
+keywords = ["python","dependency", "packaging", "build"]
+categories = ["python", "packaging", "dependency-management", "build-tools",]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-petgraph = "^0.4.13"
+#petgraph = "^0.4.13"
 regex = "^1.1.9"
 reqwest = "^0.9.19"
 structopt = "^0.2.18"

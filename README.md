@@ -13,8 +13,13 @@ in the near future.
 
 ## Installation
 There are 2 main ways to install:
-- Download the binary from (fill in), and add it to a location on the system path.
-For example, place it under `/usr/bin` in linux, or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
+- Download a binary from the `releases` page. For example, on Ubuntu, download and run
+[This deb](https:). 
+    -- On W
+
+For example, place it under `/usr/bin` in linux, 
+or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
+
 - If you have `Rust` installed, the most convenient way is to 
 run `cargo install pypackage`.
 
@@ -188,6 +193,9 @@ cd pypackage
 cargo build --release
 
 ```
+
+## Updating
+If installed via `Cargo`, run `cargo install pypackage --force`.
 
 ## Contributing
 If you notice unexpected behavior or missing features, please post an issue,

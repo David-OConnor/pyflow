@@ -13,9 +13,9 @@ use std::{
 use structopt::StructOpt;
 //use textio;
 use crate::util::abort;
-
 mod build;
 mod commands;
+mod dep_resolution;
 mod dep_types;
 mod util;
 
@@ -168,7 +168,9 @@ impl Config {
                     }
                 } else if in_dep {
                     if !l.is_empty() {
-                        result.dependencies.push(Dependency::from_str(&l).unwrap());
+                        result
+                            .dependencies
+                            .push(Dependency::from_str(&l, false).unwrap());
                     }
                 }
             }
@@ -263,7 +265,7 @@ fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
 }
 
 #[derive(Debug)]
-struct AliasError {
+pub struct AliasError {
     details: String,
 }
 
@@ -277,17 +279,6 @@ impl fmt::Display for AliasError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.details)
     }
-}
-
-/// Help for this tool
-fn help() {
-    // todo: Use a pre-built help from a CLI crate?
-    // todo
-}
-
-/// Version info about this tool
-fn version() {
-    // todo
 }
 
 /// Make an educated guess at the command needed to execute python the
@@ -382,49 +373,49 @@ impl Lock {
             }
         }
     }
-
-    /// Create a lock from dependencies; resolve them and their sub-dependencies. Find conflicts.
-    fn from_dependencies(dependencies: &[Dependency]) -> Self {
-        for dep in dependencies {
-            match util::get_warehouse_data(&dep.name) {
-                Ok(data) => {
-                    let warehouse_versions: Vec<Version> = data
-                        .releases
-                        .keys()
-                        // Don't include release candidate and beta; they'll be None when parsing the string.
-                        .filter(|v| Version::from_str2(&v).is_some())
-                        .map(|v| Version::from_str2(&v).unwrap())
-                        .collect();
-
-                    //                    match dep.best_match(&warehouse_versions) {
-                    //                        Some(best) => {
-                    //                            lock_packs.push(
-                    //                                LockPackage {
-                    //                                    name: dep.name.clone(),
-                    //                                    version: best.to_string(),
-                    //                                    source: None,  // todo
-                    //                                    dependencies: None // todo
-                    //                                }
-                    //                            )
-                    //                        }
-                    //                        None => abort(&format!("Unable to find a matching dependency for {}", dep.to_toml_string())),
-                    //                    }
-
-                    //                    for (v, release) in data.releases {
-                    //                        let vers = Version::from_str2(&v);
-                    //                        if
-                    //                    }
-                }
-                Err(_) => abort(&format!("Problem getting warehouse data for {}", dep.name)),
-            }
-        }
-        let lock_packs = vec![];
-
-        Self {
-            metadata: None,
-            package: Some(lock_packs),
-        }
-    }
+    // todo perhaps obsolete
+    // Create a lock from dependencies; resolve them and their sub-dependencies. Find conflicts.
+    //    fn from_dependencies(dependencies: &[Dependency]) -> Self {
+    //        for dep in dependencies {
+    //            match dep_resolution::get_warehouse_data(&dep.name) {
+    //                Ok(data) => {
+    //                    let warehouse_versions: Vec<Version> = data
+    //                        .releases
+    //                        .keys()
+    //                        // Don't include release candidate and beta; they'll be None when parsing the string.
+    //                        .filter(|v| Version::from_str2(&v).is_some())
+    //                        .map(|v| Version::from_str2(&v).unwrap())
+    //                        .collect();
+    //
+    //                    //                    match dep.best_match(&warehouse_versions) {
+    //                    //                        Some(best) => {
+    //                    //                            lock_packs.push(
+    //                    //                                LockPackage {
+    //                    //                                    name: dep.name.clone(),
+    //                    //                                    version: best.to_string(),
+    //                    //                                    source: None,  // todo
+    //                    //                                    dependencies: None // todo
+    //                    //                                }
+    //                    //                            )
+    //                    //                        }
+    //                    //                        None => abort(&format!("Unable to find a matching dependency for {}", dep.to_toml_string())),
+    //                    //                    }
+    //
+    //                    //                    for (v, release) in data.releases {
+    //                    //                        let vers = Version::from_str2(&v);
+    //                    //                        if
+    //                    //                    }
+    //                }
+    //                Err(_) => abort(&format!("Problem getting warehouse data for {}", dep.name)),
+    //            }
+    //        }
+    //        let lock_packs = vec![];
+    //
+    //        Self {
+    //            metadata: None,
+    //            package: Some(lock_packs),
+    //        }
+    //    }
 }
 
 /// Read dependency data froma lock file.
@@ -565,15 +556,37 @@ enum InstallType {
     Uninstall,
 }
 
-fn make_dependency_graph(deps: &Vec<Dependency>) -> petgraph::Graph<Dependency, &str> {
-    let deps = deps.clone();  // todo do we want this?
-
-    let mut graph = petgraph::Graph::<Dependency, &str>::new();
-    for dep in deps {
-        graph.add_node(dep);
-    }
-    graph
-}
+/// Recursively add nodes.
+//fn add_nodes(graph: &mut petgraph::Graph<Dependency, &str>, node: Dependency, parent_i: u32) {
+//    let n_i = graph.add_node(node);
+//    graph.add_edge(parent_i, n, "");
+//
+//    for dep in node.dependencies {
+//        add_nodes(graph, dep, n_i)
+//    }
+//}
+//
+//fn make_dependency_graph(deps: &Vec<Dependency>) -> petgraph::Graph<Dependency, &str> {
+//    let deps = deps.clone(); // todo do we want this?
+//
+//    let mut graph = petgraph::Graph::<Dependency, &str>::new();
+//
+//    let top_dep = Dependency {
+//        // Dummy to hold the others
+//        name: "".into(),
+//        version_reqs: vec![],
+//        dependencies: deps,
+//    };
+//
+//    let top_i = graph.add_node(top_dep);
+//    let t = graph.add_node(top_dep.clone());
+//
+//    for mut dep in deps {
+//        add_nodes(&mut graph, dep, top_i);
+//    }
+//
+//    graph
+//}
 
 fn main() {
     let cfg_filename = "pyproject.toml";
@@ -684,7 +697,7 @@ py_version = \"3.7\"",
         SubCommand::Install { packages, bin } => {
             let mut new_deps: Vec<Dependency> = packages
                 .into_iter()
-                .map(|p| Dependency::from_str(&p).unwrap())
+                .map(|p| Dependency::from_str(&p, false).unwrap())
                 .collect();
 
             // todo: Compare to existing listed lock_packs and merge appropriately.
@@ -701,7 +714,11 @@ py_version = \"3.7\"",
             //            }
 
             cfg.dependencies.append(&mut new_deps);
-            let dep_graph = make_dependency_graph(&cfg.dependencies);
+
+            // Recursively add sub-dependencies.
+            for mut dep in cfg.dependencies.iter_mut() {
+                dep_resolution::populate_subdeps(&mut dep);
+            }
 
             //            let lock = Lock::from_dependencies(&cfg.dependencies);
             let lock = Lock {
@@ -717,7 +734,6 @@ py_version = \"3.7\"",
                         version: Version::from_str2(&lock_pack.version).unwrap(),
                         deps: vec![],
                         source: None,
-
                     };
                     if let Err(_) = commands::install(&bin_path, &vec![p], false, false) {
                         abort("Problem installing packages");

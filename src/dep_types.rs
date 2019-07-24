@@ -1,7 +1,7 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::{cmp, num, str::FromStr, string::ParseError};
+use std::{cmp, num, str::FromStr};
 
 /// An exact, 3-number Semver version.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -116,6 +116,8 @@ pub enum ReqType {
     Gte,
     Lte,
     Ne,
+    Gt,
+    Lt,
     Caret,
     Tilde,
     // todo wildcard
@@ -128,6 +130,8 @@ impl ToString for ReqType {
             ReqType::Exact => "==".into(),
             ReqType::Gte => ">=".into(),
             ReqType::Lte => "<=".into(),
+            ReqType::Gt => ">".into(),
+            ReqType::Lt => "<".into(),
             ReqType::Ne => "!=".into(),
             ReqType::Caret => "^".into(),
             ReqType::Tilde => "~".into(),
@@ -141,6 +145,8 @@ impl ReqType {
             "==" => ReqType::Exact,
             ">=" => ReqType::Gte,
             "<=" => ReqType::Lte,
+            ">" => ReqType::Gt,
+            "<" => ReqType::Lt,
             "!=" => ReqType::Ne,
             "^" => ReqType::Caret,
             "~" => ReqType::Tilde,
@@ -161,12 +167,24 @@ pub struct VersionReq {
 
 /// A single version req. Can be chained together.
 impl VersionReq {
-    pub fn from_str(s: &str) -> Result<Self, Box<Error>> {
-        let re =
-            Regex::new(r"^(\^|~|==|<=|>=|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?$")
-                .unwrap();
+    pub fn new(type_: ReqType, major: u32, minor: u32, patch: u32) -> Self {
+        Self {
+            type_,
+            major,
+            minor: Some(minor),
+            patch: Some(patch),
+        }
+    }
 
-        let caps = re.captures(s).expect("Problem parsing version");
+    pub fn from_str(s: &str) -> Result<Self, Box<Error>> {
+        let re = Regex::new(
+            r"^(\^|~|==|<=|>=|<|>|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?$",
+        )
+        .unwrap();
+
+        let caps = re
+            .captures(s)
+            .expect(&format!("Problem parsing version: {}", s));
 
         // Only major is required.
         let type_ = match caps.get(1) {
@@ -175,18 +193,18 @@ impl VersionReq {
         };
 
         let major = match caps.get(2) {
-            Some(p) => p.as_str().parse::<u32>().unwrap(),
+            Some(p) => p.as_str().parse::<u32>().expect("Problem parsing major"),
             //            None => return Box::new(Err("Problem parsing version")),
             None => panic!("Problem parsing version"),
         };
 
         let minor = match caps.get(3) {
-            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+            Some(p) => Some(p.as_str().parse::<u32>().expect("Problem parsing minor")),
             None => None,
         };
 
         let patch = match caps.get(4) {
-            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
+            Some(p) => Some(p.as_str().parse::<u32>().expect("Problem parsing patch")),
             None => None,
         };
 
@@ -214,12 +232,13 @@ impl VersionReq {
         } else {
             self.type_.to_string()
         };
-        match self.type_ {
-            ReqType::Caret => type_str.push_str("="),
-            ReqType::Tilde => type_str.push_str("="),
-            _ => (),
+        if pip_style {
+            match self.type_ {
+                ReqType::Caret => type_str.push_str("="),
+                ReqType::Tilde => type_str.push_str("="),
+                _ => (),
+            }
         }
-
 
         if let Some(mi) = self.minor {
             if let Some(p) = self.patch {
@@ -232,7 +251,7 @@ impl VersionReq {
         }
     }
 
-    pub fn is_compatible(&self, version: Version) -> bool {
+    pub fn is_compatible(&self, version: &Version) -> bool {
         // Version being unspecified means any version's acceptable; setting to 0s ensure that.
         // Treat missing minor and patch values as 0
         let minor = self.minor.unwrap_or(0);
@@ -241,13 +260,15 @@ impl VersionReq {
         let self_version = Version::new(self.major, minor, patch);
 
         let min = self_version;
-        let mut max = Version::new(0, 0, 0);
+        let max;
 
         match self.type_ {
-            ReqType::Exact => self_version == version,
-            ReqType::Gte => self_version >= version,
-            ReqType::Lte => self_version <= version,
-            ReqType::Ne => self_version != version,
+            ReqType::Exact => &self_version == version,
+            ReqType::Gte => &self_version >= version,
+            ReqType::Lte => &self_version <= version,
+            ReqType::Gt => &self_version > version,
+            ReqType::Lt => &self_version < version,
+            ReqType::Ne => &self_version != version,
             ReqType::Caret => {
                 if self.major > 0 {
                     max = Version::new(self.major + 1, 0, 0);
@@ -256,9 +277,7 @@ impl VersionReq {
                 } else {
                     max = Version::new(0, 0, self_version.patch + 2);
                 }
-                println!("YO:\n\n {:?} {:?}", version, max);
-                println!("WTF: {}", version < max);
-                min <= version && version < max
+                &min <= version && version < &max
             }
             // For tilde, if minor's specified, can only increment patch.
             // If not, can increment minor or patch.
@@ -268,18 +287,20 @@ impl VersionReq {
                 } else {
                     max = Version::new(self.major + 1, 0, 0);
                 }
-                min < version && version < max
+                &min < version && version < &max
             }
         }
     }
 }
 
-/// Includes information for describing a `Python` dependency
+/// Includes information for describing a `Python` dependency. Can be used in a dependency
+/// graph.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Dependency {
     pub name: String,
     pub version_reqs: Vec<VersionReq>,
     pub dependencies: Vec<Dependency>,
+    // todo: Is this a good place to store hash?
 }
 
 /// [Ref](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
@@ -362,26 +383,44 @@ impl Dependency {
 }
 
 /// This would be used when parsing from something like `pyproject.toml`
-impl FromStr for Dependency {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl Dependency {
+    pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, Box<Error>> {
         // Check if no version is specified.
-        let novers_re = Regex::new(r"^[a-zA-Z]+$").unwrap();
-        let mut no_vers = novers_re.captures(s).is_some();
+        let novers_re = if pypi_fmt {
+            Regex::new(r"^([a-zA-Z\-]+)\s*;.*$").unwrap()
+        } else {
+            Regex::new(r"^([a-zA-Z]+)$").unwrap()
+        };
 
-        let mut name = s.to_string();
-        let mut reqs = vec![];
-
-        if !no_vers {
-            let re = Regex::new(r#"^(.*?)\s*=\s*"(.*)"$"#).unwrap();
-            let caps = re.captures(s).unwrap();
-
-            name = caps.get(1).unwrap().as_str().to_string();
-            let reqs_m = caps.get(2).unwrap();
-            reqs = VersionReq::from_str_multiple(reqs_m.as_str())
-                .expect("Problem parsing version requirement");
+        match novers_re.captures(s) {
+            Some(m) => {
+                return Ok(Self {
+                    name: m.get(1).unwrap().as_str().to_string(),
+                    version_reqs: vec![],
+                    dependencies: vec![],
+                })
+            }
+            None => (),
         }
+
+        let re = if pypi_fmt {
+            // ie saturn (>=0.3.4)
+            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s;.*)?$").unwrap()
+        } else {
+            //ie saturn = ">=0.3.4"
+            Regex::new(r#"^(.*?)\s*=\s*"(.*)"$"#).unwrap()
+        };
+        let caps = match re.captures(s) {
+            Some(c) => c,
+            //                None => return Err(Box::new()),
+            // todo: Figure out how to return an error
+            None => panic!(format!("Problem parsing dependency from string: {}", s)),
+        };
+
+        let name = caps.get(1).unwrap().as_str().to_string();
+        let reqs_m = caps.get(2).unwrap();
+        let reqs = VersionReq::from_str_multiple(reqs_m.as_str())
+            .expect("Problem parsing version requirement");
 
         Ok(Self {
             name,
@@ -432,12 +471,12 @@ pub mod tests {
             type_: ReqType::Caret,
         };
 
-        assert!(req1.is_compatible(Version::new(1, 9, 9)));
-        assert!(!req1.is_compatible(Version::new(2, 0, 0)));
-        assert!(req2.is_compatible(Version::new(0, 2, 9)));
-        assert!(!req2.is_compatible(Version::new(0, 3, 0)));
-        assert!(req3.is_compatible(Version::new(0, 0, 3)));
-        assert!(!req3.is_compatible(Version::new(0, 0, 5)));
+        assert!(req1.is_compatible(&Version::new(1, 9, 9)));
+        assert!(!req1.is_compatible(&Version::new(2, 0, 0)));
+        assert!(req2.is_compatible(&Version::new(0, 2, 9)));
+        assert!(!req2.is_compatible(&Version::new(0, 3, 0)));
+        assert!(req3.is_compatible(&Version::new(0, 0, 3)));
+        assert!(!req3.is_compatible(&Version::new(0, 0, 5)));
     }
 
     #[test]
@@ -505,11 +544,18 @@ pub mod tests {
             patch: Some(1),
             type_: ReqType::Gte,
         };
+
+        assert_eq!(VersionReq::from_str(a).unwrap(), req_a);
+        assert_eq!(VersionReq::from_str(b).unwrap(), req_b);
+        assert_eq!(VersionReq::from_str(c).unwrap(), req_c);
+        assert_eq!(VersionReq::from_str(d).unwrap(), req_d);
+        assert_eq!(VersionReq::from_str(e).unwrap(), req_e);
+        assert_eq!(VersionReq::from_str(f).unwrap(), req_f);
     }
 
     #[test]
     fn parse_dep_novers() {
-        let p = Dependency::from_str("saturn").unwrap();
+        let p = Dependency::from_str("saturn", false).unwrap();
         assert_eq!(
             p,
             Dependency {
@@ -522,7 +568,7 @@ pub mod tests {
 
     #[test]
     fn parse_dep_withvers() {
-        let p = Dependency::from_str("bolt = \"3.1.4\"").unwrap();
+        let p = Dependency::from_str("bolt = \"3.1.4\"", false).unwrap();
         assert_eq!(
             p,
             Dependency {
@@ -540,7 +586,7 @@ pub mod tests {
 
     #[test]
     fn parse_dep_caret() {
-        let p = Dependency::from_str("chord = \"^2.7.18\"").unwrap();
+        let p = Dependency::from_str("chord = \"^2.7.18\"", false).unwrap();
         assert_eq!(
             p,
             Dependency {
@@ -558,7 +604,7 @@ pub mod tests {
 
     #[test]
     fn parse_dep_tilde_short() {
-        let p = Dependency::from_str("sphere = \"~6.7\"").unwrap();
+        let p = Dependency::from_str("sphere = \"~6.7\"", false).unwrap();
         assert_eq!(
             p,
             Dependency {
@@ -575,19 +621,50 @@ pub mod tests {
     }
 
     #[test]
+    fn parse_dep_pypi() {
+        let p = Dependency::from_str("urllib3 (!=1.25.0,!=1.25.1,<=1.26)", true).unwrap();
+        assert_eq!(
+            p,
+            Dependency {
+                name: "urllib3".into(),
+                version_reqs: vec![
+                    VersionReq {
+                        major: 1,
+                        minor: Some(25),
+                        patch: Some(0),
+                        type_: ReqType::Ne,
+                    },
+                    VersionReq {
+                        major: 1,
+                        minor: Some(25),
+                        patch: Some(1),
+                        type_: ReqType::Ne,
+                    },
+                    VersionReq {
+                        major: 1,
+                        minor: Some(26),
+                        patch: None,
+                        type_: ReqType::Lte,
+                    }
+                ],
+
+                dependencies: vec![],
+            }
+        )
+    }
+
+    #[test]
     fn dep_tostring_single_reqs() {
         // todo: Expand this with more cases
 
         let a = Dependency {
             name: "package".to_string(),
-            version_reqs: vec![
-                VersionReq {
-                    major: 3,
-                    minor: Some(3),
-                    patch: Some(6),
-                    type_: ReqType::Exact,
-                },
-            ],
+            version_reqs: vec![VersionReq {
+                major: 3,
+                minor: Some(3),
+                patch: Some(6),
+                type_: ReqType::Exact,
+            }],
             dependencies: vec![],
         };
 
@@ -608,21 +685,22 @@ pub mod tests {
                     patch: Some(4),
                     type_: ReqType::Ne,
                 },
-                 VersionReq {
+                VersionReq {
                     major: 3,
                     minor: Some(7),
                     patch: None,
                     type_: ReqType::Gte,
                 },
-
             ],
             dependencies: vec![],
         };
 
         assert_eq!(a.to_pip_string(), "'package!=2.7.4,>=3.7'".to_string());
-        assert_eq!(a.to_cfg_string(), r#"package = "!=2.7.4, >=3.7""#.to_string());
+        assert_eq!(
+            a.to_cfg_string(),
+            r#"package = "!=2.7.4, >=3.7""#.to_string()
+        );
     }
-
 
     #[test]
     fn version_ordering() {
