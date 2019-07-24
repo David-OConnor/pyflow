@@ -5,6 +5,7 @@ pyproject.toml
 /__pypackages__
 script.py
 
-# Prevent generated files from being committed
+# Prevent generated and test files from being committed
 setup.py
-
+requirements.txt
+Pipfile

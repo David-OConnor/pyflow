@@ -1,4 +1,4 @@
-use crate::dep_types::{Dependency, Version};
+use crate::dep_types::{Dependency, Version, VersionReq};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
@@ -105,25 +105,30 @@ fn get_dep_data(name: &str, version: &Version) -> Result<(Vec<String>), Box<Erro
     Ok(resp)
 }
 
-/// Recursively add all dependencies. Pull avail versions from the PyPi warehouse, and sub-dep
-/// requirements from our cached DB
-pub fn populate_subdeps(dep: &mut Dependency) {
-    let wh_data = get_warehouse_data(&dep.name).expect("Problem getting warehouse data");
-
-    let versions = get_warehouse_versions(&dep.name);
-
-    let compatible_versions: Vec<Version> = versions
+/// Filter versions compatible with a set of requirements.
+fn filter_compatible(reqs: &Vec<VersionReq>, versions: Vec<Version>) -> Vec<Version> {
+    // todo: Test this
+    versions
         .into_iter()
         .filter(|v| {
             let mut compat = true;
-            for req in dep.version_reqs.clone() {
+            for req in reqs {
                 if !req.is_compatible(v) {
                     compat = false;
                 }
             }
             compat
         })
-        .collect();
+        .collect()
+}
+
+/// Recursively add all dependencies. Pull avail versions from the PyPi warehouse, and sub-dep
+/// requirements from our cached DB
+pub fn populate_subdeps(dep: &mut Dependency) {
+    let wh_data = get_warehouse_data(&dep.name).expect("Problem getting warehouse data");
+
+    let versions = get_warehouse_versions(&dep.name);
+    let compatible_versions = filter_compatible(&dep.version_reqs, versions);
 
     for vers in compatible_versions {
         let data = get_dep_data(&dep.name, &vers).expect("Can't get dep data");

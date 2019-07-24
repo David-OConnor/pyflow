@@ -408,7 +408,7 @@ impl Dependency {
             Regex::new(r"^(.*?)\s+\((.*)\)(?:\s;.*)?$").unwrap()
         } else {
             //ie saturn = ">=0.3.4"
-            Regex::new(r#"^(.*?)\s*=\s*"(.*)"$"#).unwrap()
+            Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
         };
         let caps = match re.captures(s) {
             Some(c) => c,

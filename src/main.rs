@@ -17,6 +17,7 @@ mod build;
 mod commands;
 mod dep_resolution;
 mod dep_types;
+mod edit_files;
 mod util;
 
 #[derive(StructOpt, Debug)]
@@ -90,7 +91,7 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
 /// A config, parsed from pyproject.toml
 #[derive(Clone, Debug, Default, Deserialize)]
 // todo: Auto-desr some of these!
-struct Config {
+pub struct Config {
     py_version: Option<Version>,
     dependencies: Vec<Dependency>,
     name: Option<String>,
@@ -99,7 +100,7 @@ struct Config {
     author_email: Option<String>,
     description: Option<String>,
     classifiers: Vec<String>,
-    keywords: Vec<String>, // todo: Classifiers vs keywords?
+    keywords: Vec<String>,
     homepage: Option<String>,
     repo_url: Option<String>,
     readme_filename: Option<String>,
@@ -112,10 +113,13 @@ fn key_re(key: &str) -> Regex {
 
 impl Config {
     /// Pull config data from Cargo.toml
-    pub fn from_file(filename: &str) -> Self {
+    pub fn from_file(filename: &str) -> Option<Self> {
         // We don't use the `toml` crate here because it doesn't appear flexible enough.
         let mut result = Config::default();
-        let file = fs::File::open(filename).expect("cannot open pyproject.toml");
+        let file = match fs::File::open(filename) {
+            Ok(f) => f,
+            Err(_) => return None,
+        };
 
         let mut in_sect = false;
         let mut in_dep = false;
@@ -176,7 +180,7 @@ impl Config {
             }
         }
 
-        result
+        Some(result)
     }
 }
 
@@ -418,10 +422,10 @@ impl Lock {
     //    }
 }
 
-/// Read dependency data froma lock file.
+/// Read dependency data from a lock file.
 fn read_lock(filename: &str) -> Result<(Lock), Box<Error>> {
     let data = fs::read_to_string(filename)?;
-    let t: Lock = toml::from_str(&data).unwrap();
+//    let t: Lock = toml::from_str(&data).unwrap();
     Ok(toml::from_str(&data)?)
 }
 
@@ -438,58 +442,6 @@ fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-/// Write dependencies to pyproject.toml
-fn add_dependencies(filename: &str, dependencies: &[Dependency]) {
-    //        let data = fs::read_to_string("pyproject.toml")
-    //            .expect("Unable to read pyproject.toml while attempting to add a dependency");
-    let file = fs::File::open(filename).expect("cannot open pyproject.toml");
-
-    let mut in_dep = false;
-    let sect_re = Regex::new(r"\[.*\]").unwrap();
-
-    // todo: use this? https://doc.rust-lang.org/std/macro.writeln.html
-
-    let mut result = String::new();
-    for line in BufReader::new(file).lines() {
-        //    for line in data.lines() {
-        if let Ok(l) = line {
-            result.push_str(&l);
-            result.push_str("\n");
-            // todo replace this with something that clips off
-            // todo post-# part of strings; not just ignores ones starting with #
-            if l.starts_with('#') {
-                continue;
-            }
-
-            if &l == "[tool.pypackage.dependencies]" {
-                in_dep = true;
-                continue;
-            } else if sect_re.is_match(&l) {
-                in_dep = false;
-                continue;
-            }
-
-            if in_dep {
-                //                result.push_str()
-            }
-        }
-    }
-
-    fs::write("pyproject.toml", result)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
-}
-
-/// Remove dependencies from pyproject.toml
-fn remove_dependencies(filename: &str, dependencies: &[Dependency]) {
-    let data = fs::read_to_string("pyproject.toml")
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
-
-    // todo
-    let new_data = data;
-
-    fs::write(filename, new_data)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
-}
 
 fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     // We only use the alias for creating the virtual environment. After that,
@@ -588,14 +540,16 @@ enum InstallType {
 //    graph
 //}
 
+
 fn main() {
+    // todo perhaps much of this setup code should only be in certain match branches.
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pypackage.lock";
 
     let pypackage_dir = env::current_dir()
         .expect("Can't find current path")
         .join("__pypackages__");
-    let mut cfg = Config::from_file(cfg_filename);
+    let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
     let py_version_cfg = cfg.py_version;
 
     // Check for environments. Create one if none exist. Set `vers_path`.
@@ -701,17 +655,7 @@ py_version = \"3.7\"",
                 .collect();
 
             // todo: Compare to existing listed lock_packs and merge appropriately.
-            add_dependencies(cfg_filename, &new_deps);
-
-            //            let mut p = Vec::new();
-            //            if packages.is_empty() {
-            //                p = cfg.dependencies.clone();
-            //            } else {
-            //                p = packages
-            //                    .into_iter()
-            //                    .map(|p| Dependency::from_str(&p).unwrap())
-            //                    .collect();
-            //            }
+            edit_files::add_dependencies(cfg_filename, &new_deps);
 
             cfg.dependencies.append(&mut new_deps);
 
@@ -756,7 +700,15 @@ py_version = \"3.7\"",
         }
         SubCommand::Package {} => build::build(&bin_path, &lib_path, &cfg),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
-        SubCommand::Init {} => abort("Init not yet implemented"),
+        SubCommand::Init {} => {
+            // todo the prog will currently fail before getting this far; intercept early in main()?
+            let mut new_cfg = Config::from_file(cfg_filename).unwrap_or_default();
+
+            edit_files::parse_req_dot_text(&mut new_cfg);
+            edit_files::parse_pipfile(&mut new_cfg);
+            edit_files::parse_poetry(&mut new_cfg);
+            edit_files::update_pyproject(&new_cfg);
+        }
     }
 }
 
