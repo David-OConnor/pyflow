@@ -1,4 +1,4 @@
-use crate::{Config, dep_types::Dependency, Version};
+use crate::{dep_types::Dependency, Config, Version};
 use regex::Regex;
 use serde::Deserialize;
 use std::fs;
@@ -53,16 +53,15 @@ pub fn parse_req_dot_text(cfg: &mut Config) {
 
     for line in BufReader::new(file).lines() {
         if let Ok(l) = line {
-            match Dependency::from_str(&l, false) {
-                Ok(d) => {
+            match Dependency::from_pip_str(&l) {
+                Some(d) => {
                     cfg.dependencies.push(d.clone());
                     println!("Added {} from requirements.txt", d.to_cfg_string())
-                },
-                Err(_) => println!("Problem parsing {} from requirements.txt", &l),
+                }
+                None => println!("Problem parsing {} from requirements.txt", &l),
             };
         }
     }
-
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,10 +80,11 @@ struct PipfileRequires {
 /// https://github.com/pypa/pipfile
 #[derive(Debug, Deserialize)]
 struct Pipfile {
-    source: Option<PipfileSource>,
-    requires: Option<PipfileRequires>,
-    packages: Option<Vec<String>>
-//    dev_packages: Option<Vec<String>>  // todo currently unimplemented
+    source: Vec<PipfileSource>
+//    source: Vec<Option<PipfileSource>>,
+//    requires: Option<PipfileRequires>,
+//    requires: Vec<String>,
+//    packages: Option<Vec<String>>, //    dev_packages: Option<Vec<String>>  // todo currently unimplemented
 }
 
 pub fn parse_pipfile(cfg: &mut Config) {
@@ -93,67 +93,57 @@ pub fn parse_pipfile(cfg: &mut Config) {
         Err(_) => return,
     };
 
-//    let t: Config = toml::from_str(&data).unwrap();
+    //    let t: Config = toml::from_str(&data).unwrap();
     let pipfile: Pipfile = match toml::from_str(&data) {
         Ok(p) => p,
         Err(_) => {
             println!("Problem parsing Pipfile - skipping");
-            return
+            return;
         }
     };
-    if let Some(deps) = pipfile.packages {
-        for dep in deps.into_iter() {
-            match Dependency::from_str(&dep, false) {
-                Ok(parsed) => {
-                    cfg.dependencies.push(parsed.clone());
-                    println!("Added {} from requirements.txt", parsed.to_cfg_string());
-                },
-                Err(_) => {
-                    println!("Problem parsing {} from Pipfile - skipping", dep);
-                }
-            }
-
-
-        }
-    }
+//    if let Some(deps) = pipfile.packages {
+//        for dep in deps.into_iter() {
+//            match Dependency::from_str(&dep, false) {
+//                Ok(parsed) => {
+//                    cfg.dependencies.push(parsed.clone());
+//                    println!("Added {} from requirements.txt", parsed.to_cfg_string());
+//                }
+//                Err(_) => {
+//                    println!("Problem parsing {} from Pipfile - skipping", dep);
+//                }
+//            }
+//        }
+//    }
 
     // Pipfile deliberately only includes minimal metadata.
-    if let Some(metadata) = pipfile.source {
-        if let Some(name) = metadata.name {
-            if cfg.name.is_none() {
-                cfg.name = Some(name)
-            }
-        }
-        if let Some(url) = metadata.url {
-            if cfg.homepage.is_none() {
-                cfg.homepage = Some(url)
-            }
-        }
-    }
+//    if let Some(metadata) = pipfile.source {
+//        if let Some(name) = metadata.name {
+//            if cfg.name.is_none() {
+//                cfg.name = Some(name)
+//            }
+//        }
+//        if let Some(url) = metadata.url {
+//            if cfg.homepage.is_none() {
+//                cfg.homepage = Some(url)
+//            }
+//        }
+//    }
 
-    if let Some(requires) = pipfile.requires {
-        if cfg.py_version.is_none() {
-
-            if let Some(py_v) = Version::from_str2(&requires.python_version) {
-                if cfg.py_version.is_none() {
-                    cfg.py_version = Some(py_v)
-                }
-            }
-
-        }
-    }
-
-
+//    if let Some(requires) = pipfile.requires {
+//        if cfg.py_version.is_none() {
+//            if let Some(py_v) = Version::from_str2(&requires.python_version) {
+//                if cfg.py_version.is_none() {
+//                    cfg.py_version = Some(py_v)
+//                }
+//            }
+//        }
+//    }
 }
 
-pub fn parse_poetry(cfg: &mut Config) {
-
-}
+pub fn parse_poetry(cfg: &mut Config) {}
 
 /// Create or update a `pyproject.toml` file.
-pub fn update_pyproject(cfg: &Config) {
-
-}
+pub fn update_pyproject(cfg: &Config) {}
 
 /// Remove dependencies from pyproject.toml
 pub fn remove_dependencies(filename: &str, dependencies: &[Dependency]) {

@@ -8,12 +8,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8e8ec656-42c1-4de6-aedd-231786fe5c7c" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/edit_files.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/dep_resolution.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_resolution.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/dep_types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_types.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/edit_files.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/edit_files.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -27,13 +24,13 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/main.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="149">
-              <caret line="93" column="4" selection-start-line="93" selection-start-column="4" selection-end-line="93" selection-end-column="4" />
+            <state relative-caret-position="99">
+              <caret line="197" column="65" selection-start-line="197" selection-start-column="65" selection-end-line="197" selection-end-column="65" />
               <folding>
-                <element signature="e#8102#8103#0" expanded="true" />
-                <element signature="e#8130#8131#0" expanded="true" />
-                <element signature="e#8231#8232#0" expanded="true" />
-                <element signature="e#8275#8276#0" expanded="true" />
+                <element signature="e#9647#9648#0" expanded="true" />
+                <element signature="e#9675#9676#0" expanded="true" />
+                <element signature="e#9776#9777#0" expanded="true" />
+                <element signature="e#9820#9821#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -42,8 +39,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/edit_files.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="119">
-              <caret line="153" selection-start-line="153" selection-end-line="153" />
+            <state relative-caret-position="-165">
+              <caret line="76" column="25" selection-start-line="76" selection-start-column="25" selection-end-line="76" selection-end-column="25" />
             </state>
           </provider>
         </entry>
@@ -51,17 +48,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/util.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="126">
-              <caret line="52" column="66" selection-start-line="52" selection-start-column="66" selection-end-line="52" selection-end-column="66" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/dep_resolution.rs">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="97">
-              <caret line="137" column="12" lean-forward="true" selection-start-line="137" selection-start-column="12" selection-end-line="137" selection-end-column="12" />
+            <state relative-caret-position="72">
+              <caret line="4" column="7" selection-start-line="4" selection-start-column="7" selection-end-line="4" selection-end-column="7" />
             </state>
           </provider>
         </entry>
@@ -87,8 +75,14 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/dep_types.rs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="237">
-              <caret line="32" column="11" selection-start-line="32" selection-start-column="11" selection-end-line="32" selection-end-column="11" />
+            <state relative-caret-position="144">
+              <caret line="8" column="19" selection-start-line="8" selection-start-column="19" selection-end-line="8" selection-end-column="19" />
+              <folding>
+                <element signature="e#14802#14803#0" expanded="true" />
+                <element signature="e#14871#14872#0" expanded="true" />
+                <element signature="e#16347#16348#0" expanded="true" />
+                <element signature="e#16396#16397#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -104,27 +98,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>add_de</find>
-      <find>pub(crate)</find>
-      <find>create a lock</find>
-      <find>util::</find>
-      <find>rom_str_m</find>
-      <find>lte</find>
-      <find>dep_partial</find>
-      <find>VersionReq::new</find>
-      <find>struct depen</find>
-      <find>problem parsing v</find>
-      <find>problem</find>
-      <find>unwrap</find>
-      <find>parse_dep_py</find>
-      <find>parse_</find>
-      <find>installtype</find>
-      <find>rege</find>
-      <find>fs::</find>
-      <find>buf</find>
-      <find>fn add_</find>
-      <find>add_depen</find>
-      <find>update_p</find>
       <find>toml::</find>
       <find>remove_dep</find>
       <find>struct lo</find>
@@ -134,6 +107,27 @@
       <find>regex</find>
       <find>pipe</find>
       <find>struct con</find>
+      <find>problem pars</find>
+      <find>problem parsing dep</find>
+      <find>from_</find>
+      <find>is_some</find>
+      <find>|</find>
+      <find>|&lt;</find>
+      <find>versionreq::n</find>
+      <find>fs::wri</find>
+      <find>st</find>
+      <find>struct vers</find>
+      <find>problem parsing</find>
+      <find>struct lock</find>
+      <find>problem parsing pip</find>
+      <find>from_s</find>
+      <find>toml::fr</find>
+      <find>toml::from_</find>
+      <find>fn write_fi</find>
+      <find>new(</find>
+      <find>fn main</find>
+      <find>toml__</find>
+      <find>created</find>
     </findStrings>
     <replaceStrings>
       <replace>pypackage</replace>
@@ -180,9 +174,9 @@
     <option name="directoryName" value="XQqpFPMC" />
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="500" />
-    <option name="y" value="40" />
-    <option name="width" value="1183" />
+    <option name="x" value="721" />
+    <option name="y" value="47" />
+    <option name="width" value="1123" />
     <option name="height" value="1013" />
   </component>
   <component name="ProjectView">
@@ -274,7 +268,7 @@
       <workItem from="1563770089867" duration="250000" />
       <workItem from="1563770432552" duration="10720000" />
       <workItem from="1563792828346" duration="3560000" />
-      <workItem from="1563851042748" duration="46590000" />
+      <workItem from="1563851042748" duration="52925000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed bugs in python-version checking and package installation">
       <created>1563704289313</created>
@@ -287,13 +281,13 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="217471000" />
+    <option name="totallyTimeSpent" value="223806000" />
   </component>
   <component name="ToolWindowManager">
-    <frame x="500" y="40" width="1183" height="1013" extended-state="0" />
+    <frame x="721" y="47" width="1123" height="1013" extended-state="0" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.17502199" />
+      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.18477252" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
@@ -307,7 +301,7 @@
       <window_info anchor="bottom" id="Version Control" order="8" />
       <window_info anchor="bottom" id="Database Changes" order="9" />
       <window_info anchor="bottom" id="Event Log" order="10" side_tool="true" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="11" visible="true" weight="0.49828961" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="11" visible="true" weight="0.42189282" />
       <window_info anchor="bottom" id="Python Console" order="12" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
@@ -434,27 +428,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/src/dep_resolution.rs">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="97">
-          <caret line="137" column="12" lean-forward="true" selection-start-line="137" selection-start-column="12" selection-end-line="137" selection-end-column="12" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/util.rs">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="126">
-          <caret line="52" column="66" selection-start-line="52" selection-start-column="66" selection-end-line="52" selection-end-column="66" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/pyproject.toml">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="180">
-          <caret line="10" selection-start-line="10" selection-end-line="10" selection-end-column="16" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/src/commands.rs">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="862">
@@ -469,29 +442,56 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/src/dep_resolution.rs">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="97">
+          <caret line="137" column="12" selection-start-line="137" selection-start-column="12" selection-end-line="137" selection-end-column="12" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/dep_types.rs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="237">
-          <caret line="32" column="11" selection-start-line="32" selection-start-column="11" selection-end-line="32" selection-end-column="11" />
+        <state relative-caret-position="144">
+          <caret line="8" column="19" selection-start-line="8" selection-start-column="19" selection-end-line="8" selection-end-column="19" />
+          <folding>
+            <element signature="e#14802#14803#0" expanded="true" />
+            <element signature="e#14871#14872#0" expanded="true" />
+            <element signature="e#16347#16348#0" expanded="true" />
+            <element signature="e#16396#16397#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/edit_files.rs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="119">
-          <caret line="153" selection-start-line="153" selection-end-line="153" />
+        <state relative-caret-position="-165">
+          <caret line="76" column="25" selection-start-line="76" selection-start-column="25" selection-end-line="76" selection-end-column="25" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/util.rs">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="72">
+          <caret line="4" column="7" selection-start-line="4" selection-start-column="7" selection-end-line="4" selection-end-column="7" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/pyproject.toml">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="72">
+          <caret line="4" selection-start-line="4" selection-end-line="4" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/main.rs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="149">
-          <caret line="93" column="4" selection-start-line="93" selection-start-column="4" selection-end-line="93" selection-end-column="4" />
+        <state relative-caret-position="99">
+          <caret line="197" column="65" selection-start-line="197" selection-start-column="65" selection-end-line="197" selection-end-column="65" />
           <folding>
-            <element signature="e#8102#8103#0" expanded="true" />
-            <element signature="e#8130#8131#0" expanded="true" />
-            <element signature="e#8231#8232#0" expanded="true" />
-            <element signature="e#8275#8276#0" expanded="true" />
+            <element signature="e#9647#9648#0" expanded="true" />
+            <element signature="e#9675#9676#0" expanded="true" />
+            <element signature="e#9776#9777#0" expanded="true" />
+            <element signature="e#9820#9821#0" expanded="true" />
           </folding>
         </state>
       </provider>

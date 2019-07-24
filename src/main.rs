@@ -113,7 +113,7 @@ fn key_re(key: &str) -> Regex {
 
 impl Config {
     /// Pull config data from Cargo.toml
-    pub fn from_file(filename: &str) -> Option<Self> {
+    fn from_file(filename: &str) -> Option<Self> {
         // We don't use the `toml` crate here because it doesn't appear flexible enough.
         let mut result = Config::default();
         let file = match fs::File::open(filename) {
@@ -182,6 +182,48 @@ impl Config {
 
         Some(result)
     }
+
+    /// Create a new `pyproject.toml` file.
+    fn write_file(&self, filename: &str) {
+        let file = PathBuf::from(filename);
+        if file.exists() {
+            abort("`pyproject.toml` already exists")
+        }
+
+        // todo: Use a bufer instead of String?
+        let mut result = String::new();
+
+        result.push_str("[tool.pypackage]\n");
+        if let Some(name) = &self.name {
+            result.push_str(&("name = \"".to_owned() + name + "\"\n"));
+        } else {  // Give name, and a few other fields default values.
+            result.push_str(&("name = \"\"".to_owned() + "\n"));
+        }
+        if let Some(py_v) = self.py_version {
+            result.push_str(&("version = \"".to_owned() + &py_v.to_string() + "\"\n"));
+        } else {
+            result.push_str(&("version = \"\"".to_owned() + "\n"));
+        }
+        if let Some(vers) = self.version {
+            result.push_str(&(vers.to_string() + "\n"));
+        }
+       if let Some(author) = &self.author {
+            result.push_str(&(author.to_owned() + "\n"));
+        }
+
+        result.push_str("\n\n");
+        result.push_str("[tool.pypackage.dependencies]\n");
+        for dep in self.dependencies.iter() {
+            result.push_str(&(dep.to_cfg_string() + "\n"));
+        }
+
+        println!("FILE: {:?}", file);
+        match fs::write(file, result) {
+            Ok(_) => println!("Created `pyproject.toml`"),
+            Err(_) => abort("Problem writing `pyproject.toml`"),
+        }
+    }
+
 }
 
 /// Create a template directory for a python project.
@@ -425,7 +467,7 @@ impl Lock {
 /// Read dependency data from a lock file.
 fn read_lock(filename: &str) -> Result<(Lock), Box<Error>> {
     let data = fs::read_to_string(filename)?;
-//    let t: Lock = toml::from_str(&data).unwrap();
+    //    let t: Lock = toml::from_str(&data).unwrap();
     Ok(toml::from_str(&data)?)
 }
 
@@ -441,7 +483,6 @@ fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
     fs::write(filename, data)?;
     Ok(())
 }
-
 
 fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     // We only use the alias for creating the virtual environment. After that,
@@ -540,16 +581,46 @@ enum InstallType {
 //    graph
 //}
 
-
 fn main() {
     // todo perhaps much of this setup code should only be in certain match branches.
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pypackage.lock";
 
+    let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
+
+    let opt = Opt::from_args();
+    let subcmd = match opt.subcmds {
+        Some(sc) => sc,
+        None => {
+            abort("No command entered. For a list of what you can do, run `pyproject --help`.");
+            SubCommand::Init {}  // Dummy to satisfy the compiler.
+        }
+    };
+
+    // New doesn't execute any other logic. Init must execute befor the rest of the logic,
+    // since it sets up a new (or modified) `pyproject.toml`. The rest of the commands rely
+    // on the virtualenv and `pyproject.toml`, so make sure those are set up before processing them.
+    match subcmd {
+        SubCommand::New {name} => {
+            new(&name).expect("Problem creating project");
+            println!("Created a new Python project named {}", name);
+            return
+        }
+        SubCommand::Init {} => {
+            edit_files::parse_req_dot_text(&mut cfg);
+            edit_files::parse_pipfile(&mut cfg);
+            edit_files::parse_poetry(&mut cfg);
+            edit_files::update_pyproject(&cfg);
+
+            cfg.write_file(cfg_filename);
+        },
+        _ => (),
+    }
+
     let pypackage_dir = env::current_dir()
         .expect("Can't find current path")
         .join("__pypackages__");
-    let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
+
     let py_version_cfg = cfg.py_version;
 
     // Check for environments. Create one if none exist. Set `vers_path`.
@@ -616,8 +687,6 @@ py_version = \"3.7\"",
         Err(_) => Lock::default(),
     };
 
-    let opt = Opt::from_args();
-
     let args = opt.custom_bin;
     if !args.is_empty() {
         // todo better handling, eg abort
@@ -634,18 +703,7 @@ py_version = \"3.7\"",
         return;
     }
 
-    let subcmd = match opt.subcmds {
-        Some(sc) => sc,
-        None => return,
-    };
-
     match subcmd {
-        SubCommand::New { name } => {
-            new(&name).expect("Problem creating project");
-            //                // todo: Maybe show the path created at.
-            println!("Created a new Python project named {}", name)
-        }
-
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
@@ -700,15 +758,10 @@ py_version = \"3.7\"",
         }
         SubCommand::Package {} => build::build(&bin_path, &lib_path, &cfg),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
-        SubCommand::Init {} => {
-            // todo the prog will currently fail before getting this far; intercept early in main()?
-            let mut new_cfg = Config::from_file(cfg_filename).unwrap_or_default();
 
-            edit_files::parse_req_dot_text(&mut new_cfg);
-            edit_files::parse_pipfile(&mut new_cfg);
-            edit_files::parse_poetry(&mut new_cfg);
-            edit_files::update_pyproject(&new_cfg);
-        }
+         // We already handled init
+        SubCommand::Init {} => (),
+        SubCommand::New {name} => (),
     }
 }
 

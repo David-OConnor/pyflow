@@ -428,6 +428,36 @@ impl Dependency {
             dependencies: vec![],
         })
     }
+
+    pub fn from_pip_str(s: &str) -> Option<Self> {
+        // todo multiple ie single quotes support?
+        // Check if no version is specified.
+        if Regex::new(r"^([a-zA-Z\-]+)$").unwrap().captures(s).is_some() {
+            return Some(Self {
+                name: s.to_string(),
+                version_reqs: vec![],
+                dependencies: vec![],
+            });
+        }
+
+        let re = Regex::new(r"^(.*?)((?:\^|~|==|<=|>=|<|>|!=).*)$").unwrap();
+
+        let caps = match re.captures(s) {
+            Some(c) => c,
+            // todo: Figure out how to return an error
+            None => return None,
+        };
+
+        let name = caps.get(1).unwrap().as_str().to_string();
+        let req = VersionReq::from_str(caps.get(2).unwrap().as_str())
+            .expect("Problem parsing requirement");
+
+        Some(Self {
+            name,
+            version_reqs: vec![req],
+            dependencies: vec![],
+        })
+    }
 }
 
 /// An exact package to install.
@@ -621,7 +651,26 @@ pub mod tests {
     }
 
     #[test]
-    fn parse_dep_pypi() {
+    fn parse_dep_pip() {
+        let p = Dependency::from_pip_str("Django>=2.22").unwrap();
+        assert_eq!(
+            p,
+            Dependency {
+                name: "Django".into(),
+                version_reqs: vec![VersionReq {
+                    major: 2,
+                    minor: Some(22),
+                    patch: None,
+                    type_: ReqType::Gte,
+                },],
+
+                dependencies: vec![],
+            }
+        )
+    }
+
+    #[test]
+    fn parse_dep_pypi_cplx() {
         let p = Dependency::from_str("urllib3 (!=1.25.0,!=1.25.1,<=1.26)", true).unwrap();
         assert_eq!(
             p,
