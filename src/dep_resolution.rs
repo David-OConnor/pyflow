@@ -1,7 +1,6 @@
 use crate::dep_types::{Dependency, Version, VersionReq};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::error::Error;
 use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
@@ -47,26 +46,34 @@ struct WarehouseData {
 
 /// Fetch data about a package from the Pypi Warehouse.
 /// https://warehouse.pypa.io/api-reference/json/
-fn get_warehouse_data(name: &str) -> Result<(WarehouseData), Box<Error>> {
+fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
     let url = format!("https://pypi.org/pypi/{}/json", name);
     let resp = reqwest::get(&url)?.json()?;
     Ok(resp)
 }
 
 fn get_warehouse_versions(name: &str) -> Vec<Version> {
+    // todo return Result with custom fetch error type
     let data =
         get_warehouse_data(name).expect(&format!("Problem getting warehouse data for {}", name));
 
-    data.releases
-        .keys()
-        .map(|v| Version::from_str(v).expect("Problem parsing version while making dep graph"))
-        .collect()
+    let mut result = vec![];
+    for ver in data.releases.keys() {
+        match Version::from_str(ver) {
+            Ok(v) => result.push(v),
+            Err(e) => println!(
+                "Problem parsing version: `{} {}` while making dependency graph",
+                name, ver
+            ),
+        }
+    }
+    result
 }
 
 fn get_warehouse_data_w_version(
     name: &str,
     version: &Version,
-) -> Result<(WarehouseData), Box<Error>> {
+) -> Result<WarehouseData, reqwest::Error> {
     let url = format!(
         "https://pypi.org/pypi/{}/{}/json",
         name,
@@ -76,27 +83,33 @@ fn get_warehouse_data_w_version(
     Ok(resp)
 }
 
-/// Find dependencies for a specific version.
+/// Find dependencies for a specific version of a package.
 fn get_warehouse_deps(name: &str, version: &Version) -> Vec<Dependency> {
+    // todo return Result with custom fetch error type
     let data = get_warehouse_data_w_version(name, version).expect(&format!(
-        "Problem getting warehouse data for {}: {}",
+        "Problem getting warehouse data for `{}: {}`",
         name,
         version.to_string()
     ));
 
-    data.info
-        .requires_dist
-        .expect("Can't find distros")
-        .into_iter()
-        .map(|dep| {
-            Dependency::from_str(&dep, true)
-                .expect("Problem parsing version while making dep graph")
-        })
-        .collect()
+    let mut result = vec![];
+    if let Some(reqs) = data.info.requires_dist {
+        for req in reqs {
+            match Dependency::from_str(&req, true) {
+                Ok(d) => result.push(d),
+                Err(_) => println!(
+                    "Problem parsing dependency requirement: `{}` while making dependency graph",
+                    &req
+                ),
+            }
+        }
+    }
+    result
 }
 
 /// Fetch dependency data from our database, where it's cached.
-fn get_dep_data(name: &str, version: &Version) -> Result<(Vec<String>), Box<Error>> {
+fn get_dep_data(name: &str, version: &Version) -> Result<(Vec<String>), reqwest::Error> {
+    // todo return Result with custom fetch error type
     let url = format!(
         "https://pydeps.herokuapp.com/{}/{}",
         name,
@@ -131,8 +144,11 @@ pub fn populate_subdeps(dep: &mut Dependency) {
     let versions = get_warehouse_versions(&dep.name);
     let compatible_versions = filter_compatible(&dep.version_reqs, versions);
 
+    // todo best match here?
+
     for vers in compatible_versions {
-        let data = get_dep_data(&dep.name, &vers).expect("Can't get dep data");
+        //        let data = get_dep_data(&dep.name, &vers).expect("Can't get dep data");
+        dep.dependencies = get_warehouse_deps(&dep.name, &vers);
     }
 }
 

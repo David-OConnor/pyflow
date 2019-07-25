@@ -10,7 +10,6 @@
       <change beforePath="$PROJECT_DIR$/src/dep_types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_types.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/edit_files.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/edit_files.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/util.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/util.rs" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -99,7 +98,7 @@
       <workItem from="1564043225583" duration="41000" />
       <workItem from="1564043298581" duration="87000" />
       <workItem from="1564043407118" duration="17000" />
-      <workItem from="1564043440652" duration="4232000" />
+      <workItem from="1564043440652" duration="21203000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed bugs in python-version checking and package installation">
       <created>1563704289313</created>

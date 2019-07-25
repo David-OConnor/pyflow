@@ -1,16 +1,18 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::{cmp, fmt, num, option, str::FromStr};
+use std::{cmp, fmt, num, str::FromStr};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct DependencyError {
     details: String,
 }
 
-impl  DependencyError {
-    pub fn new(details: & str) -> Self {
-        Self{details: details.to_owned()}
+impl DependencyError {
+    pub fn new(details: &str) -> Self {
+        Self {
+            details: details.to_owned(),
+        }
     }
 }
 
@@ -60,28 +62,29 @@ impl Version {
 }
 
 impl FromStr for Version {
-    type Err = num::ParseIntError;
+    type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?(.*)$").unwrap();
+        let re = Regex::new(r"^(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?(.*)$").unwrap();
         let caps = re
             .captures(s)
             .expect(&format!("Problem parsing version: {}", s));
 
-        // The final match group indicates beta, release candidate etc. Ignore if we find it.
-        // todo: Handle these.
-        if !caps.get(4).unwrap().as_str().is_empty() {
-            // todo
-            "How do I raise an error here properly?".parse::<u32>()?;
-        }
-
         let major = caps.get(1).unwrap().as_str().parse::<u32>()?;
-        let minor = caps.get(2).unwrap().as_str().parse::<u32>()?;
+        let minor = match caps.get(2) {
+            Some(p) => p.as_str().parse::<u32>()?,
+            None => 0,
+        };
 
         let patch = match caps.get(3) {
             Some(p) => p.as_str().parse::<u32>()?,
             None => 0,
         };
+        // todo: Ignore trailing part for now.
+        //        match caps.get(4) {
+        //            Some(p) => p.as_str().parse::<u32>()?,
+        //            None => (),
+        //        };
 
         Ok(Self {
             major,
@@ -171,16 +174,20 @@ pub struct VersionReq {
     pub major: u32,
     pub minor: Option<u32>,
     pub patch: Option<u32>,
+    // todo
+//    pub extras: Vec<String>
 }
 
 impl FromStr for VersionReq {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        println!("PROBLEM: {}", s);
+        // todo: You could delegate part of this out, or at least share the regex with Version::to_string
         let re = Regex::new(
             r"^(\^|~|==|<=|>=|<|>|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?$",
         )
-            .unwrap();
+        .unwrap();
 
         let caps = match re.captures(s) {
             Some(c) => c,
@@ -229,7 +236,7 @@ impl VersionReq {
     }
 
     /// From a comma-separated list
-    pub fn from_str_multiple(vers: &str) -> Result<Vec<Self>, Box<Error>> {
+    pub fn from_str_multiple(vers: &str) -> Result<Vec<Self>, DependencyError> {
         Ok(vers
             .split(",")
             .map(|req| Self::from_str(req).expect("Prob parsing a concatonated version req."))
@@ -396,12 +403,35 @@ impl Dependency {
 
 /// This would be used when parsing from something like `pyproject.toml`
 impl Dependency {
-    pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, Box<Error>> {
+    pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
+        let re = if pypi_fmt {
+            // ie saturn (>=0.3.4)
+            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s*;.*)?$").unwrap()
+        } else {
+            // ie saturn = ">=0.3.4"
+            Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
+        };
+        match re.captures(s) {
+            Some(caps) => {
+                println!("CAPS: {:?}", caps);
+                let name = caps.get(1).unwrap().as_str().to_string();
+                let reqs_m = caps.get(2).unwrap();
+                let reqs = VersionReq::from_str_multiple(reqs_m.as_str())?;
+
+                return Ok(Self {
+                    name,
+                    version_reqs: reqs,
+                    dependencies: vec![],
+                });
+            }
+            None => (),
+        };
+
         // Check if no version is specified.
         let novers_re = if pypi_fmt {
-            Regex::new(r"^([a-zA-Z\-]+)\s*;.*$").unwrap()
+            Regex::new(r"^([a-zA-Z\-0-9]+)(?:\s*;)?").unwrap()
         } else {
-            Regex::new(r"^([a-zA-Z]+)$").unwrap()
+            Regex::new(r"^([a-zA-Z\-0-9]+)$").unwrap()
         };
 
         match novers_re.captures(s) {
@@ -415,36 +445,16 @@ impl Dependency {
             None => (),
         }
 
-        let re = if pypi_fmt {
-            // ie saturn (>=0.3.4)
-            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s;.*)?$").unwrap()
-        } else {
-            //ie saturn = ">=0.3.4"
-            Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
-        };
-        let caps = match re.captures(s) {
-            Some(c) => c,
-            //                None => return Err(Box::new()),
-            // todo: Figure out how to return an error
-            None => panic!(format!("Problem parsing dependency from string: {}", s)),
-        };
-
-        let name = caps.get(1).unwrap().as_str().to_string();
-        let reqs_m = caps.get(2).unwrap();
-        let reqs = VersionReq::from_str_multiple(reqs_m.as_str())
-            .expect("Problem parsing version requirement");
-
-        Ok(Self {
-            name,
-            version_reqs: reqs,
-            dependencies: vec![],
-        })
+        return Err(DependencyError::new(&format!(
+            "Problem parsing version requirement: {}",
+            s
+        )));
     }
 
     pub fn from_pip_str(s: &str) -> Option<Self> {
         // todo multiple ie single quotes support?
         // Check if no version is specified.
-        if Regex::new(r"^([a-zA-Z\-]+)$")
+        if Regex::new(r"^([a-zA-Z\-0-9]+)$")
             .unwrap()
             .captures(s)
             .is_some()
@@ -537,12 +547,18 @@ pub mod tests {
         );
         assert_eq!(Version::from_str("3.12.5").unwrap(), Version::new(3, 12, 5));
         assert_eq!(Version::from_str("0.1.0").unwrap(), Version::new(0, 1, 0));
+        assert_eq!(Version::from_str("1").unwrap(), Version::new(1, 0, 0));
+        assert_eq!(Version::from_str("2.3").unwrap(), Version::new(2, 3, 0));
     }
 
     #[test]
-    #[should_panic(expected = "Problem parsing version: 3-7")]
     fn bad_version() {
-        Version::from_str("3-7").unwrap();
+        assert_eq!(
+            Version::from_str("3-7"),
+            Err(DependencyError {
+                details: "Problem parsing version: 3-7".to_owned()
+            })
+        );
     }
 
     #[test]
@@ -601,15 +617,34 @@ pub mod tests {
 
     #[test]
     fn parse_dep_novers() {
-        let p = Dependency::from_str("saturn", false).unwrap();
-        assert_eq!(
-            p,
-            Dependency {
-                name: "saturn".into(),
-                version_reqs: vec![],
-                dependencies: vec![],
-            }
-        )
+        let actual1 = Dependency::from_str("saturn", false).unwrap();
+        let actual2 = Dependency::from_str("saturn", true).unwrap();
+        let actual3 = Dependency::from_str("saturn; extra == 'bcrypt", true).unwrap();
+        let expected = Dependency {
+            name: "saturn".into(),
+            version_reqs: vec![],
+            dependencies: vec![],
+        };
+        assert_eq!(actual1, expected);
+        assert_eq!(actual2, expected);
+        assert_eq!(actual3, expected);
+    }
+
+    #[test]
+    fn parse_dep_pypy_semicolon() {
+        // tod: Make this handle extras.
+        let actual = Dependency::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", false).unwrap();
+        let expected = Dependency {
+            name: "pyOpenSSL".into(),
+            version_reqs: vec![VersionReq {
+                type_: ReqType::Gte,
+                major: 0,
+                minor: Some(14),
+                patch: None
+            }],
+            dependencies: vec![],
+        };
+        assert_eq!(actual, expected);
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use crate::{dep_types::Dependency, Config, Version};
+use crate::{dep_types::Dependency, Config};
 use regex::Regex;
 use serde::Deserialize;
 use std::fs;
