@@ -99,6 +99,7 @@ pub struct Config {
     author: Option<String>,
     author_email: Option<String>,
     description: Option<String>,
+    // https://pypi.org/classifiers/
     classifiers: Vec<String>,
     keywords: Vec<String>,
     homepage: Option<String>,
@@ -196,7 +197,8 @@ impl Config {
         result.push_str("[tool.pypackage]\n");
         if let Some(name) = &self.name {
             result.push_str(&("name = \"".to_owned() + name + "\"\n"));
-        } else {  // Give name, and a few other fields default values.
+        } else {
+            // Give name, and a few other fields default values.
             result.push_str(&("name = \"\"".to_owned() + "\n"));
         }
         if let Some(py_v) = self.py_version {
@@ -207,7 +209,7 @@ impl Config {
         if let Some(vers) = self.version {
             result.push_str(&(vers.to_string() + "\n"));
         }
-       if let Some(author) = &self.author {
+        if let Some(author) = &self.author {
             result.push_str(&(author.to_owned() + "\n"));
         }
 
@@ -223,7 +225,6 @@ impl Config {
             Err(_) => abort("Problem writing `pyproject.toml`"),
         }
     }
-
 }
 
 /// Create a template directory for a python project.
@@ -380,7 +381,7 @@ struct LockPackage {
     // serialize and deserialize
     // todo: We have an analog Package type; perhaps just figure out how to serialize that.
     name: String,
-    version: String,
+    version: Version,
     source: Option<String>,
     dependencies: Option<Vec<String>>,
 }
@@ -408,7 +409,7 @@ impl Lock {
             // todo: Perhaps impl to_lockpack etc from Package.
             let lock_package = LockPackage {
                 name: package.name.clone(),
-                version: package.version.to_string(),
+                version: package.version,
                 source: package.source.clone(),
                 dependencies: None,
             };
@@ -544,11 +545,6 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     py_ver_from_alias
 }
 
-enum InstallType {
-    Install,
-    Uninstall,
-}
-
 /// Recursively add nodes.
 //fn add_nodes(graph: &mut petgraph::Graph<Dependency, &str>, node: Dependency, parent_i: u32) {
 //    let n_i = graph.add_node(node);
@@ -593,7 +589,7 @@ fn main() {
         Some(sc) => sc,
         None => {
             abort("No command entered. For a list of what you can do, run `pyproject --help`.");
-            SubCommand::Init {}  // Dummy to satisfy the compiler.
+            SubCommand::Init {} // Dummy to satisfy the compiler.
         }
     };
 
@@ -601,10 +597,10 @@ fn main() {
     // since it sets up a new (or modified) `pyproject.toml`. The rest of the commands rely
     // on the virtualenv and `pyproject.toml`, so make sure those are set up before processing them.
     match subcmd {
-        SubCommand::New {name} => {
+        SubCommand::New { name } => {
             new(&name).expect("Problem creating project");
             println!("Created a new Python project named {}", name);
-            return
+            return;
         }
         SubCommand::Init {} => {
             edit_files::parse_req_dot_text(&mut cfg);
@@ -613,7 +609,7 @@ fn main() {
             edit_files::update_pyproject(&cfg);
 
             cfg.write_file(cfg_filename);
-        },
+        }
         _ => (),
     }
 
@@ -733,7 +729,8 @@ py_version = \"3.7\"",
                     // todo: methods to convert between LockPack and Package, since they're analogous
                     let p = Package {
                         name: lock_pack.name.clone(),
-                        version: Version::from_str2(&lock_pack.version).unwrap(),
+                        //                        version: Version::from_str(&lock_pack.version).unwrap(),
+                        version: lock_pack.version,
                         deps: vec![],
                         source: None,
                     };
@@ -759,9 +756,9 @@ py_version = \"3.7\"",
         SubCommand::Package {} => build::build(&bin_path, &lib_path, &cfg),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
 
-         // We already handled init
+        // We already handled init
         SubCommand::Init {} => (),
-        SubCommand::New {name} => (),
+        SubCommand::New { name } => (),
     }
 }
 

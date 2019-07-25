@@ -1,4 +1,5 @@
 use crate::dep_types::Version;
+use std::str::FromStr;
 use std::{env, path::PathBuf, process, thread, time};
 
 /// A convenience function
@@ -15,7 +16,7 @@ pub fn possible_py_versions() -> Vec<Version> {
         "3.8", "3.9", "3.10", "3.11", "3.12",
     ]
     .into_iter()
-    .map(|v| Version::from_str2(v).unwrap())
+    .map(|v| Version::from_str(v).unwrap())
     .collect()
 }
 

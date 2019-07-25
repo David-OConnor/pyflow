@@ -2,6 +2,7 @@ use crate::dep_types::{Dependency, Version, VersionReq};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
+use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 struct WarehouseInfo {
@@ -58,7 +59,7 @@ fn get_warehouse_versions(name: &str) -> Vec<Version> {
 
     data.releases
         .keys()
-        .map(|v| Version::from_str2(v).expect("Problem parsing version while making dep graph"))
+        .map(|v| Version::from_str(v).expect("Problem parsing version while making dep graph"))
         .collect()
 }
 

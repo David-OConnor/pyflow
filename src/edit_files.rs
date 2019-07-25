@@ -80,11 +80,44 @@ struct PipfileRequires {
 /// https://github.com/pypa/pipfile
 #[derive(Debug, Deserialize)]
 struct Pipfile {
-    source: Vec<PipfileSource>
-//    source: Vec<Option<PipfileSource>>,
-//    requires: Option<PipfileRequires>,
-//    requires: Vec<String>,
-//    packages: Option<Vec<String>>, //    dev_packages: Option<Vec<String>>  // todo currently unimplemented
+    source: Vec<PipfileSource>, //    source: Vec<Option<PipfileSource>>,
+                                //    requires: Option<PipfileRequires>,
+                                //    requires: Vec<String>,
+                                //    packages: Option<Vec<String>>, //    dev_packages: Option<Vec<String>>  // todo currently unimplemented
+}
+
+#[derive(Debug, Deserialize)]
+struct Poetry {
+    // etc
+    name: String,
+    version: Option<String>,
+    description: Option<String>,
+    license: Option<String>,
+    authors: Option<String>,
+    readme: Option<String>,
+    homepage: Option<String>,
+    repository: Option<String>,
+    documentation: Option<String>,
+    keywords: Option<Vec<String>>,
+    classifiers: Option<Vec<String>>,
+    packages: Option<Vec<String>>,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+}
+
+/// https://poetry.eustace.io/docs/pyproject/
+#[derive(Debug, Deserialize)]
+struct PoetryPyproject {
+    #[serde(alias = "tool.poetry")]
+    poetry: Poetry,
+    #[serde(alias = "tool.poetry.dependencies")]
+    dependencies: Option<Vec<String>>,
+    #[serde(alias = "tool.poetry.source")]
+    source: Option<Vec<String>>,
+    #[serde(alias = "tool.poetry.scripts")]
+    scripts: Option<Vec<String>>,
+    #[serde(alias = "tool.poetry.extras")]
+    extras: Option<Vec<String>>,
 }
 
 pub fn parse_pipfile(cfg: &mut Config) {
@@ -101,43 +134,43 @@ pub fn parse_pipfile(cfg: &mut Config) {
             return;
         }
     };
-//    if let Some(deps) = pipfile.packages {
-//        for dep in deps.into_iter() {
-//            match Dependency::from_str(&dep, false) {
-//                Ok(parsed) => {
-//                    cfg.dependencies.push(parsed.clone());
-//                    println!("Added {} from requirements.txt", parsed.to_cfg_string());
-//                }
-//                Err(_) => {
-//                    println!("Problem parsing {} from Pipfile - skipping", dep);
-//                }
-//            }
-//        }
-//    }
+    //    if let Some(deps) = pipfile.packages {
+    //        for dep in deps.into_iter() {
+    //            match Dependency::from_str(&dep, false) {
+    //                Ok(parsed) => {
+    //                    cfg.dependencies.push(parsed.clone());
+    //                    println!("Added {} from requirements.txt", parsed.to_cfg_string());
+    //                }
+    //                Err(_) => {
+    //                    println!("Problem parsing {} from Pipfile - skipping", dep);
+    //                }
+    //            }
+    //        }
+    //    }
 
     // Pipfile deliberately only includes minimal metadata.
-//    if let Some(metadata) = pipfile.source {
-//        if let Some(name) = metadata.name {
-//            if cfg.name.is_none() {
-//                cfg.name = Some(name)
-//            }
-//        }
-//        if let Some(url) = metadata.url {
-//            if cfg.homepage.is_none() {
-//                cfg.homepage = Some(url)
-//            }
-//        }
-//    }
+    //    if let Some(metadata) = pipfile.source {
+    //        if let Some(name) = metadata.name {
+    //            if cfg.name.is_none() {
+    //                cfg.name = Some(name)
+    //            }
+    //        }
+    //        if let Some(url) = metadata.url {
+    //            if cfg.homepage.is_none() {
+    //                cfg.homepage = Some(url)
+    //            }
+    //        }
+    //    }
 
-//    if let Some(requires) = pipfile.requires {
-//        if cfg.py_version.is_none() {
-//            if let Some(py_v) = Version::from_str2(&requires.python_version) {
-//                if cfg.py_version.is_none() {
-//                    cfg.py_version = Some(py_v)
-//                }
-//            }
-//        }
-//    }
+    //    if let Some(requires) = pipfile.requires {
+    //        if cfg.py_version.is_none() {
+    //            if let Some(py_v) = Version::from_str2(&requires.python_version) {
+    //                if cfg.py_version.is_none() {
+    //                    cfg.py_version = Some(py_v)
+    //                }
+    //            }
+    //        }
+    //    }
 }
 
 pub fn parse_poetry(cfg: &mut Config) {}

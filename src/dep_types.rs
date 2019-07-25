@@ -1,10 +1,39 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::{cmp, num, str::FromStr};
+use std::{cmp, fmt, num, option, str::FromStr};
+
+#[derive(Debug)]
+pub struct DependencyError {
+    details: String,
+}
+
+impl  DependencyError {
+    pub fn new(details: & str) -> Self {
+        Self{details: details.to_owned()}
+    }
+}
+
+impl Error for DependencyError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
+
+impl fmt::Display for DependencyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
+
+impl From<num::ParseIntError> for DependencyError {
+    fn from(error: num::ParseIntError) -> Self {
+        Self { details: "".into() }
+    }
+}
 
 /// An exact, 3-number Semver version.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
@@ -28,9 +57,12 @@ impl Version {
             patch: 0,
         }
     }
+}
 
-    // todo Notsure why I need this; FromStr's doesn't always work.
-    pub fn from_str2(s: &str) -> Option<Self> {
+impl FromStr for Version {
+    type Err = num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let re = Regex::new(r"^(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?(.*)$").unwrap();
         let caps = re
             .captures(s)
@@ -39,41 +71,15 @@ impl Version {
         // The final match group indicates beta, release candidate etc. Ignore if we find it.
         // todo: Handle these.
         if !caps.get(4).unwrap().as_str().is_empty() {
-            return None;
+            // todo
+            "How do I raise an error here properly?".parse::<u32>()?;
         }
 
-        let major = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
-        let minor = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
+        let major = caps.get(1).unwrap().as_str().parse::<u32>()?;
+        let minor = caps.get(2).unwrap().as_str().parse::<u32>()?;
 
         let patch = match caps.get(3) {
-            Some(p) => p.as_str().parse::<u32>().unwrap(),
-            None => 0,
-        };
-
-        Some(Self {
-            major,
-            minor,
-            patch,
-        })
-    }
-}
-
-impl FromStr for Version {
-    type Err = num::ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^(\d{1,4})\.(\d{1,4})(?:\.(\d{1,4}))?$").unwrap();
-        let caps = re
-            .captures(s)
-            .expect(&format!("Problem parsing version: {}", s));
-
-        let major = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
-        let minor = caps.get(2).unwrap().as_str().parse::<u32>().unwrap();
-
-        let patch = match caps.get(3) {
-            //            Some(p) => Some(p.as_str().parse::<u32>().unwrap()),
-            //            None => None,
-            Some(p) => p.as_str().parse::<u32>().unwrap(),
+            Some(p) => p.as_str().parse::<u32>()?,
             None => 0,
         };
 
@@ -139,18 +145,20 @@ impl ToString for ReqType {
     }
 }
 
-impl ReqType {
-    fn from_str(s: &str) -> Self {
+impl FromStr for ReqType {
+    type Err = DependencyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "==" => ReqType::Exact,
-            ">=" => ReqType::Gte,
-            "<=" => ReqType::Lte,
-            ">" => ReqType::Gt,
-            "<" => ReqType::Lt,
-            "!=" => ReqType::Ne,
-            "^" => ReqType::Caret,
-            "~" => ReqType::Tilde,
-            _ => panic!("Problem parsing requirement"),
+            "==" => Ok(ReqType::Exact),
+            ">=" => Ok(ReqType::Gte),
+            "<=" => Ok(ReqType::Lte),
+            ">" => Ok(ReqType::Gt),
+            "<" => Ok(ReqType::Lt),
+            "!=" => Ok(ReqType::Ne),
+            "^" => Ok(ReqType::Caret),
+            "~" => Ok(ReqType::Tilde),
+            _ => Err(DependencyError::new("Problem parsing ReqType")),
         }
     }
 }
@@ -165,46 +173,38 @@ pub struct VersionReq {
     pub patch: Option<u32>,
 }
 
-/// A single version req. Can be chained together.
-impl VersionReq {
-    pub fn new(type_: ReqType, major: u32, minor: u32, patch: u32) -> Self {
-        Self {
-            type_,
-            major,
-            minor: Some(minor),
-            patch: Some(patch),
-        }
-    }
+impl FromStr for VersionReq {
+    type Err = DependencyError;
 
-    pub fn from_str(s: &str) -> Result<Self, Box<Error>> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let re = Regex::new(
             r"^(\^|~|==|<=|>=|<|>|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?$",
         )
-        .unwrap();
+            .unwrap();
 
-        let caps = re
-            .captures(s)
-            .expect(&format!("Problem parsing version: {}", s));
+        let caps = match re.captures(s) {
+            Some(c) => c,
+            None => return Err(DependencyError::new("Problem parsing Version requirement")),
+        };
 
         // Only major is required.
         let type_ = match caps.get(1) {
-            Some(t) => ReqType::from_str(t.as_str()),
+            Some(t) => ReqType::from_str(t.as_str())?,
             None => ReqType::Exact,
         };
 
         let major = match caps.get(2) {
-            Some(p) => p.as_str().parse::<u32>().expect("Problem parsing major"),
-            //            None => return Box::new(Err("Problem parsing version")),
+            Some(p) => p.as_str().parse::<u32>()?,
             None => panic!("Problem parsing version"),
         };
 
         let minor = match caps.get(3) {
-            Some(p) => Some(p.as_str().parse::<u32>().expect("Problem parsing minor")),
+            Some(p) => Some(p.as_str().parse::<u32>()?),
             None => None,
         };
 
         let patch = match caps.get(4) {
-            Some(p) => Some(p.as_str().parse::<u32>().expect("Problem parsing patch")),
+            Some(p) => Some(p.as_str().parse::<u32>()?),
             None => None,
         };
 
@@ -214,6 +214,18 @@ impl VersionReq {
             patch,
             type_,
         })
+    }
+}
+
+/// A single version req. Can be chained together.
+impl VersionReq {
+    pub fn new(type_: ReqType, major: u32, minor: u32, patch: u32) -> Self {
+        Self {
+            type_,
+            major,
+            minor: Some(minor),
+            patch: Some(patch),
+        }
     }
 
     /// From a comma-separated list
@@ -432,7 +444,11 @@ impl Dependency {
     pub fn from_pip_str(s: &str) -> Option<Self> {
         // todo multiple ie single quotes support?
         // Check if no version is specified.
-        if Regex::new(r"^([a-zA-Z\-]+)$").unwrap().captures(s).is_some() {
+        if Regex::new(r"^([a-zA-Z\-]+)$")
+            .unwrap()
+            .captures(s)
+            .is_some()
+        {
             return Some(Self {
                 name: s.to_string(),
                 version_reqs: vec![],
