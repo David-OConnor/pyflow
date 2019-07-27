@@ -140,6 +140,9 @@ the project directory.
 - It's dependency resolution and locking is much faster due to using a cached
 database of dependencies, vice downloading and checking each package.
 
+- Multiple versions of a dependency can be installed, allowing resolution
+of conflicting sub-dependencies.
+
 - By not requiring Python to install or run, it remains intallation-agnostic.
 This is especially important on Linux, where there may be several versions
 of Python installed, with different versions and access levels. This avoids
@@ -154,10 +157,9 @@ one to set up the environment with.
 of binaries from `PyPi`.
 
 
-## Todo
-- Check or resolve dependency conflicts
-- Improve CLI and console feedback.
-- Improve docs
+## Not-yet-implemented
+- Support for Python < 3.3
+- Installing multiple versions of a sub-dependency when required
 
 
 ## Building and uploading your project to PyPi.

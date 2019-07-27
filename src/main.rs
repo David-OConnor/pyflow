@@ -1,7 +1,8 @@
-use crate::dep_types::{Dependency, Package, Version};
+use crate::dep_types::{Dependency, DependencyError, Package, Version, VersionReq};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp,
     collections::HashMap,
     env,
     error::Error,
@@ -374,12 +375,6 @@ fn find_py_alias() -> Result<(String, Version), AliasError> {
     }
 }
 
-fn find_sub_dependencies(package: Dependency) -> Vec<Dependency> {
-    // todo: This will be useful for dependency resolution, and removing packages
-    // todo no longer needed when running install.
-    vec![]
-}
-
 /// Similar to that used by Cargo.lock
 #[derive(Debug, Deserialize, Serialize)]
 struct LockPackage {
@@ -414,7 +409,7 @@ impl Lock {
             // todo: reconsider your package etc structs
             // todo: Perhaps impl to_lockpack etc from Package.
             let lock_package = LockPackage {
-                name: package.name.clone(),
+                name: package.name.to_owned(),
                 version: package.version,
                 source: package.source.clone(),
                 dependencies: None,
@@ -506,6 +501,53 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     util::wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
 
     py_ver_from_alias
+}
+
+/// Remove duplicates. If the requirements are different but compatible, pick the more-restrictive
+/// one. If incompatible, return Err.
+/// todo: We'll have to think about how to resolve the errors, likely elsewhere.
+fn clean_flattened_deps(
+    deps: &Vec<(u32, Dependency)>,
+) -> Result<HashMap<String, (u32, Vec<(Version, Version)>)>, DependencyError> {
+    // result is a (min, max) tuple
+    let mut result: HashMap<String, (u32, Vec<(Version, Version)>)> = HashMap::new(); // todo remove annotation
+
+    for (level, dep) in deps.into_iter() {
+        match result.get(&dep.name) {
+            Some(reqs) => {
+                result.insert(
+                    dep.name.to_owned(),
+                    (
+                        cmp::max(*level, reqs.0),
+                        dep_types::intersection_temp(&dep.version_reqs, &reqs.1),
+                    ),
+                );
+            }
+            None => {
+                // Not already present; without any checks.
+                result.insert(
+                    dep.name.to_owned(),
+                    (*level, dep_types::to_ranges(&dep.version_reqs)),
+                );
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Extract dependencies from a nested hierarchy. Ultimately, we can only (practially) have
+/// one copy per dep. Record what level they came from.
+/// // todo: Is there a clever way to have multiple versions of a dep installed???
+fn flatten_deps(result: &mut Vec<(u32, Dependency)>, level: u32, deps: &Vec<Dependency>) {
+    for dep in deps.iter() {
+        // We don't need sub-deps in the result; they're extraneous info. We only really care about
+        // the name and version requirements.
+        let mut result_dep = dep.clone();
+        result_dep.dependencies = vec![];
+        result.push((level, result_dep));
+        flatten_deps(result, level + 1, &dep.dependencies);
+    }
 }
 
 fn main() {
@@ -643,14 +685,29 @@ py_version = \"3.7\"",
 
             cfg.dependencies.append(&mut new_deps);
 
+            println!("Resolving dependencies...");
             // Recursively add sub-dependencies.
             for mut dep in cfg.dependencies.iter_mut() {
-                dep_resolution::populate_subdeps(&mut dep);
+                dep_resolution::populate_subdeps(&mut dep, &vec![]);
             }
 
-            println!("DEPS: {:#?}", &cfg.dependencies);
+            // todo: Write tests for a few dep res cases.
+            //            println!("DEPS: {:#?}", &cfg.dependencies);
+            let mut flattened_deps = vec![];
+            flatten_deps(&mut flattened_deps, 0, &cfg.dependencies);
+            let cleaned = match clean_flattened_deps(&flattened_deps) {
+                Ok(c) => c,
+                Err(e) => {
+                    abort(&e.details);
+                    HashMap::new() // todo dummy to satisfy compiler
+                }
+            };
 
-            //            let lock = Lock::from_dependencies(&cfg.dependencies);
+            println!("Flattened: {:#?}", flattened_deps);
+
+            // Now that deps are populated,
+
+            //                        let lock = Lock::from_dependencies(&cfg.dependencies);
             let lock = Lock {
                 metadata: None,
                 package: None,
@@ -660,7 +717,7 @@ py_version = \"3.7\"",
                 for lock_pack in lock_packs {
                     // todo: methods to convert between LockPack and Package, since they're analogous
                     let p = Package {
-                        name: lock_pack.name.clone(),
+                        name: lock_pack.name.to_owned(),
                         //                        version: Version::from_str(&lock_pack.version).unwrap(),
                         version: lock_pack.version,
                         deps: vec![],

@@ -1,11 +1,14 @@
 /target
 **/*.rs.bk
 
-pyproject.toml
-/__pypackages__
-script.py
+
 
 # Prevent generated and test files from being committed
 setup.py
 requirements.txt
 Pipfile
+pypackage.lock
+pyproject.toml
+/__pypackages__
+script.py
+

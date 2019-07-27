@@ -5,7 +5,7 @@ use std::{cmp, fmt, num, str::FromStr};
 
 #[derive(Debug, PartialEq)]
 pub struct DependencyError {
-    details: String,
+    pub details: String,
 }
 
 impl DependencyError {
@@ -175,14 +175,13 @@ pub struct VersionReq {
     pub minor: Option<u32>,
     pub patch: Option<u32>,
     // todo
-//    pub extras: Vec<String>
+    //    pub extras: Vec<String>
 }
 
 impl FromStr for VersionReq {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        println!("PROBLEM: {}", s);
         // todo: You could delegate part of this out, or at least share the regex with Version::to_string
         let re = Regex::new(
             r"^(\^|~|==|<=|>=|<|>|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?$",
@@ -237,10 +236,14 @@ impl VersionReq {
 
     /// From a comma-separated list
     pub fn from_str_multiple(vers: &str) -> Result<Vec<Self>, DependencyError> {
-        Ok(vers
-            .split(",")
-            .map(|req| Self::from_str(req).expect("Prob parsing a concatonated version req."))
-            .collect())
+        let mut result = vec![];
+        for req in vers.split(",") {
+            match Self::from_str(req) {
+                Ok(r) => result.push(r),
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(result)
     }
 
     pub fn to_string(&self, ommit_equals: bool, pip_style: bool) -> String {
@@ -270,6 +273,66 @@ impl VersionReq {
         }
     }
 
+    /// Find the lowest and highest compatible versions. Return a vec, since the != requirement type
+    /// has two ranges.
+    pub fn compatible_range(&self) -> Vec<(Version, Version)> {
+        // Version being unspecified means any version's acceptable; setting to 0s ensure that.
+        // Treat missing minor and patch values as 0
+        let minor = self.minor.unwrap_or(0);
+        let patch = self.patch.unwrap_or(0);
+
+        let self_version = Version::new(self.major, minor, patch);
+
+        let highest = Version::new(999999, 0, 0);
+        let lowest = Version::new(0, 0, 0);
+        let max;
+
+        match self.type_ {
+            ReqType::Exact => vec![(self_version, self_version)],
+            ReqType::Gte => vec![(self_version, highest)],
+            ReqType::Lte => vec![(lowest, self_version)],
+            ReqType::Gt => vec![(
+                Version::new(self.major, self_version.minor, self_version.patch + 1),
+                highest,
+            )],
+            ReqType::Lt => vec![(
+                lowest,
+                Version::new(self.major, self_version.minor, self_version.patch - 1),
+            )],
+            ReqType::Ne => vec![
+                (
+                    lowest,
+                    Version::new(self.major, self_version.minor, self_version.patch - 1),
+                ),
+                (
+                    Version::new(self.major, self_version.minor, self_version.patch + 1),
+                    highest,
+                ),
+            ],
+            // This section DRY from `compatible`.
+            ReqType::Caret => {
+                if self.major > 0 {
+                    max = Version::new(self.major + 1, 0, 0);
+                } else if self_version.minor > 0 {
+                    max = Version::new(0, self_version.minor + 1, 0);
+                } else {
+                    max = Version::new(0, 0, self_version.patch + 2);
+                }
+                vec![(self_version, max)]
+            }
+            // For tilde, if minor's specified, can only increment patch.
+            // If not, can increment minor or patch.
+            ReqType::Tilde => {
+                if self.minor.is_some() {
+                    max = Version::new(self.major, self_version.minor + 1, 0);
+                } else {
+                    max = Version::new(self.major + 1, 0, 0);
+                }
+                vec![(self_version, max)]
+            }
+        }
+    }
+
     pub fn is_compatible(&self, version: &Version) -> bool {
         // Version being unspecified means any version's acceptable; setting to 0s ensure that.
         // Treat missing minor and patch values as 0
@@ -283,10 +346,10 @@ impl VersionReq {
 
         match self.type_ {
             ReqType::Exact => &self_version == version,
-            ReqType::Gte => &self_version >= version,
-            ReqType::Lte => &self_version <= version,
-            ReqType::Gt => &self_version > version,
-            ReqType::Lt => &self_version < version,
+            ReqType::Gte => &self_version <= version,
+            ReqType::Lte => &self_version >= version,
+            ReqType::Gt => &self_version < version,
+            ReqType::Lt => &self_version > version,
             ReqType::Ne => &self_version != version,
             ReqType::Caret => {
                 if self.major > 0 {
@@ -310,6 +373,85 @@ impl VersionReq {
             }
         }
     }
+}
+
+///// Find the intersection of two verison requirements
+//pub fn intersection_single(req1: &VersionReq, req2: &VersionReq) -> Vec<VersionReq> {
+//    // The maximum number of intersection requirements can be the lowest of the num
+//    // requirements of our two starting sets. We start with one, which will only get narrower
+//    // as we include requirements from the other.
+//
+//    let ranges1 = req1.compatible_range();
+//    let ranges2 = req2.compatible_range();
+//
+//}
+
+pub fn to_ranges(reqs: &Vec<VersionReq>) -> Vec<(Version, Version)> {
+    reqs.into_iter()
+        .map(|r| r.compatible_range())
+        .flatten()
+        .collect()
+}
+
+/// todo: Find a more elegant way to handle this; diff is second arg's type.
+pub fn intersection_temp(
+    reqs1: &Vec<VersionReq>,
+    ranges2: &Vec<(Version, Version)>,
+) -> Vec<(Version, Version)> {
+    let mut ranges1 = vec![];
+
+    for req in reqs1 {
+        for range in req.compatible_range() {
+            ranges1.push(range);
+        }
+    }
+
+    let mut result = vec![];
+    for rng1 in ranges1 {
+        for rng2 in ranges2 {
+            // 0 is min, 1 is max.
+            if rng2.1 >= rng1.0 && rng1.0 <= rng2.1 {
+                result.push((rng1.0, rng2.1))
+            } else if rng1.1 >= rng2.0 && rng2.0 <= rng1.1 {
+                result.push((rng2.0, rng1.1))
+            }
+        }
+    }
+
+    result
+}
+
+/// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
+pub fn intersection(reqs1: &Vec<VersionReq>, reqs2: &Vec<VersionReq>) -> Vec<(Version, Version)> {
+    let mut ranges1 = vec![];
+    for req in reqs1 {
+        for range in req.compatible_range() {
+            ranges1.push(range);
+        }
+    }
+
+    let mut ranges2 = vec![];
+    for req in reqs2 {
+        for range in req.compatible_range() {
+            ranges2.push(range);
+        }
+    }
+
+    println!("1: {:?}, 2: {:?}", ranges1, ranges2);
+
+    let mut result = vec![];
+    for rng1 in &ranges1 {
+        for rng2 in &ranges2 {
+            // 0 is min, 1 is max.
+            if rng2.1 >= rng1.0 && rng2.0 <= rng1.1 {
+                result.push((cmp::min(rng2.0, rng1.1), cmp::max(rng1.0, rng2.1)));
+            } else if rng1.1 >= rng2.0 && rng1.0 <= rng2.1 {
+                result.push((cmp::min(rng1.0, rng2.1), cmp::max(rng2.0, rng1.1)))
+            }
+        }
+    }
+
+    result
 }
 
 /// Includes information for describing a `Python` dependency. Can be used in a dependency
@@ -387,7 +529,7 @@ impl Dependency {
     /// eg `saturn = "^0.3.1"` or `matplotlib = "3.1.1"`
     pub fn to_cfg_string(&self) -> String {
         match self.version_reqs.len() {
-            0 => self.name.clone(),
+            0 => self.name.to_owned(),
             _ => format!(
                 r#"{} = "{}""#,
                 self.name,
@@ -413,7 +555,6 @@ impl Dependency {
         };
         match re.captures(s) {
             Some(caps) => {
-                println!("CAPS: {:?}", caps);
                 let name = caps.get(1).unwrap().as_str().to_string();
                 let reqs_m = caps.get(2).unwrap();
                 let reqs = VersionReq::from_str_multiple(reqs_m.as_str())?;
@@ -505,6 +646,7 @@ impl Package {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use ReqType::{Caret, Exact, Gt, Gte, Lt, Lte, Ne, Tilde};
 
     #[test]
     fn compat_caret() {
@@ -512,25 +654,56 @@ pub mod tests {
             major: 1,
             minor: Some(2),
             patch: Some(3),
-            type_: ReqType::Caret,
+            type_: Caret,
         };
         let req2 = VersionReq {
             major: 0,
             minor: Some(2),
             patch: Some(3),
-            type_: ReqType::Caret,
+            type_: Caret,
         };
         let req3 = VersionReq {
             major: 0,
             minor: Some(0),
             patch: Some(3),
-            type_: ReqType::Caret,
+            type_: Caret,
         };
 
         assert!(req1.is_compatible(&Version::new(1, 9, 9)));
         assert!(!req1.is_compatible(&Version::new(2, 0, 0)));
         assert!(req2.is_compatible(&Version::new(0, 2, 9)));
         assert!(!req2.is_compatible(&Version::new(0, 3, 0)));
+        assert!(req3.is_compatible(&Version::new(0, 0, 3)));
+        assert!(!req3.is_compatible(&Version::new(0, 0, 5)));
+    }
+
+    #[test]
+    fn compat_gt_eq() {
+        let req1 = VersionReq {
+            major: 1,
+            minor: Some(2),
+            patch: Some(3),
+            type_: Gte,
+        };
+        let req2 = VersionReq {
+            major: 0,
+            minor: Some(2),
+            patch: Some(3),
+            type_: Gt,
+        };
+        let req3 = VersionReq {
+            major: 0,
+            minor: Some(0),
+            patch: Some(3),
+            type_: Exact,
+        };
+
+        assert!(req1.is_compatible(&Version::new(1, 2, 3)));
+        assert!(req1.is_compatible(&Version::new_short(4, 2)));
+        assert!(!req1.is_compatible(&Version::new(1, 2, 2)));
+        assert!(req2.is_compatible(&Version::new(0, 2, 9)));
+        assert!(!req2.is_compatible(&Version::new(0, 1, 0)));
+        assert!(!req2.is_compatible(&Version::new(0, 2, 3)));
         assert!(req3.is_compatible(&Version::new(0, 0, 3)));
         assert!(!req3.is_compatible(&Version::new(0, 0, 5)));
     }
@@ -574,37 +747,37 @@ pub mod tests {
             major: 2,
             minor: Some(3),
             patch: None,
-            type_: ReqType::Ne,
+            type_: Ne,
         };
         let req_b = VersionReq {
             major: 1,
             minor: Some(3),
             patch: Some(32),
-            type_: ReqType::Caret,
+            type_: Caret,
         };
         let req_c = VersionReq {
             major: 2,
             minor: Some(3),
             patch: None,
-            type_: ReqType::Tilde,
+            type_: Tilde,
         };
         let req_d = VersionReq {
             major: 5,
             minor: None,
             patch: None,
-            type_: ReqType::Exact,
+            type_: Exact,
         };
         let req_e = VersionReq {
             major: 11,
             minor: Some(2),
             patch: Some(3),
-            type_: ReqType::Lte,
+            type_: Lte,
         };
         let req_f = VersionReq {
             major: 0,
             minor: Some(0),
             patch: Some(1),
-            type_: ReqType::Gte,
+            type_: Gte,
         };
 
         assert_eq!(VersionReq::from_str(a).unwrap(), req_a);
@@ -631,16 +804,17 @@ pub mod tests {
     }
 
     #[test]
-    fn parse_dep_pypy_semicolon() {
+    fn parse_dep_pypi_semicolon() {
         // tod: Make this handle extras.
-        let actual = Dependency::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", false).unwrap();
+        let actual =
+            Dependency::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", true).unwrap();
         let expected = Dependency {
             name: "pyOpenSSL".into(),
             version_reqs: vec![VersionReq {
-                type_: ReqType::Gte,
+                type_: Gte,
                 major: 0,
                 minor: Some(14),
-                patch: None
+                patch: None,
             }],
             dependencies: vec![],
         };
@@ -658,7 +832,7 @@ pub mod tests {
                     major: 3,
                     minor: Some(1),
                     patch: Some(4),
-                    type_: ReqType::Exact,
+                    type_: Exact,
                 },],
                 dependencies: vec![],
             }
@@ -676,7 +850,7 @@ pub mod tests {
                     major: 2,
                     minor: Some(7),
                     patch: Some(18),
-                    type_: ReqType::Caret,
+                    type_: Caret,
                 }],
                 dependencies: vec![],
             }
@@ -694,7 +868,7 @@ pub mod tests {
                     major: 6,
                     minor: Some(7),
                     patch: None,
-                    type_: ReqType::Tilde,
+                    type_: Tilde,
                 }],
                 dependencies: vec![],
             }
@@ -712,7 +886,7 @@ pub mod tests {
                     major: 2,
                     minor: Some(22),
                     patch: None,
-                    type_: ReqType::Gte,
+                    type_: Gte,
                 },],
 
                 dependencies: vec![],
@@ -732,19 +906,19 @@ pub mod tests {
                         major: 1,
                         minor: Some(25),
                         patch: Some(0),
-                        type_: ReqType::Ne,
+                        type_: Ne,
                     },
                     VersionReq {
                         major: 1,
                         minor: Some(25),
                         patch: Some(1),
-                        type_: ReqType::Ne,
+                        type_: Ne,
                     },
                     VersionReq {
                         major: 1,
                         minor: Some(26),
                         patch: None,
-                        type_: ReqType::Lte,
+                        type_: Lte,
                     }
                 ],
 
@@ -763,7 +937,7 @@ pub mod tests {
                 major: 3,
                 minor: Some(3),
                 patch: Some(6),
-                type_: ReqType::Exact,
+                type_: Exact,
             }],
             dependencies: vec![],
         };
@@ -783,13 +957,13 @@ pub mod tests {
                     major: 2,
                     minor: Some(7),
                     patch: Some(4),
-                    type_: ReqType::Ne,
+                    type_: Ne,
                 },
                 VersionReq {
                     major: 3,
                     minor: Some(7),
                     patch: None,
-                    type_: ReqType::Gte,
+                    type_: Gte,
                 },
             ],
             dependencies: vec![],
@@ -814,5 +988,37 @@ pub mod tests {
 
         assert!(a > b && b > c && c > d && d > e);
         assert!(f < g);
+    }
+
+    #[test]
+    fn intersections_empty() {
+        let reqs1 = vec![VersionReq::new(Exact, 4, 9, 4)];
+        let reqs2 = vec![VersionReq::new(Gte, 4, 9, 7)];
+
+        let reqs3 = vec![VersionReq::new(Lte, 4, 9, 6)];
+        let reqs4 = vec![VersionReq::new(Gte, 4, 9, 7)];
+
+        println!("YOU: {:?}", intersection(&reqs3, &reqs4));
+
+        assert!(intersection(&reqs1, &reqs2).is_empty());
+        assert!(intersection(&reqs3, &reqs4).is_empty());
+    }
+
+    #[test]
+    fn intersections_simple() {
+        let reqs1 = vec![VersionReq::new(Gte, 4, 9, 4)];
+        let reqs2 = vec![VersionReq::new(Gte, 4, 3, 1)];
+
+        let reqs3 = vec![VersionReq::new(Caret, 3, 0, 0)];
+        let reqs4 = vec![VersionReq::new(Exact, 3, 3, 6)];
+
+        //        assert_eq!(
+        //            intersection(&reqs1, &reqs2),
+        //            vec![(Version::new(4, 9, 4), Version::new(999999, 0, 0))]
+        //        );
+        assert_eq!(
+            intersection(&reqs3, &reqs4),
+            vec![(Version::new(3, 3, 6), Version::new(3, 3, 6))]
+        );
     }
 }

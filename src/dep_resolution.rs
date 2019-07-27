@@ -1,4 +1,7 @@
-use crate::dep_types::{Dependency, Version, VersionReq};
+use crate::{
+    dep_types::{Dependency, Version, VersionReq},
+    util,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -52,10 +55,9 @@ fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
     Ok(resp)
 }
 
-fn get_warehouse_versions(name: &str) -> Vec<Version> {
+fn get_warehouse_versions(name: &str) -> Result<Vec<Version>, reqwest::Error> {
     // todo return Result with custom fetch error type
-    let data =
-        get_warehouse_data(name).expect(&format!("Problem getting warehouse data for {}", name));
+    let data = get_warehouse_data(name)?;
 
     let mut result = vec![];
     for ver in data.releases.keys() {
@@ -67,7 +69,7 @@ fn get_warehouse_versions(name: &str) -> Vec<Version> {
             ),
         }
     }
-    result
+    Ok(result)
 }
 
 fn get_warehouse_data_w_version(
@@ -84,13 +86,9 @@ fn get_warehouse_data_w_version(
 }
 
 /// Find dependencies for a specific version of a package.
-fn get_warehouse_deps(name: &str, version: &Version) -> Vec<Dependency> {
+fn get_warehouse_deps(name: &str, version: &Version) -> Result<Vec<Dependency>, reqwest::Error> {
     // todo return Result with custom fetch error type
-    let data = get_warehouse_data_w_version(name, version).expect(&format!(
-        "Problem getting warehouse data for `{}: {}`",
-        name,
-        version.to_string()
-    ));
+    let data = get_warehouse_data_w_version(name, version)?;
 
     let mut result = vec![];
     if let Some(reqs) = data.info.requires_dist {
@@ -104,7 +102,7 @@ fn get_warehouse_deps(name: &str, version: &Version) -> Vec<Dependency> {
             }
         }
     }
-    result
+    Ok(result)
 }
 
 /// Fetch dependency data from our database, where it's cached.
@@ -138,18 +136,42 @@ fn filter_compatible(reqs: &Vec<VersionReq>, versions: Vec<Version>) -> Vec<Vers
 
 /// Recursively add all dependencies. Pull avail versions from the PyPi warehouse, and sub-dep
 /// requirements from our cached DB
-pub fn populate_subdeps(dep: &mut Dependency) {
-    let wh_data = get_warehouse_data(&dep.name).expect("Problem getting warehouse data");
-
-    let versions = get_warehouse_versions(&dep.name);
+pub fn populate_subdeps(dep: &mut Dependency, cache: &Vec<Dependency>) {
+    println!("Getting warehouse versions for {}", &dep.name);
+    let versions = match get_warehouse_versions(&dep.name) {
+        Ok(v) => v,
+        Err(_) => {
+            println!("Can't find fdependencies for {}", dep.name);
+            return;
+        }
+    };
     let compatible_versions = filter_compatible(&dep.version_reqs, versions);
-
-    // todo best match here?
-
-    for vers in compatible_versions {
-        //        let data = get_dep_data(&dep.name, &vers).expect("Can't get dep data");
-        dep.dependencies = get_warehouse_deps(&dep.name, &vers);
+    if compatible_versions.is_empty() {
+        util::abort(&format!(
+            "Can't find a compatible version for {:?}",
+            dep.name
+        ));
     }
+
+    // todo cache these results.
+
+    // todo: We currently assume the dep graph is resolvable using only the best match.
+    // todo: This logic is flawed, but should work in many cases.
+    // Let's start with the best match, and see if the tree resolves without conflicts using it.
+    let newest_compat = compatible_versions.iter().max().unwrap();
+    match get_warehouse_deps(&dep.name, newest_compat) {
+        Ok(mut d) => {
+            dep.dependencies = d.clone();
+            for subdep in d.iter_mut() {
+                populate_subdeps(subdep, cache);
+            }
+        }
+        Err(_) => println!(
+            "Can't find dependencies for {}: {}",
+            dep.name,
+            newest_compat.to_string()
+        ),
+    };
 }
 
 #[cfg(test)]
@@ -162,7 +184,7 @@ pub mod tests {
         // Makes API call
         // Assume no new releases since writing this test.
         assert_eq!(
-            get_warehouse_versions("scinot").sort(),
+            get_warehouse_versions("scinot").unwrap().sort(),
             vec![
                 Version::new(0, 0, 1),
                 Version::new(0, 0, 2),
@@ -201,7 +223,7 @@ pub mod tests {
         use crate::dep_types::ReqType::{Gte, Lt, Ne};
 
         assert_eq!(
-            get_warehouse_deps("requests", &Version::new(2, 22, 0)),
+            get_warehouse_deps("requests", &Version::new(2, 22, 0)).unwrap(),
             vec![
                 dep_part("chardet", vec![vrnew(Lt, 3, 1, 0), vrnew(Gte, 3, 0, 2)]),
                 dep_part("idna", vec![vrnew_short(Lt, 2, 9), vrnew_short(Gte, 2, 5)]),
