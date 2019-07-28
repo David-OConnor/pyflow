@@ -6,6 +6,9 @@ use std::io::{BufRead, BufReader};
 
 /// Write dependencies to pyproject.toml
 pub fn add_dependencies(filename: &str, dependencies: &[Dependency]) {
+    if !dependencies.is_empty() {
+        println!("Adding dependencies via the CLI isn't yet supported");
+    }
     //        let data = fs::read_to_string("pyproject.toml")
     //            .expect("Unable to read pyproject.toml while attempting to add a dependency");
     let file = fs::File::open(filename).expect("cannot open pyproject.toml");

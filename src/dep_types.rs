@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
 
+pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
+
 #[derive(Debug, PartialEq)]
 pub struct DependencyError {
     pub details: String,
@@ -35,12 +37,38 @@ impl From<num::ParseIntError> for DependencyError {
 }
 
 /// An exact, 3-number Semver version.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub patch: u32,
-}
+} //impl Serialize for Version {
+  //      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  //    where
+  //        S: Serializer,
+  //    {
+  //        // 3 is the number of fields in the struct.
+  //        let mut state = serializer.serialize_struct("Color", 3)?;
+  //        state.serialize_field("r", &self.r)?;
+  //        state.serialize_field("g", &self.g)?;
+  //        state.serialize_field("b", &self.b)?;
+  //        state.end()
+  //    }
+  //}
+
+//impl Serialize for Version {
+//      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//    where
+//        S: Serializer,
+//    {
+//        // 3 is the number of fields in the struct.
+//        let mut state = serializer.serialize_struct("Color", 3)?;
+//        state.serialize_field("r", &self.r)?;
+//        state.serialize_field("g", &self.g)?;
+//        state.serialize_field("b", &self.b)?;
+//        state.end()
+//    }
+//}
 
 impl Version {
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
@@ -68,7 +96,7 @@ impl FromStr for Version {
         let re = Regex::new(r"^(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?(.*)$").unwrap();
         let caps = re
             .captures(s)
-            .expect(&format!("Problem parsing version: {}", s));
+            .unwrap_or_else(|| panic!("Problem parsing version: {}", s));
 
         let major = caps.get(1).unwrap().as_str().parse::<u32>()?;
         let minor = match caps.get(2) {
@@ -237,7 +265,7 @@ impl VersionReq {
     /// From a comma-separated list
     pub fn from_str_multiple(vers: &str) -> Result<Vec<Self>, DependencyError> {
         let mut result = vec![];
-        for req in vers.split(",") {
+        for req in vers.split(',') {
             match Self::from_str(req) {
                 Ok(r) => result.push(r),
                 Err(e) => return Err(e),
@@ -283,7 +311,7 @@ impl VersionReq {
 
         let self_version = Version::new(self.major, minor, patch);
 
-        let highest = Version::new(999999, 0, 0);
+        let highest = Version::new(MAX_VER, 0, 0);
         let lowest = Version::new(0, 0, 0);
         let max;
 
@@ -345,12 +373,12 @@ impl VersionReq {
         let max;
 
         match self.type_ {
-            ReqType::Exact => &self_version == version,
-            ReqType::Gte => &self_version <= version,
-            ReqType::Lte => &self_version >= version,
-            ReqType::Gt => &self_version < version,
-            ReqType::Lt => &self_version > version,
-            ReqType::Ne => &self_version != version,
+            ReqType::Exact => self_version == *version,
+            ReqType::Gte => self_version <= *version,
+            ReqType::Lte => self_version >= *version,
+            ReqType::Gt => self_version < *version,
+            ReqType::Lt => self_version > *version,
+            ReqType::Ne => self_version != *version,
             ReqType::Caret => {
                 if self.major > 0 {
                     max = Version::new(self.major + 1, 0, 0);
@@ -359,7 +387,7 @@ impl VersionReq {
                 } else {
                     max = Version::new(0, 0, self_version.patch + 2);
                 }
-                &min <= version && version < &max
+                min <= *version && *version < max
             }
             // For tilde, if minor's specified, can only increment patch.
             // If not, can increment minor or patch.
@@ -369,7 +397,7 @@ impl VersionReq {
                 } else {
                     max = Version::new(self.major + 1, 0, 0);
                 }
-                &min < version && version < &max
+                min < *version && *version < max
             }
         }
     }
@@ -386,17 +414,22 @@ impl VersionReq {
 //
 //}
 
-pub fn to_ranges(reqs: &Vec<VersionReq>) -> Vec<(Version, Version)> {
-    reqs.into_iter()
-        .map(|r| r.compatible_range())
-        .flatten()
-        .collect()
+pub fn to_ranges(reqs: &[VersionReq]) -> Vec<(Version, Version)> {
+    // If no requirement specified, return the full range.
+    if reqs.is_empty() {
+        vec![(Version::new(0, 0, 0), Version::new(MAX_VER, 0, 0))]
+    } else {
+        reqs.iter()
+            .map(|r| r.compatible_range())
+            .flatten()
+            .collect()
+    }
 }
 
 /// todo: Find a more elegant way to handle this; diff is second arg's type.
 pub fn intersection_temp(
-    reqs1: &Vec<VersionReq>,
-    ranges2: &Vec<(Version, Version)>,
+    reqs1: &[VersionReq],
+    ranges2: &[(Version, Version)],
 ) -> Vec<(Version, Version)> {
     let mut ranges1 = vec![];
 
@@ -422,7 +455,7 @@ pub fn intersection_temp(
 }
 
 /// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
-pub fn intersection(reqs1: &Vec<VersionReq>, reqs2: &Vec<VersionReq>) -> Vec<(Version, Version)> {
+pub fn intersection(reqs1: &[VersionReq], reqs2: &[VersionReq]) -> Vec<(Version, Version)> {
     let mut ranges1 = vec![];
     for req in reqs1 {
         for range in req.compatible_range() {
@@ -436,8 +469,6 @@ pub fn intersection(reqs1: &Vec<VersionReq>, reqs2: &Vec<VersionReq>) -> Vec<(Ve
             ranges2.push(range);
         }
     }
-
-    println!("1: {:?}, 2: {:?}", ranges1, ranges2);
 
     let mut result = vec![];
     for rng1 in &ranges1 {
@@ -455,7 +486,7 @@ pub fn intersection(reqs1: &Vec<VersionReq>, reqs2: &Vec<VersionReq>) -> Vec<(Ve
 }
 
 /// Includes information for describing a `Python` dependency. Can be used in a dependency
-/// graph.
+/// graph. Uses a set of requirements, compared to `Package`, which is tied to an exact version.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Dependency {
     pub name: String,
@@ -502,7 +533,7 @@ impl Dependency {
 
     /// eg `saturn>=0.3.1`, or `'stevedore>=1.3.0,<1.4.0'` (Note single quotes
     /// when there are multiple requirements specified.
-    pub fn to_pip_string(&self) -> String {
+    pub fn _to_pip_string(&self) -> String {
         // Note that ^= may not be valid in Pip, but ~= is.
         match self.version_reqs.len() {
             0 => self.name.to_string(),
@@ -553,19 +584,16 @@ impl Dependency {
             // ie saturn = ">=0.3.4"
             Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
         };
-        match re.captures(s) {
-            Some(caps) => {
-                let name = caps.get(1).unwrap().as_str().to_string();
-                let reqs_m = caps.get(2).unwrap();
-                let reqs = VersionReq::from_str_multiple(reqs_m.as_str())?;
+        if let Some(caps) = re.captures(s) {
+            let name = caps.get(1).unwrap().as_str().to_string();
+            let reqs_m = caps.get(2).unwrap();
+            let reqs = VersionReq::from_str_multiple(reqs_m.as_str())?;
 
-                return Ok(Self {
-                    name,
-                    version_reqs: reqs,
-                    dependencies: vec![],
-                });
-            }
-            None => (),
+            return Ok(Self {
+                name,
+                version_reqs: reqs,
+                dependencies: vec![],
+            });
         };
 
         // Check if no version is specified.
@@ -575,21 +603,18 @@ impl Dependency {
             Regex::new(r"^([a-zA-Z\-0-9]+)$").unwrap()
         };
 
-        match novers_re.captures(s) {
-            Some(m) => {
-                return Ok(Self {
-                    name: m.get(1).unwrap().as_str().to_string(),
-                    version_reqs: vec![],
-                    dependencies: vec![],
-                })
-            }
-            None => (),
+        if let Some(m) = novers_re.captures(s) {
+            return Ok(Self {
+                name: m.get(1).unwrap().as_str().to_string(),
+                version_reqs: vec![],
+                dependencies: vec![],
+            });
         }
 
-        return Err(DependencyError::new(&format!(
+        Err(DependencyError::new(&format!(
             "Problem parsing version requirement: {}",
             s
-        )));
+        )))
     }
 
     pub fn from_pip_str(s: &str) -> Option<Self> {
@@ -627,7 +652,7 @@ impl Dependency {
     }
 }
 
-/// An exact package to install.
+/// An exact package to install. Typed analog of LockPack.
 #[derive(Clone, Debug)]
 pub struct Package {
     pub name: String,
@@ -640,8 +665,71 @@ impl Package {
     pub fn to_pip_string(&self) -> String {
         format!("{}=={}", self.name, self.version.to_string())
     }
+
+    pub fn from_lock_pack(lock_pack: &LockPackage) -> Self {
+        // todo: Return result /propogate parse errors.
+        Self {
+            name: lock_pack.name.to_owned(),
+            version: Version::from_str(&lock_pack.version)
+                .expect("Problem converting from lock pack version"),
+            deps: match &lock_pack.dependencies {
+                Some(deps) => deps
+                    .iter()
+                    .map(|d| {
+                        Dependency::from_str(d, false).expect("Problem converting Dep from string")
+                    })
+                    .collect(),
+                None => vec![],
+            },
+            source: lock_pack.source.to_owned(),
+        }
+    }
 }
 // todo: Implement to/from Lockpack for Package?
+
+/// Similar to that used by Cargo.lock. Represents an exact package to download. // todo(Although
+/// todo the dependencies field isn't part of that/?)
+#[derive(Debug, Deserialize, Serialize)]
+pub struct LockPackage {
+    // We use Strings here instead of types like Version to make it easier to
+    // serialize and deserialize
+    // todo: We have an analog Package type; perhaps just figure out how to serialize that.
+    pub name: String,
+    //    version: Version,  todo
+    pub version: String,
+    pub source: Option<String>,
+    pub dependencies: Option<Vec<String>>,
+}
+
+/// Modelled after [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct Lock {
+    pub package: Option<Vec<LockPackage>>,
+    pub metadata: Option<String>, // ie checksums
+}
+
+impl Lock {
+    fn add_packages(&mut self, packages: &[Package]) {
+        // todo: Write tests for this.
+
+        for package in packages {
+            // Use the actual version installed, not the requirement!
+            // todo: reconsider your package etc structs
+            // todo: Perhaps impl to_lockpack etc from Package.
+            let lock_package = LockPackage {
+                name: package.name.to_owned(),
+                version: package.version.to_string(),
+                source: package.source.clone(),
+                dependencies: None,
+            };
+
+            match &mut self.package {
+                Some(p) => p.push(lock_package),
+                None => self.package = Some(vec![lock_package]),
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 pub mod tests {
@@ -998,8 +1086,6 @@ pub mod tests {
         let reqs3 = vec![VersionReq::new(Lte, 4, 9, 6)];
         let reqs4 = vec![VersionReq::new(Gte, 4, 9, 7)];
 
-        println!("YOU: {:?}", intersection(&reqs3, &reqs4));
-
         assert!(intersection(&reqs1, &reqs2).is_empty());
         assert!(intersection(&reqs3, &reqs4).is_empty());
     }
@@ -1012,10 +1098,10 @@ pub mod tests {
         let reqs3 = vec![VersionReq::new(Caret, 3, 0, 0)];
         let reqs4 = vec![VersionReq::new(Exact, 3, 3, 6)];
 
-        //        assert_eq!(
-        //            intersection(&reqs1, &reqs2),
-        //            vec![(Version::new(4, 9, 4), Version::new(999999, 0, 0))]
-        //        );
+        assert_eq!(
+            intersection(&reqs1, &reqs2),
+            vec![(Version::new(4, 9, 4), Version::new(MAX_VER, 0, 0))]
+        );
         assert_eq!(
             intersection(&reqs3, &reqs4),
             vec![(Version::new(3, 3, 6), Version::new(3, 3, 6))]

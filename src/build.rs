@@ -44,9 +44,10 @@ setuptools.setup(
     );
 
     fs::write("setup.py", data).expect("Problem writing dummy setup.py");
-    if let Err(_) = util::wait_for_dirs(&vec![env::current_dir()
+    if util::wait_for_dirs(&[env::current_dir()
         .expect("Problem finding current dir")
         .join("setup.py")])
+    .is_err()
     {
         util::abort("Problem waiting for setup.py to be created.")
     };

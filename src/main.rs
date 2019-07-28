@@ -1,6 +1,6 @@
-use crate::dep_types::{Dependency, DependencyError, Package, Version, VersionReq};
+use crate::dep_types::{Dependency, DependencyError, Lock, LockPackage, Package, Version};
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{
     cmp,
     collections::HashMap,
@@ -20,6 +20,8 @@ mod dep_resolution;
 mod dep_types;
 mod edit_files;
 mod util;
+
+type CleanedDeps = HashMap<String, (u32, Vec<(Version, Version)>)>;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Pypackage", about = "Python packaging and publishing")]
@@ -315,7 +317,7 @@ fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
         .expect(
             "Can't find the Python alias associated with that number. Is it in the list above?",
         );
-    (alias.to_string(), version.clone())
+    (alias.to_string(), *version)
 }
 
 #[derive(Debug)]
@@ -360,9 +362,8 @@ fn find_py_alias() -> Result<(String, Version), AliasError> {
     for alias in possible_aliases {
         // We use the --version command as a quick+effective way to determine if
         // this command is associated with Python.
-        match commands::find_py_version(alias) {
-            Some(v) => found_aliases.push((alias.to_string(), v)),
-            None => (),
+        if let Some(v) = commands::find_py_version(alias) {
+            found_aliases.push((alias.to_string(), v));
         }
     }
 
@@ -372,54 +373,6 @@ fn find_py_alias() -> Result<(String, Version), AliasError> {
         }),
         1 => Ok(found_aliases[0].clone()),
         _ => Ok(prompt_alias(&found_aliases)),
-    }
-}
-
-/// Similar to that used by Cargo.lock
-#[derive(Debug, Deserialize, Serialize)]
-struct LockPackage {
-    // We use Strings here instead of types like Version to make it easier to
-    // serialize and deserialize
-    // todo: We have an analog Package type; perhaps just figure out how to serialize that.
-    name: String,
-    version: Version,
-    source: Option<String>,
-    dependencies: Option<Vec<String>>,
-}
-
-//impl LockPackage {
-//    pub fn to_pip_string(&self) -> String {
-//        format!("{}={}", self.name, self.version)
-//    }
-//}
-
-/// Modelled after [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)
-#[derive(Debug, Default, Deserialize, Serialize)]
-struct Lock {
-    package: Option<Vec<LockPackage>>,
-    metadata: Option<String>, // ie checksums
-}
-
-impl Lock {
-    fn add_packages(&mut self, packages: &[Package]) {
-        // todo: Write tests for this.
-
-        for package in packages {
-            // Use the actual version installed, not the requirement!
-            // todo: reconsider your package etc structs
-            // todo: Perhaps impl to_lockpack etc from Package.
-            let lock_package = LockPackage {
-                name: package.name.to_owned(),
-                version: package.version,
-                source: package.source.clone(),
-                dependencies: None,
-            };
-
-            match &mut self.package {
-                Some(p) => p.push(lock_package),
-                None => self.package = Some(vec![lock_package]),
-            }
-        }
     }
 }
 
@@ -481,14 +434,14 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     // If the Python version's below 3.3, we must download and install the
     // `virtualenv` package, since `venv` isn't included.
     if py_ver_from_alias < Version::new_short(3, 3) {
-        if let Err(_) = commands::install_virtualenv_global(&alias) {
+        if commands::install_virtualenv_global(&alias).is_err() {
             util::abort("Problem installing the virtualenv package, required by Python versions older than 3.3)");
         }
-        if let Err(_) = commands::create_legacy_virtualenv(&alias, &lib_path, ".venv") {
+        if commands::create_legacy_virtualenv(&alias, &lib_path, ".venv").is_err() {
             util::abort("Problem creating virtual environment");
         }
     } else {
-        if let Err(_) = commands::create_venv(&alias, &lib_path, ".venv") {
+        if commands::create_venv(&alias, &lib_path, ".venv").is_err() {
             util::abort("Problem creating virtual environment");
         }
     }
@@ -498,7 +451,7 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     // todo: These won't work with Scripts ! - pass venv_path et cinstead
     let py_venv = lib_path.join("../.venv/bin/python");
     let pip_venv = lib_path.join("../.venv/bin/pip");
-    util::wait_for_dirs(&vec![py_venv, pip_venv]).unwrap();
+    util::wait_for_dirs(&[py_venv, pip_venv]).unwrap();
 
     py_ver_from_alias
 }
@@ -506,13 +459,11 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
 /// Remove duplicates. If the requirements are different but compatible, pick the more-restrictive
 /// one. If incompatible, return Err.
 /// todo: We'll have to think about how to resolve the errors, likely elsewhere.
-fn clean_flattened_deps(
-    deps: &Vec<(u32, Dependency)>,
-) -> Result<HashMap<String, (u32, Vec<(Version, Version)>)>, DependencyError> {
+fn clean_flattened_deps(deps: &[(u32, Dependency)]) -> Result<CleanedDeps, DependencyError> {
     // result is a (min, max) tuple
     let mut result: HashMap<String, (u32, Vec<(Version, Version)>)> = HashMap::new(); // todo remove annotation
 
-    for (level, dep) in deps.into_iter() {
+    for (level, dep) in deps.iter() {
         match result.get(&dep.name) {
             Some(reqs) => {
                 result.insert(
@@ -539,7 +490,7 @@ fn clean_flattened_deps(
 /// Extract dependencies from a nested hierarchy. Ultimately, we can only (practially) have
 /// one copy per dep. Record what level they came from.
 /// // todo: Is there a clever way to have multiple versions of a dep installed???
-fn flatten_deps(result: &mut Vec<(u32, Dependency)>, level: u32, deps: &Vec<Dependency>) {
+fn flatten_deps(result: &mut Vec<(u32, Dependency)>, level: u32, deps: &[Dependency]) {
     for dep in deps.iter() {
         // We don't need sub-deps in the result; they're extraneous info. We only really care about
         // the name and version requirements.
@@ -547,6 +498,151 @@ fn flatten_deps(result: &mut Vec<(u32, Dependency)>, level: u32, deps: &Vec<Depe
         result_dep.dependencies = vec![];
         result.push((level, result_dep));
         flatten_deps(result, level + 1, &dep.dependencies);
+    }
+}
+
+/// Find teh packages installed, by browsing the lib folder.
+fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
+    // todo: More functional?
+    let mut package_folders = vec![];
+    for entry in lib_path.read_dir().unwrap() {
+        if let Ok(entry) = entry {
+            if entry.file_type().unwrap().is_dir() {
+                package_folders.push(entry.file_name())
+            }
+        }
+    }
+
+    let mut result = vec![];
+    for folder in package_folders.iter() {
+        // todo: Doesn't include legacy egg-info format.
+        let re = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
+        let folder_name = folder.to_str().unwrap();
+        if let Some(caps) = re.captures(&folder_name) {
+            let name = caps.get(1).unwrap().as_str();
+            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
+            result.push((name.to_owned(), vers));
+        }
+    }
+    result
+}
+
+/// Uninstall and install packages to be in accordance with the lock.
+fn sync_packages_with_lock(bin_path: &PathBuf, lib_path: &PathBuf, lock_packs: &Vec<LockPackage>) {
+    let installed_packages = find_installed(lib_path);
+
+    // Uninstall packages no longer needed.
+    for (name_ins, vers_ins) in installed_packages.iter() {
+        if !lock_packs
+            .iter()
+            .map(|lp| (lp.name.to_owned().to_lowercase(), Version::from_str(&lp.version).unwrap()))
+            .collect::<Vec<(String, Version)>>()
+            .contains(&(name_ins.to_owned().to_lowercase(), *vers_ins))
+        {
+            println!("Uninstalling {}: {}", name_ins, vers_ins.to_string());
+            // Uninstall the package
+            // package folders appear to be lowercase, while metadata keeps the package title's casing.
+            if fs::remove_dir_all(lib_path.join(name_ins.to_lowercase())).is_err() {
+                println!("Problem uninstalling {} {}", name_ins, vers_ins.to_string())
+            }
+            if fs::remove_dir_all(lib_path.join(format!(
+                "{}-{}.dist-info",
+                name_ins,
+                vers_ins.to_string()
+            ))).is_err() {
+                println!("Problem uninstalling metadata for {}: {}", name_ins, vers_ins.to_string())
+            }
+        }
+    }
+
+    for lock_pack in lock_packs {
+        let p = Package::from_lock_pack(lock_pack);
+        if installed_packages
+            .iter()
+            // Set both names to lowercase to ensure case doesn't preclude a match.
+            .map(|(p_name, p_vers)| (p_name.clone().to_lowercase(), *p_vers))
+            .collect::<Vec<(String, Version)>>()
+            .contains(&(p.name.clone().to_lowercase(), p.version)) {
+            continue  // Already installed.
+        }
+
+        // path_to_info is the path to the metadatafolder, ie dist-info (or egg-info for older packages).
+        // todo: egg-info
+        // when making the path, use the LockPackage vice p, since its version's already serialized.
+        let path_to_dep = lib_path.join(&lock_pack.name);
+        let path_to_info = lib_path.join(format!(
+            "{}-{}.dist-info",
+            lock_pack.name, lock_pack.version
+        ));
+
+        if commands::install(&bin_path, &[p], false, false).is_err() {
+            abort("Problem installing packages");
+        }
+    }
+}
+
+/// Install/uninstall deps as required from the passed list, and re-write the lock file.
+fn sync_deps(
+    lock_filename: &str,
+    bin_path: &PathBuf,
+    lib_path: &PathBuf,
+    deps: &mut Vec<Dependency>,
+) {
+    println!("Resolving dependencies...");
+    // Recursively add sub-dependencies.
+    for mut dep in deps.iter_mut() {
+        dep_resolution::populate_subdeps(&mut dep, &[]);
+    }
+
+    // todo: Write tests for a few dep res cases.
+    //            println!("DEPS: {:#?}", &cfg.dependencies);
+    let mut flattened_deps = vec![];
+    flatten_deps(&mut flattened_deps, 0, &deps);
+
+    let cleaned = match clean_flattened_deps(&flattened_deps) {
+        Ok(c) => c,
+        Err(e) => {
+            abort(&e.details);
+            HashMap::new() // todo dummy to satisfy compiler
+        }
+    };
+
+    //            println!("Flattened: {:#?}", flattened_deps);
+    //            println!("Cleaned: {:#?}", cleaned);
+
+    let mut lock_packs = vec![];
+    // todo big DRY from dep_resolution
+    // todo: And you're making redundant warehouse calls to populate versions/find the best.. Fix this by caching.
+    for (name, (level, req)) in cleaned {
+        let versions = dep_resolution::get_warehouse_versions(&name).unwrap();
+        let compatible_versions = dep_resolution::filter_compatible2(&req, versions);
+
+        let newest_compat = compatible_versions.into_iter().max().unwrap();
+
+        lock_packs.push(LockPackage {
+            name,
+            version: newest_compat.to_string(),
+            source: None,       // todo
+            dependencies: None, // todo??
+        });
+    }
+
+    let lock = Lock {
+        metadata: None, // todo
+        package: Some(lock_packs),
+    };
+
+    // Now that the deps are resolved, flattened, cleaned, and only have one per package name, we can
+    // pick the best match of each, download, and lock.
+
+    if let Some(lock_packs) = &lock.package {
+        sync_packages_with_lock(bin_path, lib_path, &lock_packs)
+    } else {
+        println!("Found no dependencies in `pyproject.toml` to install")
+    }
+
+    if write_lock(lock_filename, &lock).is_err() {
+        abort("Problem writing lock file");
     }
 }
 
@@ -647,7 +743,7 @@ py_version = \"3.7\"",
     let lib_path = vers_path.join("lib");
     let (bin_path, lib_bin_path) = util::find_bin_path(&vers_path);
 
-    let mut lock = match read_lock(lock_filename) {
+    let lock = match read_lock(lock_filename) {
         Ok(l) => {
             println!("Found lockfile");
             l
@@ -660,7 +756,7 @@ py_version = \"3.7\"",
         // todo better handling, eg abort
         let name = args.get(0).expect("Missing first arg").clone();
         let args: Vec<String> = args.into_iter().skip(1).collect();
-        if let Err(_) = commands::run_bin(&bin_path, &lib_path, &name, &args) {
+        if commands::run_bin(&bin_path, &lib_path, &name, &args).is_err() {
             abort(&format!(
                 "Problem running the binary script {}. Is it installed? \
                  Try running `pypackage install {} -b`",
@@ -675,70 +771,31 @@ py_version = \"3.7\"",
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
-            let mut new_deps: Vec<Dependency> = packages
+            let mut added_deps: Vec<Dependency> = packages
                 .into_iter()
                 .map(|p| Dependency::from_str(&p, false).unwrap())
                 .collect();
 
             // todo: Compare to existing listed lock_packs and merge appropriately.
-            edit_files::add_dependencies(cfg_filename, &new_deps);
+            edit_files::add_dependencies(cfg_filename, &added_deps);
+            cfg.dependencies.append(&mut added_deps);
 
-            cfg.dependencies.append(&mut new_deps);
-
-            println!("Resolving dependencies...");
-            // Recursively add sub-dependencies.
-            for mut dep in cfg.dependencies.iter_mut() {
-                dep_resolution::populate_subdeps(&mut dep, &vec![]);
-            }
-
-            // todo: Write tests for a few dep res cases.
-            //            println!("DEPS: {:#?}", &cfg.dependencies);
-            let mut flattened_deps = vec![];
-            flatten_deps(&mut flattened_deps, 0, &cfg.dependencies);
-            let cleaned = match clean_flattened_deps(&flattened_deps) {
-                Ok(c) => c,
-                Err(e) => {
-                    abort(&e.details);
-                    HashMap::new() // todo dummy to satisfy compiler
-                }
-            };
-
-            println!("Flattened: {:#?}", flattened_deps);
-
-            // Now that deps are populated,
-
-            //                        let lock = Lock::from_dependencies(&cfg.dependencies);
-            let lock = Lock {
-                metadata: None,
-                package: None,
-            }; // todo temp so it'll compile while we work around things.
-
-            if let Some(lock_packs) = &lock.package {
-                for lock_pack in lock_packs {
-                    // todo: methods to convert between LockPack and Package, since they're analogous
-                    let p = Package {
-                        name: lock_pack.name.to_owned(),
-                        //                        version: Version::from_str(&lock_pack.version).unwrap(),
-                        version: lock_pack.version,
-                        deps: vec![],
-                        source: None,
-                    };
-                    if let Err(_) = commands::install(&bin_path, &vec![p], false, false) {
-                        abort("Problem installing packages");
-                    }
-                }
-            } else {
-                println!("Found no dependencies in `pyproject.toml` to install")
-            }
-
-            if let Err(_) = write_lock(lock_filename, &lock) {
-                abort("Problem writing lock file");
-            }
+            sync_deps(lock_filename, &bin_path, &lib_path, &mut cfg.dependencies);
         }
-        SubCommand::Uninstall { packages } => {}
+        SubCommand::Uninstall { packages } => {
+            // todo: DRY with ::Install
+            let removed_deps: Vec<Dependency> = packages
+                .into_iter()
+                .map(|p| Dependency::from_str(&p, false).unwrap())
+                .collect();
+
+            edit_files::remove_dependencies(cfg_filename, &removed_deps);
+
+            sync_deps(lock_filename, &bin_path, &lib_path, &mut cfg.dependencies)
+        }
 
         SubCommand::Python { args } => {
-            if let Err(_) = commands::run_python(&bin_path, &lib_path, &args) {
+            if commands::run_python(&bin_path, &lib_path, &args).is_err() {
                 abort("Problem running Python");
             }
         }

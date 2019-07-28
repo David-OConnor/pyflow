@@ -55,7 +55,7 @@ fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
     Ok(resp)
 }
 
-fn get_warehouse_versions(name: &str) -> Result<Vec<Version>, reqwest::Error> {
+pub fn get_warehouse_versions(name: &str) -> Result<Vec<Version>, reqwest::Error> {
     // todo return Result with custom fetch error type
     let data = get_warehouse_data(name)?;
 
@@ -118,7 +118,7 @@ fn get_dep_data(name: &str, version: &Version) -> Result<(Vec<String>), reqwest:
 }
 
 /// Filter versions compatible with a set of requirements.
-fn filter_compatible(reqs: &Vec<VersionReq>, versions: Vec<Version>) -> Vec<Version> {
+pub fn filter_compatible(reqs: &[VersionReq], versions: Vec<Version>) -> Vec<Version> {
     // todo: Test this
     versions
         .into_iter()
@@ -134,9 +134,26 @@ fn filter_compatible(reqs: &Vec<VersionReq>, versions: Vec<Version>) -> Vec<Vers
         .collect()
 }
 
+/// Alternative reqs format
+pub fn filter_compatible2(reqs: &[(Version, Version)], versions: Vec<Version>) -> Vec<Version> {
+    // todo: Test this
+    versions
+        .into_iter()
+        .filter(|v| {
+            let mut compat = true;
+            for req in reqs {
+                if *v > req.1 || *v < req.0 {
+                    compat = false;
+                }
+            }
+            compat
+        })
+        .collect()
+}
+
 /// Recursively add all dependencies. Pull avail versions from the PyPi warehouse, and sub-dep
 /// requirements from our cached DB
-pub fn populate_subdeps(dep: &mut Dependency, cache: &Vec<Dependency>) {
+pub fn populate_subdeps(dep: &mut Dependency, cache: &[Dependency]) {
     println!("Getting warehouse versions for {}", &dep.name);
     let versions = match get_warehouse_versions(&dep.name) {
         Ok(v) => v,

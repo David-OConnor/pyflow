@@ -51,7 +51,7 @@ pub fn find_bin_path(vers_path: &PathBuf) -> (PathBuf, PathBuf) {
 
 /// Wait for directories to be created; required between modifying the filesystem,
 /// and running code that depends on the new files.
-pub fn wait_for_dirs(dirs: &Vec<PathBuf>) -> Result<(), crate::AliasError> {
+pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::AliasError> {
     // todo: AliasError is a quick fix to avoid creating new error type.
     let timeout = 1000; // ms
     for _ in 0..timeout {
