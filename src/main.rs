@@ -107,6 +107,7 @@ pub struct Config {
     keywords: Vec<String>,
     homepage: Option<String>,
     repo_url: Option<String>,
+    package_url: Option<String>,
     readme_filename: Option<String>,
     license: Option<String>,
 }
@@ -268,6 +269,9 @@ py_version = "3.7"
 version = "0.1.0"
 description = ""
 author = ""
+
+pyackage_url = "https://test.pypi.org"
+# pyackage_url = "https://pypi.org"
 
 [tool.pypackage.dependencies]
 "##,
@@ -514,11 +518,19 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
     }
 
     let mut result = vec![];
+
     for folder in package_folders.iter() {
-        // todo: Doesn't include legacy egg-info format.
-        let re = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
         let folder_name = folder.to_str().unwrap();
+        let re = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
+        let re_egg = Regex::new(r"^(.*?)-(.*?)\.egg-info$").unwrap();
+
         if let Some(caps) = re.captures(&folder_name) {
+            let name = caps.get(1).unwrap().as_str();
+            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
+            result.push((name.to_owned(), vers));
+
+        // todo dry
+        } else if let Some(caps) = re_egg.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
             result.push((name.to_owned(), vers));
@@ -535,9 +547,17 @@ fn sync_packages_with_lock(bin_path: &PathBuf, lib_path: &PathBuf, lock_packs: &
     for (name_ins, vers_ins) in installed_packages.iter() {
         if !lock_packs
             .iter()
-            .map(|lp| (lp.name.to_owned().to_lowercase(), Version::from_str(&lp.version).unwrap()))
+            .map(|lp| {
+                (
+                    lp.name.to_owned().to_lowercase(),
+                    Version::from_str(&lp.version).unwrap(),
+                )
+            })
             .collect::<Vec<(String, Version)>>()
             .contains(&(name_ins.to_owned().to_lowercase(), *vers_ins))
+            || name_ins.to_lowercase() == "twine"
+            || name_ins.to_lowercase() == "setuptools"
+            || name_ins.to_lowercase() == "setuptools"
         {
             println!("Uninstalling {}: {}", name_ins, vers_ins.to_string());
             // Uninstall the package
@@ -545,12 +565,33 @@ fn sync_packages_with_lock(bin_path: &PathBuf, lib_path: &PathBuf, lock_packs: &
             if fs::remove_dir_all(lib_path.join(name_ins.to_lowercase())).is_err() {
                 println!("Problem uninstalling {} {}", name_ins, vers_ins.to_string())
             }
+
+            // Only report error if both dist-info and egg-info removal fail.
+            let mut meta_folder_removed = false;
             if fs::remove_dir_all(lib_path.join(format!(
                 "{}-{}.dist-info",
                 name_ins,
                 vers_ins.to_string()
-            ))).is_err() {
-                println!("Problem uninstalling metadata for {}: {}", name_ins, vers_ins.to_string())
+            )))
+            .is_ok()
+            {
+                meta_folder_removed = true;
+            }
+            if fs::remove_dir_all(lib_path.join(format!(
+                "{}-{}.egg-info",
+                name_ins,
+                vers_ins.to_string()
+            )))
+            .is_ok()
+            {
+                meta_folder_removed = true;
+            }
+            if !meta_folder_removed {
+                println!(
+                    "Problem uninstalling metadata for {}: {}",
+                    name_ins,
+                    vers_ins.to_string()
+                )
             }
         }
     }
@@ -562,18 +603,19 @@ fn sync_packages_with_lock(bin_path: &PathBuf, lib_path: &PathBuf, lock_packs: &
             // Set both names to lowercase to ensure case doesn't preclude a match.
             .map(|(p_name, p_vers)| (p_name.clone().to_lowercase(), *p_vers))
             .collect::<Vec<(String, Version)>>()
-            .contains(&(p.name.clone().to_lowercase(), p.version)) {
-            continue  // Already installed.
+            .contains(&(p.name.clone().to_lowercase(), p.version))
+        {
+            continue; // Already installed.
         }
 
         // path_to_info is the path to the metadatafolder, ie dist-info (or egg-info for older packages).
         // todo: egg-info
         // when making the path, use the LockPackage vice p, since its version's already serialized.
-        let path_to_dep = lib_path.join(&lock_pack.name);
-        let path_to_info = lib_path.join(format!(
-            "{}-{}.dist-info",
-            lock_pack.name, lock_pack.version
-        ));
+        //        let path_to_dep = lib_path.join(&lock_pack.name);
+        //        let path_to_info = lib_path.join(format!(
+        //            "{}-{}.dist-info",
+        //            lock_pack.name, lock_pack.version
+        //        ));
 
         if commands::install(&bin_path, &[p], false, false).is_err() {
             abort("Problem installing packages");

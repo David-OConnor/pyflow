@@ -119,7 +119,6 @@ pub(crate) fn install(
         Command::new("./python")
             .current_dir(bin_path)
             .args(args)
-            //            .arg("--upgrade")
             // todo: This may not be viable for older packages with poorly-specified deps.
             .arg("--no-deps")
             .status()?;

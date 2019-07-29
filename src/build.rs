@@ -4,7 +4,7 @@ use std::{env, fs, path::PathBuf, process::Command};
 // https://packaging.python.org/tutorials/packaging-projects/
 
 /// Creates a temporary file which imitates setup.py
-fn create_dummy_setup(cfg: &crate::Config) {
+fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
     let classifiers = ""; // todo temp
                           // todo add to this
     let version = match cfg.version {
@@ -43,7 +43,7 @@ setuptools.setup(
         classifiers,
     );
 
-    fs::write("setup.py", data).expect("Problem writing dummy setup.py");
+    fs::write(filename, data).expect("Problem writing dummy setup.py");
     if util::wait_for_dirs(&[env::current_dir()
         .expect("Problem finding current dir")
         .join("setup.py")])
@@ -53,10 +53,10 @@ setuptools.setup(
     };
 }
 
-fn cleanup_dummy_setup(filename: &str) {}
-
 pub(crate) fn build(bin_path: &PathBuf, lib_path: &PathBuf, cfg: &crate::Config) {
     // todo: Check if they exist; only install if they don't.
+    let dummy_setup_fname = "setup_temp_pypackage.py";
+
     println!("Installing build tools...");
     Command::new("./python")
         .current_dir(bin_path)
@@ -64,39 +64,41 @@ pub(crate) fn build(bin_path: &PathBuf, lib_path: &PathBuf, cfg: &crate::Config)
             "-m",
             "pip",
             "install",
-            "--upgrade",
+            //            "--upgrade",
             "setuptools",
             "twine",
             "wheel",
         ])
         .status()
-        .expect("Problem building");
+        .expect("Problem installing build tools");
 
-    create_dummy_setup(cfg);
+    create_dummy_setup(cfg, dummy_setup_filename);
 
     util::set_pythonpath(lib_path);
     println!("Building the package...");
-    //    Command::new("./python")
-    //        .current_dir(bin_path)
-    Command::new("./__pypackages__/3.7/venv/bin/python")
-        .args(&["setup.py", "sdist", "bdist_wheel"])
+    Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "python"))
+        .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
         .status()
         .expect("Problem building");
     println!("Build complete.");
+
+    fs::remove_file(dummy_setup_fname);
 }
 
 pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
-    let repo_url = cfg.repo_url.clone();
+    let repo_url = cfg.package_url.clone().unwrap_or("https://test.pypi.org".to_string());
 
-    Command::new("./python")
-        .current_dir(bin_path)
+    println!("Uploading to {}", repo_url);
+    Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "twine"))
         .args(&[
-            "-m",
-            "twine_upload",
+//            "-m",
+//            "twine upload",
+            "upload",
             &format!(
-                "--{}",
-                repo_url.expect("Can't find repo url when publishing")
+                "--repository-url {}/",
+                repo_url
             ),
+            "dist/*",
         ])
         .status()
         .expect("Problem publishing");
