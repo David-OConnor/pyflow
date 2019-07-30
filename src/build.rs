@@ -72,7 +72,7 @@ pub(crate) fn build(bin_path: &PathBuf, lib_path: &PathBuf, cfg: &crate::Config)
         .status()
         .expect("Problem installing build tools");
 
-    create_dummy_setup(cfg, dummy_setup_filename);
+    create_dummy_setup(cfg, dummy_setup_fname);
 
     util::set_pythonpath(lib_path);
     println!("Building the package...");
@@ -82,22 +82,24 @@ pub(crate) fn build(bin_path: &PathBuf, lib_path: &PathBuf, cfg: &crate::Config)
         .expect("Problem building");
     println!("Build complete.");
 
-    fs::remove_file(dummy_setup_fname);
+    if fs::remove_file(dummy_setup_fname).is_err() {
+        println!("Problem removing temporary setup file while building ")
+    };
 }
 
 pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
-    let repo_url = cfg.package_url.clone().unwrap_or("https://test.pypi.org".to_string());
+    let repo_url = cfg
+        .package_url
+        .clone()
+        .unwrap_or("https://test.pypi.org".to_string());
 
     println!("Uploading to {}", repo_url);
     Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "twine"))
         .args(&[
-//            "-m",
-//            "twine upload",
+            //            "-m",
+            //            "twine upload",
             "upload",
-            &format!(
-                "--repository-url {}/",
-                repo_url
-            ),
+            &format!("--repository-url {}/", repo_url),
             "dist/*",
         ])
         .status()

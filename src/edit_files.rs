@@ -1,24 +1,102 @@
-use crate::{dep_types::Dependency, Config};
+use crate::{
+    dep_types::{Dependency, VersionReq},
+    util, Config,
+};
 use regex::Regex;
 use serde::Deserialize;
-use std::fs;
 use std::io::{BufRead, BufReader};
+use std::str::FromStr;
+use std::{fs, io};
 
-/// Write dependencies to pyproject.toml
-pub fn add_dependencies(filename: &str, dependencies: &[Dependency]) {
-    if !dependencies.is_empty() {
-        println!("Adding dependencies via the CLI isn't yet supported");
+/// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
+/// we should update the version.
+pub fn add_dependencies(filename: &str, added: &[Dependency]) {
+    if !added.is_empty() {
+        println!("Adding dependencies via the CLI is not yet supported.");
+        return;
     }
+
     //        let data = fs::read_to_string("pyproject.toml")
     //            .expect("Unable to read pyproject.toml while attempting to add a dependency");
     let file = fs::File::open(filename).expect("cannot open pyproject.toml");
 
     let mut in_dep = false;
-    let sect_re = Regex::new(r"\[.*\]").unwrap();
+    let sect_re = Regex::new(r"\[.*\]").unwrap(); // todo: Will this catch double-bracket sections?
 
     // todo: use this? https://doc.rust-lang.org/std/macro.writeln.html
 
+    // todo: Handle Vec<VersionReq> vs VersionReq.
+    let mut already_installed = vec![];
+
     let mut result = String::new();
+
+    for line in BufReader::new(&file).lines() {
+        //    for line in data.lines() {
+        if let Ok(l) = line {
+            result.push_str(&l);
+            result.push_str("\n");
+            // todo replace this with something that clips off
+            // todo post-# part of strings; not just ignores ones starting with #
+            if l.starts_with('#') {
+                continue;
+            }
+
+            if &l == "[tool.pypackage.dependencies]" {
+                in_dep = true;
+                continue;
+            } else if sect_re.is_match(&l) {
+                in_dep = false;
+                continue;
+            }
+
+            if in_dep {
+                if let Ok(req) = Dependency::from_str(&l, false) {
+                    already_installed.push(req);
+                } else {
+                    util::abort(&format!(
+                        "Problem reading dependency {} in `pyproject.toml`",
+                        &l
+                    ));
+                }
+            }
+        }
+    }
+
+    // Determine how to handle duplicates
+    for added in added {
+        for installed in already_installed.iter() {
+            if installed.name.to_lowercase() == added.name.to_lowercase() {
+                // todo ugly output due to Vec<VersionReq>
+                println!(
+                    "{} is already included in `pyproject.toml`. Do you want to update its \
+                     version requirement from {:?} to {:?}?",
+                    added.name, installed.version_reqs, added.version_reqs
+                );
+
+                let mut input = String::new();
+                io::stdin()
+                    .read_line(&mut input)
+                    .expect("Unable to read user input in overwrite prompt");
+
+                let input = input
+                    .chars()
+                    .next()
+                    .expect("Problem reading input")
+                    .to_string()
+                    .to_lowercase();
+
+                if input == "yes" || input == "y" {
+                    println!("Not yet implemented");
+                } else {
+
+                }
+                println!("Not yet implemented");
+            }
+        }
+    }
+
+    // todo: DRY: Clean this up.
+    // Now that we've determined which dependencies are already installed, add new ones.
     for line in BufReader::new(file).lines() {
         //    for line in data.lines() {
         if let Ok(l) = line {
@@ -39,7 +117,8 @@ pub fn add_dependencies(filename: &str, dependencies: &[Dependency]) {
             }
 
             if in_dep {
-                //                result.push_str()
+                // There should be no more parsing errors here, since this is our second pass.
+                let req = VersionReq::from_str(&l).unwrap();
             }
         }
     }

@@ -1,1 +1,23 @@
-package = []
+[[package]]
+name = "eventlet"
+version = "0.25.0"
+
+[[package]]
+name = "gevent"
+version = "1.5.0"
+
+[[package]]
+name = "gunicorn"
+version = "19.9.0"
+
+[[package]]
+name = "tornado"
+version = "6.0.3"
+
+[[package]]
+name = "saturn"
+version = "0.3.5"
+
+[[package]]
+name = "pytz"
+version = "2019.1.0"

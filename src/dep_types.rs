@@ -43,18 +43,18 @@ pub struct Version {
     pub minor: u32,
     pub patch: u32,
 } //impl Serialize for Version {
-  //      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  //    where
-  //        S: Serializer,
-  //    {
-  //        // 3 is the number of fields in the struct.
-  //        let mut state = serializer.serialize_struct("Color", 3)?;
-  //        state.serialize_field("r", &self.r)?;
-  //        state.serialize_field("g", &self.g)?;
-  //        state.serialize_field("b", &self.b)?;
-  //        state.end()
-  //    }
-  //}
+//      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//    where
+//        S: Serializer,
+//    {
+//        // 3 is the number of fields in the struct.
+//        let mut state = serializer.serialize_struct("Color", 3)?;
+//        state.serialize_field("r", &self.r)?;
+//        state.serialize_field("g", &self.g)?;
+//        state.serialize_field("b", &self.b)?;
+//        state.end()
+//    }
+//}
 
 //impl Serialize for Version {
 //      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -93,32 +93,37 @@ impl FromStr for Version {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?(.*)$").unwrap();
-        let caps = re
-            .captures(s)
-            .unwrap_or_else(|| panic!("Problem parsing version: {}", s));
+        // We could try to handle this as a single regex, but splitting it up may be easier here.
 
-        let major = caps.get(1).unwrap().as_str().parse::<u32>()?;
-        let minor = match caps.get(2) {
-            Some(p) => p.as_str().parse::<u32>()?,
-            None => 0,
-        };
+        let re_maj_only = Regex::new(r"^(\d{1,9})\.?$").unwrap();
+        let re_maj_minor = Regex::new(r"^(\d{1,9})\.(\d{1,9})\.?$").unwrap();
+        let re_maj_minor_patch = Regex::new(r"^(\d{1,9})\.(\d{1,9})\.(\d{1,9})\.?$").unwrap();
 
-        let patch = match caps.get(3) {
-            Some(p) => p.as_str().parse::<u32>()?,
-            None => 0,
-        };
-        // todo: Ignore trailing part for now.
-        //        match caps.get(4) {
-        //            Some(p) => p.as_str().parse::<u32>()?,
-        //            None => (),
-        //        };
+        if let Some(caps) = re_maj_only.captures(s) {
+            return Ok(Self {
+                major: caps.get(1).unwrap().as_str().parse::<u32>()?,
+                minor: 0,
+                patch: 0,
+            });
+        }
 
-        Ok(Self {
-            major,
-            minor,
-            patch,
-        })
+        if let Some(caps) = re_maj_minor.captures(s) {
+            return Ok(Self {
+                major: caps.get(1).unwrap().as_str().parse::<u32>()?,
+                minor: caps.get(2).unwrap().as_str().parse::<u32>()?,
+                patch: 0,
+            });
+        }
+
+        if let Some(caps) = re_maj_minor_patch.captures(s) {
+            return Ok(Self {
+                major: caps.get(1).unwrap().as_str().parse::<u32>()?,
+                minor: caps.get(2).unwrap().as_str().parse::<u32>()?,
+                patch: caps.get(3).unwrap().as_str().parse::<u32>()?,
+            });
+        }
+
+        Err(DependencyError::new(&format!("Problem parsing version: {}", s)))
     }
 }
 
@@ -214,7 +219,7 @@ impl FromStr for VersionReq {
         let re = Regex::new(
             r"^(\^|~|==|<=|>=|<|>|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?$",
         )
-        .unwrap();
+            .unwrap();
 
         let caps = match re.captures(s) {
             Some(c) => c,
@@ -427,7 +432,7 @@ pub fn to_ranges(reqs: &[VersionReq]) -> Vec<(Version, Version)> {
 }
 
 /// todo: Find a more elegant way to handle this; diff is second arg's type.
-pub fn intersection_temp(
+pub fn intersection_convert_one(
     reqs1: &[VersionReq],
     ranges2: &[(Version, Version)],
 ) -> Vec<(Version, Version)> {
@@ -439,23 +444,14 @@ pub fn intersection_temp(
         }
     }
 
-    let mut result = vec![];
-    for rng1 in ranges1 {
-        for rng2 in ranges2 {
-            // 0 is min, 1 is max.
-            if rng2.1 >= rng1.0 && rng1.0 <= rng2.1 {
-                result.push((rng1.0, rng2.1))
-            } else if rng1.1 >= rng2.0 && rng2.0 <= rng1.1 {
-                result.push((rng2.0, rng1.1))
-            }
-        }
-    }
-
-    result
+    intersection(&ranges1, ranges2)
 }
 
 /// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
-pub fn intersection(reqs1: &[VersionReq], reqs2: &[VersionReq]) -> Vec<(Version, Version)> {
+pub fn intersection_convert_both(
+    reqs1: &[VersionReq],
+    reqs2: &[VersionReq],
+) -> Vec<(Version, Version)> {
     let mut ranges1 = vec![];
     for req in reqs1 {
         for range in req.compatible_range() {
@@ -470,14 +466,22 @@ pub fn intersection(reqs1: &[VersionReq], reqs2: &[VersionReq]) -> Vec<(Version,
         }
     }
 
+    intersection(&ranges1, &ranges2)
+}
+
+/// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
+pub fn intersection(
+    ranges1: &[(Version, Version)],
+    ranges2: &[(Version, Version)],
+) -> Vec<(Version, Version)> {
+    // Note that within each set of ranges, we use OR constraints. Between the two, we use AND.
     let mut result = vec![];
-    for rng1 in &ranges1 {
-        for rng2 in &ranges2 {
+    // Each range imposes an additonal constraint.
+    for rng1 in ranges1 {
+        for rng2 in ranges2 {
             // 0 is min, 1 is max.
-            if rng2.1 >= rng1.0 && rng2.0 <= rng1.1 {
-                result.push((cmp::min(rng2.0, rng1.1), cmp::max(rng1.0, rng2.1)));
-            } else if rng1.1 >= rng2.0 && rng1.0 <= rng2.1 {
-                result.push((cmp::min(rng1.0, rng2.1), cmp::max(rng2.0, rng1.1)))
+            if rng2.1 >= rng1.0 && rng1.1 >= rng2.0 || rng1.1 >= rng2.0 && rng2.1 >= rng1.0 {
+                result.push((cmp::max(rng2.0, rng1.0), cmp::min(rng1.1, rng2.1)));
             }
         }
     }
@@ -820,6 +824,15 @@ pub mod tests {
                 details: "Problem parsing version: 3-7".to_owned()
             })
         );
+
+        // for now at least, we don't support alpha, beta in version, as how to handle them
+        // isn't well-defined.
+        assert_eq!(
+            Version::from_str("1.2a2"),
+            Err(DependencyError {
+                details: "Problem parsing version: 1.2a2".to_owned()
+            })
+        );
     }
 
     #[test]
@@ -1030,7 +1043,7 @@ pub mod tests {
             dependencies: vec![],
         };
 
-        assert_eq!(a.to_pip_string(), "package==3.3.6".to_string());
+        assert_eq!(a._to_pip_string(), "package==3.3.6".to_string());
         assert_eq!(a.to_cfg_string(), r#"package = "3.3.6""#.to_string());
     }
 
@@ -1057,7 +1070,7 @@ pub mod tests {
             dependencies: vec![],
         };
 
-        assert_eq!(a.to_pip_string(), "'package!=2.7.4,>=3.7'".to_string());
+        assert_eq!(a._to_pip_string(), "'package!=2.7.4,>=3.7'".to_string());
         assert_eq!(
             a.to_cfg_string(),
             r#"package = "!=2.7.4, >=3.7""#.to_string()
@@ -1086,8 +1099,8 @@ pub mod tests {
         let reqs3 = vec![VersionReq::new(Lte, 4, 9, 6)];
         let reqs4 = vec![VersionReq::new(Gte, 4, 9, 7)];
 
-        assert!(intersection(&reqs1, &reqs2).is_empty());
-        assert!(intersection(&reqs3, &reqs4).is_empty());
+        assert!(intersection_convert_both(&reqs1, &reqs2).is_empty());
+        assert!(intersection_convert_both(&reqs3, &reqs4).is_empty());
     }
 
     #[test]
@@ -1099,12 +1112,26 @@ pub mod tests {
         let reqs4 = vec![VersionReq::new(Exact, 3, 3, 6)];
 
         assert_eq!(
-            intersection(&reqs1, &reqs2),
+            intersection_convert_both(&reqs1, &reqs2),
             vec![(Version::new(4, 9, 4), Version::new(MAX_VER, 0, 0))]
         );
         assert_eq!(
-            intersection(&reqs3, &reqs4),
+            intersection_convert_both(&reqs3, &reqs4),
             vec![(Version::new(3, 3, 6), Version::new(3, 3, 6))]
         );
     }
+
+    //    #[test]
+    //    fn intersection_contained() {
+    //        let reqs1 = vec![VersionReq::new(Gte, 4, 9, 2)];
+    //        let reqs2 = vec![
+    //            VersionReq::new(Gte, 4, 9, 4),
+    //            VersionReq::new(Lt, 5, 5, 5),
+    //        ];
+    //
+    //        assert_eq!(
+    //            intersection_convert_both(&reqs1, &reqs2),
+    //            vec![(Version::new(4, 9, 4), Version::new(5, 5, 5))]
+    //        );
+    //    }
 }

@@ -112,6 +112,7 @@ pub(crate) fn install(
         if !bin {
             args.push("--target");
             args.push("../../lib");
+            //            args.push("--quiet"); // Put this back unless debugging.
             //            args.push("--install-option=\"--install-scripts=../../lib/bin2\"");
         }
 

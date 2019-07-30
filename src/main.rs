@@ -474,7 +474,7 @@ fn clean_flattened_deps(deps: &[(u32, Dependency)]) -> Result<CleanedDeps, Depen
                     dep.name.to_owned(),
                     (
                         cmp::max(*level, reqs.0),
-                        dep_types::intersection_temp(&dep.version_reqs, &reqs.1),
+                        dep_types::intersection_convert_one(&dep.version_reqs, &reqs.1),
                     ),
                 );
             }
@@ -540,11 +540,14 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
 }
 
 /// Uninstall and install packages to be in accordance with the lock.
-fn sync_packages_with_lock(bin_path: &PathBuf, lib_path: &PathBuf, lock_packs: &Vec<LockPackage>) {
-    let installed_packages = find_installed(lib_path);
-
+fn sync_packages_with_lock(
+    bin_path: &PathBuf,
+    lib_path: &PathBuf,
+    lock_packs: &Vec<LockPackage>,
+    installed: &Vec<(String, Version)>,
+) {
     // Uninstall packages no longer needed.
-    for (name_ins, vers_ins) in installed_packages.iter() {
+    for (name_ins, vers_ins) in installed.iter() {
         if !lock_packs
             .iter()
             .map(|lp| {
@@ -598,7 +601,7 @@ fn sync_packages_with_lock(bin_path: &PathBuf, lib_path: &PathBuf, lock_packs: &
 
     for lock_pack in lock_packs {
         let p = Package::from_lock_pack(lock_pack);
-        if installed_packages
+        if installed
             .iter()
             // Set both names to lowercase to ensure case doesn't preclude a match.
             .map(|(p_name, p_vers)| (p_name.clone().to_lowercase(), *p_vers))
@@ -629,6 +632,7 @@ fn sync_deps(
     bin_path: &PathBuf,
     lib_path: &PathBuf,
     deps: &mut Vec<Dependency>,
+    installed: &Vec<(String, Version)>,
 ) {
     println!("Resolving dependencies...");
     // Recursively add sub-dependencies.
@@ -678,7 +682,7 @@ fn sync_deps(
     // pick the best match of each, download, and lock.
 
     if let Some(lock_packs) = &lock.package {
-        sync_packages_with_lock(bin_path, lib_path, &lock_packs)
+        sync_packages_with_lock(bin_path, lib_path, &lock_packs, installed)
     } else {
         println!("Found no dependencies in `pyproject.toml` to install")
     }
@@ -818,11 +822,19 @@ py_version = \"3.7\"",
                 .map(|p| Dependency::from_str(&p, false).unwrap())
                 .collect();
 
+            let installed = find_installed(&lib_path);
+
             // todo: Compare to existing listed lock_packs and merge appropriately.
             edit_files::add_dependencies(cfg_filename, &added_deps);
             cfg.dependencies.append(&mut added_deps);
 
-            sync_deps(lock_filename, &bin_path, &lib_path, &mut cfg.dependencies);
+            sync_deps(
+                lock_filename,
+                &bin_path,
+                &lib_path,
+                &mut cfg.dependencies,
+                &installed,
+            );
         }
         SubCommand::Uninstall { packages } => {
             // todo: DRY with ::Install
@@ -833,7 +845,14 @@ py_version = \"3.7\"",
 
             edit_files::remove_dependencies(cfg_filename, &removed_deps);
 
-            sync_deps(lock_filename, &bin_path, &lib_path, &mut cfg.dependencies)
+            let installed = find_installed(&lib_path);
+            sync_deps(
+                lock_filename,
+                &bin_path,
+                &lib_path,
+                &mut cfg.dependencies,
+                &installed,
+            )
         }
 
         SubCommand::Python { args } => {
