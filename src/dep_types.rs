@@ -43,18 +43,18 @@ pub struct Version {
     pub minor: u32,
     pub patch: u32,
 } //impl Serialize for Version {
-//      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//    where
-//        S: Serializer,
-//    {
-//        // 3 is the number of fields in the struct.
-//        let mut state = serializer.serialize_struct("Color", 3)?;
-//        state.serialize_field("r", &self.r)?;
-//        state.serialize_field("g", &self.g)?;
-//        state.serialize_field("b", &self.b)?;
-//        state.end()
-//    }
-//}
+  //      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  //    where
+  //        S: Serializer,
+  //    {
+  //        // 3 is the number of fields in the struct.
+  //        let mut state = serializer.serialize_struct("Color", 3)?;
+  //        state.serialize_field("r", &self.r)?;
+  //        state.serialize_field("g", &self.g)?;
+  //        state.serialize_field("b", &self.b)?;
+  //        state.end()
+  //    }
+  //}
 
 //impl Serialize for Version {
 //      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -123,7 +123,10 @@ impl FromStr for Version {
             });
         }
 
-        Err(DependencyError::new(&format!("Problem parsing version: {}", s)))
+        Err(DependencyError::new(&format!(
+            "Problem parsing version: {}",
+            s
+        )))
     }
 }
 
@@ -207,19 +210,18 @@ pub struct VersionReq {
     pub major: u32,
     pub minor: Option<u32>,
     pub patch: Option<u32>,
-    // todo
-    //    pub extras: Vec<String>
+    pub suffix: Option<String>, // Used for storing extra info like beta, rc, dev etc.
 }
 
 impl FromStr for VersionReq {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // todo: You could delegate part of this out, or at least share the regex with Version::to_string
+        // todo: You could delegate part of this out, or at least share the regex with Version::from_string
         let re = Regex::new(
-            r"^(\^|~|==|<=|>=|<|>|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?\.?$",
+            r"^(\^|~|==|<=|>=|<|>|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?(\.?.*)$",
         )
-            .unwrap();
+        .unwrap();
 
         let caps = match re.captures(s) {
             Some(c) => c,
@@ -247,11 +249,24 @@ impl FromStr for VersionReq {
             None => None,
         };
 
+        let suffix = match caps.get(5) {
+            Some(s) => {
+                let s_str = s.as_str();
+                if s_str.is_empty() {
+                    None
+                } else {
+                    Some(s_str.to_owned())
+                }
+            }
+            None => None,
+        };
+
         Ok(Self {
             major,
             minor,
             patch,
             type_,
+            suffix,
         })
     }
 }
@@ -264,6 +279,7 @@ impl VersionReq {
             major,
             minor: Some(minor),
             patch: Some(patch),
+            suffix: None,
         }
     }
 
@@ -295,14 +311,19 @@ impl VersionReq {
             }
         }
 
+        let suffix_text = if let Some(suffix) = self.suffix.clone() {
+            suffix
+        } else {
+            "".to_owned()
+        };
         if let Some(mi) = self.minor {
             if let Some(p) = self.patch {
-                format!("{}{}.{}.{}", type_str, self.major, mi, p)
+                format!("{}{}.{}.{}{}", type_str, self.major, mi, p, suffix_text)
             } else {
-                format!("{}{}.{}", type_str, self.major, mi)
+                format!("{}{}.{}{}", type_str, self.major, mi, suffix_text)
             }
         } else {
-            format!("{}{}", type_str, self.major)
+            format!("{}{}{}", type_str, self.major, suffix_text)
         }
     }
 
@@ -496,46 +517,16 @@ pub struct Dependency {
     pub name: String,
     pub version_reqs: Vec<VersionReq>,
     pub dependencies: Vec<Dependency>,
-    // todo: Is this a good place to store hash?
+
+    pub version: Option<Version>,
+    pub filename: String,
+    pub hash: String,
+    pub file_url: String,
 }
 
 /// [Ref](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
 impl Dependency {
-    // todo: Re-implement this.
-    //    /// Find the version from a selection that's most compatible with this
-    //    /// dependency's requirements.
-    //    pub fn best_match(&self, versions: &[Version]) -> Option<Version> {
-    //        // If no version specified, use the highest available.
-    //        if self.version.is_none() {
-    //            // This logic has to do with derefing the interior of Option.
-    //            return match versions.into_iter().max() {
-    //                Some(v) => Some(v.clone()),
-    //                None => None,
-    //            };
-    //        }
-    //
-    //        match self.version_type {
-    //            // For an exact version type, there's only one correct answer.
-    //            ReqType::Exact => {
-    //                let result = versions
-    //                    .into_iter()
-    //                    .filter(|v| *v == &self.version.unwrap())
-    //                    .collect::<Vec<&Version>>();
-    //
-    //                let b = result.get(0);
-    //
-    //                match b {
-    //                    Some(v) => Some(*v.clone()),
-    //                    None => None,
-    //                }
-    //            }
-    //            // todo implement later.
-    //            ReqType::Tilde => None,
-    //            ReqType::Caret => None,
-    //        }
-    //    }
-
-    /// eg `saturn>=0.3.1`, or `'stevedore>=1.3.0,<1.4.0'` (Note single quotes
+     /// eg `saturn>=0.3.1`, or `'stevedore>=1.3.0,<1.4.0'` (Note single quotes
     /// when there are multiple requirements specified.
     pub fn _to_pip_string(&self) -> String {
         // Note that ^= may not be valid in Pip, but ~= is.
@@ -656,7 +647,7 @@ impl Dependency {
     }
 }
 
-/// An exact package to install. Typed analog of LockPack.
+/// An exact package to install. Meant to be stored in a list vice as a tree node. A bit of a Typed analog of LockPack.
 #[derive(Clone, Debug)]
 pub struct Package {
     pub name: String,
@@ -738,28 +729,13 @@ impl Lock {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use ReqType::{Caret, Exact, Gt, Gte, Lt, Lte, Ne, Tilde};
+    use ReqType::{Caret, Exact, Gt, Gte, Lte, Ne, Tilde};
 
     #[test]
     fn compat_caret() {
-        let req1 = VersionReq {
-            major: 1,
-            minor: Some(2),
-            patch: Some(3),
-            type_: Caret,
-        };
-        let req2 = VersionReq {
-            major: 0,
-            minor: Some(2),
-            patch: Some(3),
-            type_: Caret,
-        };
-        let req3 = VersionReq {
-            major: 0,
-            minor: Some(0),
-            patch: Some(3),
-            type_: Caret,
-        };
+        let req1 = VersionReq::new(Caret, 1, 2, 3);
+        let req2 = VersionReq::new(Caret, 0, 2, 3);
+        let req3 = VersionReq::new(Caret, 0, 0, 3);
 
         assert!(req1.is_compatible(&Version::new(1, 9, 9)));
         assert!(!req1.is_compatible(&Version::new(2, 0, 0)));
@@ -771,24 +747,9 @@ pub mod tests {
 
     #[test]
     fn compat_gt_eq() {
-        let req1 = VersionReq {
-            major: 1,
-            minor: Some(2),
-            patch: Some(3),
-            type_: Gte,
-        };
-        let req2 = VersionReq {
-            major: 0,
-            minor: Some(2),
-            patch: Some(3),
-            type_: Gt,
-        };
-        let req3 = VersionReq {
-            major: 0,
-            minor: Some(0),
-            patch: Some(3),
-            type_: Exact,
-        };
+        let req1 = VersionReq::new(Gte, 1, 2, 3);
+        let req2 = VersionReq::new(Gt, 0, 2, 3);
+        let req3 = VersionReq::new(Exact, 0, 0, 3);
 
         assert!(req1.is_compatible(&Version::new(1, 2, 3)));
         assert!(req1.is_compatible(&Version::new_short(4, 2)));
@@ -836,6 +797,39 @@ pub mod tests {
     }
 
     #[test]
+    fn version_req_with_suffix() {
+        let a = "!=2.3b3";
+        let b = "^1.3.32rc1";
+        let c = "^1.3.32.dep1";
+
+        let req_a = VersionReq {
+            major: 2,
+            minor: Some(3),
+            patch: None,
+            type_: Ne,
+            suffix: Some("b3".to_string()),
+        };
+        let req_b = VersionReq {
+            major: 1,
+            minor: Some(3),
+            patch: Some(32),
+            type_: Caret,
+            suffix: Some("rc1".to_string()),
+        };
+        let req_c = VersionReq {
+            major: 1,
+            minor: Some(3),
+            patch: Some(32),
+            type_: Caret,
+            suffix: Some(".dep1".to_string()),
+        };
+
+        assert_eq!(VersionReq::from_str(a).unwrap(), req_a);
+        assert_eq!(VersionReq::from_str(b).unwrap(), req_b);
+        assert_eq!(VersionReq::from_str(c).unwrap(), req_c);
+    }
+
+    #[test]
     fn version_req_tostring() {
         let a = "!=2.3";
         let b = "^1.3.32";
@@ -843,43 +837,32 @@ pub mod tests {
         let d = "==5";
         let e = "<=11.2.3";
         let f = ">=0.0.1";
+        let f = ">=0.0.1";
 
         let req_a = VersionReq {
             major: 2,
             minor: Some(3),
             patch: None,
             type_: Ne,
+            suffix: None,
         };
-        let req_b = VersionReq {
-            major: 1,
-            minor: Some(3),
-            patch: Some(32),
-            type_: Caret,
-        };
+        let req_b = VersionReq::new(Caret, 1, 3, 32);
         let req_c = VersionReq {
             major: 2,
             minor: Some(3),
             patch: None,
             type_: Tilde,
+            suffix: None,
         };
         let req_d = VersionReq {
             major: 5,
             minor: None,
             patch: None,
             type_: Exact,
+            suffix: None,
         };
-        let req_e = VersionReq {
-            major: 11,
-            minor: Some(2),
-            patch: Some(3),
-            type_: Lte,
-        };
-        let req_f = VersionReq {
-            major: 0,
-            minor: Some(0),
-            patch: Some(1),
-            type_: Gte,
-        };
+        let req_e = VersionReq::new(Lte, 11, 2, 3);
+        let req_f = VersionReq::new(Gte, 0, 0, 1);
 
         assert_eq!(VersionReq::from_str(a).unwrap(), req_a);
         assert_eq!(VersionReq::from_str(b).unwrap(), req_b);
@@ -916,6 +899,7 @@ pub mod tests {
                 major: 0,
                 minor: Some(14),
                 patch: None,
+                suffix: None,
             }],
             dependencies: vec![],
         };
@@ -934,6 +918,7 @@ pub mod tests {
                     minor: Some(1),
                     patch: Some(4),
                     type_: Exact,
+                    suffix: None,
                 },],
                 dependencies: vec![],
             }
@@ -952,6 +937,7 @@ pub mod tests {
                     minor: Some(7),
                     patch: Some(18),
                     type_: Caret,
+                    suffix: None,
                 }],
                 dependencies: vec![],
             }
@@ -970,6 +956,7 @@ pub mod tests {
                     minor: Some(7),
                     patch: None,
                     type_: Tilde,
+                    suffix: None,
                 }],
                 dependencies: vec![],
             }
@@ -988,6 +975,7 @@ pub mod tests {
                     minor: Some(22),
                     patch: None,
                     type_: Gte,
+                    suffix: None,
                 },],
 
                 dependencies: vec![],
@@ -1003,23 +991,14 @@ pub mod tests {
             Dependency {
                 name: "urllib3".into(),
                 version_reqs: vec![
-                    VersionReq {
-                        major: 1,
-                        minor: Some(25),
-                        patch: Some(0),
-                        type_: Ne,
-                    },
-                    VersionReq {
-                        major: 1,
-                        minor: Some(25),
-                        patch: Some(1),
-                        type_: Ne,
-                    },
+                    VersionReq::new(Ne, 1, 25, 0),
+                    VersionReq::new(Ne, 1, 25, 1),
                     VersionReq {
                         major: 1,
                         minor: Some(26),
                         patch: None,
                         type_: Lte,
+                        suffix: None,
                     }
                 ],
 
@@ -1034,12 +1013,7 @@ pub mod tests {
 
         let a = Dependency {
             name: "package".to_string(),
-            version_reqs: vec![VersionReq {
-                major: 3,
-                minor: Some(3),
-                patch: Some(6),
-                type_: Exact,
-            }],
+            version_reqs: vec![VersionReq::new(Exact, 3, 3, 6)],
             dependencies: vec![],
         };
 
@@ -1054,17 +1028,13 @@ pub mod tests {
         let a = Dependency {
             name: "package".to_string(),
             version_reqs: vec![
-                VersionReq {
-                    major: 2,
-                    minor: Some(7),
-                    patch: Some(4),
-                    type_: Ne,
-                },
+                VersionReq::new(Ne, 2, 7, 4),
                 VersionReq {
                     major: 3,
                     minor: Some(7),
                     patch: None,
                     type_: Gte,
+                    suffix: None,
                 },
             ],
             dependencies: vec![],

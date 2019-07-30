@@ -7,12 +7,13 @@ use serde::Deserialize;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 use std::{fs, io};
+use termion::{color, style};
 
 /// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
 /// we should update the version.
 pub fn add_dependencies(filename: &str, added: &[Dependency]) {
     if !added.is_empty() {
-        println!("Adding dependencies via the CLI is not yet supported.");
+        println!("{}Adding dependencies via the CLI is not yet supported. Please specify dependencies in `pyproject.toml`.{}", color::Fg(color::Yellow), style::Reset);
         return;
     }
 

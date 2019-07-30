@@ -26,17 +26,17 @@ struct WarehouseRelease {
     dependencies: Option<Vec<String>>,
 }
 
-//#[derive(Debug, Deserialize)]
-//struct WarehouseUrl {
-//    // Could use digests field, which has sha256 as well as md5.
-//    // md5 is faster, and should be good enough.
-//    has_sig: bool,
-//    md5_digest: String,
-//    packagetype: String,
-//    python_version: String,
-//    requires_python: Option<String>,
-//    url: String,
-//}
+#[derive(Debug, Deserialize)]
+struct WarehouseUrl {
+    // Could use digests field, which has sha256 as well as md5.
+    // md5 is faster, and should be good enough.
+    has_sig: bool,
+    md5_digest: String,
+    packagetype: String,
+    python_version: String,
+    requires_python: Option<String>,
+    url: String,
+}
 
 /// Only deserialize the info we need to resolve dependencies etc.
 #[derive(Debug, Deserialize)]
@@ -44,7 +44,7 @@ struct WarehouseData {
     info: WarehouseInfo,
     //    releases: Vec<WarehouseRelease>,
     releases: HashMap<String, Vec<WarehouseRelease>>,
-    //    urls: Vec<WarehouseUrl>,
+        urls: Vec<WarehouseUrl>,
 }
 
 /// Fetch data about a package from the Pypi Warehouse.
@@ -61,12 +61,10 @@ pub fn get_warehouse_versions(name: &str) -> Result<Vec<Version>, reqwest::Error
 
     let mut result = vec![];
     for ver in data.releases.keys() {
-        match Version::from_str(ver) {
-            Ok(v) => result.push(v),
-            Err(e) => println!(
-                "Problem parsing version: `{} {}` while making dependency graph",
-                name, ver
-            ),
+        if let Ok(v) = Version::from_str(ver) {
+            // If not Ok, probably due to having letters etc in the name - we choose to ignore
+            // those. Possibly to indicate pre-releases/alpha/beta/release-candidate etc.
+            result.push(v);
         }
     }
     Ok(result)
@@ -154,18 +152,18 @@ pub fn filter_compatible2(reqs: &[(Version, Version)], versions: Vec<Version>) -
 /// Recursively add all dependencies. Pull avail versions from the PyPi warehouse, and sub-dep
 /// requirements from our cached DB
 pub fn populate_subdeps(dep: &mut Dependency, cache: &[Dependency]) {
-    println!("Getting warehouse versions for {}", &dep.name);
+    println!("Getting available versions for {}", &dep.name);
     let versions = match get_warehouse_versions(&dep.name) {
         Ok(v) => v,
         Err(_) => {
-            println!("Can't find fdependencies for {}", dep.name);
-            return;
+            util::abort(&format!("Can't find dependencies for {}", dep.name));
         }
     };
+
     let compatible_versions = filter_compatible(&dep.version_reqs, versions);
     if compatible_versions.is_empty() {
         util::abort(&format!(
-            "Can't find a compatible version for {:?}",
+            "Can't find a compatible version for {}",
             dep.name
         ));
     }
@@ -176,6 +174,7 @@ pub fn populate_subdeps(dep: &mut Dependency, cache: &[Dependency]) {
     // todo: This logic is flawed, but should work in many cases.
     // Let's start with the best match, and see if the tree resolves without conflicts using it.
     let newest_compat = compatible_versions.iter().max().unwrap();
+
     match get_warehouse_deps(&dep.name, newest_compat) {
         Ok(mut d) => {
             dep.dependencies = d.clone();
@@ -236,6 +235,7 @@ pub mod tests {
             major: ma,
             minor: Some(mi),
             patch: None,
+            suffix: None,
         };
         use crate::dep_types::ReqType::{Gte, Lt, Ne};
 

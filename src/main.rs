@@ -12,8 +12,9 @@ use std::{
     str::FromStr,
 };
 use structopt::StructOpt;
-//use textio;
+use termion::{color, style};
 use crate::util::abort;
+
 mod build;
 mod commands;
 mod dep_resolution;
@@ -96,6 +97,7 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
 // todo: Auto-desr some of these!
 pub struct Config {
     py_version: Option<Version>,
+//    dependencies: Vec<Dependency>,
     dependencies: Vec<Dependency>,
     name: Option<String>,
     version: Option<Version>,
@@ -539,6 +541,21 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
     result
 }
 
+fn download_and_install_package(url: &str, filename: &str, hash: &str, lib_path: &PathBuf, bin: bool) -> Result<(), reqwest::Error> {
+    // todo: Md5 isn't secure! sha256 instead?
+    let mut resp = reqwest::get(url)?;
+    let mut out = fs::File::create(lib_path.join(filename))
+        .expect("Failed to save downloaded package file");
+
+    io::copy(&mut resp, &mut out).expect("failed to copy content");
+
+    // todo: Impl hash.
+
+
+
+    Ok(())
+}
+
 /// Uninstall and install packages to be in accordance with the lock.
 fn sync_packages_with_lock(
     bin_path: &PathBuf,
@@ -566,7 +583,7 @@ fn sync_packages_with_lock(
             // Uninstall the package
             // package folders appear to be lowercase, while metadata keeps the package title's casing.
             if fs::remove_dir_all(lib_path.join(name_ins.to_lowercase())).is_err() {
-                println!("Problem uninstalling {} {}", name_ins, vers_ins.to_string())
+                println!("{}Problem uninstalling {} {}{}", color::Fg(color::Orange), name_ins, vers_ins.to_string(), style::Reset)
             }
 
             // Only report error if both dist-info and egg-info removal fail.
@@ -591,9 +608,11 @@ fn sync_packages_with_lock(
             }
             if !meta_folder_removed {
                 println!(
-                    "Problem uninstalling metadata for {}: {}",
+                    "{}Problem uninstalling metadata for {}: {}{}",
+                    color::Fg(color::Orange)
                     name_ins,
-                    vers_ins.to_string()
+                    vers_ins.to_string(),
+                    style::Reset,
                 )
             }
         }
@@ -620,9 +639,10 @@ fn sync_packages_with_lock(
         //            lock_pack.name, lock_pack.version
         //        ));
 
-        if commands::install(&bin_path, &[p], false, false).is_err() {
-            abort("Problem installing packages");
-        }
+//        if commands::install(&bin_path, &[p], false, false).is_err() {
+//            abort("Problem installing packages");
+//        }
+        download_and_install_package(url, filename, hash_, lib_path, false)
     }
 }
 
@@ -641,11 +661,10 @@ fn sync_deps(
     }
 
     // todo: Write tests for a few dep res cases.
-    //            println!("DEPS: {:#?}", &cfg.dependencies);
     let mut flattened_deps = vec![];
     flatten_deps(&mut flattened_deps, 0, &deps);
 
-    let cleaned = match clean_flattened_deps(&flattened_deps) {
+    let mut cleaned = match clean_flattened_deps(&flattened_deps) {
         Ok(c) => c,
         Err(e) => {
             abort(&e.details);
@@ -657,6 +676,7 @@ fn sync_deps(
     //            println!("Cleaned: {:#?}", cleaned);
 
     let mut lock_packs = vec![];
+
     // todo big DRY from dep_resolution
     // todo: And you're making redundant warehouse calls to populate versions/find the best.. Fix this by caching.
     for (name, (level, req)) in cleaned {
@@ -672,6 +692,8 @@ fn sync_deps(
             dependencies: None, // todo??
         });
     }
+
+    // todo: Sort by level (deeper gets installed first) before discarding level info.
 
     let lock = Lock {
         metadata: None, // todo
