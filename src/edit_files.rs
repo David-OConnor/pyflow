@@ -1,5 +1,5 @@
 use crate::{
-    dep_types::{Dependency, VersionReq},
+    dep_types::{self, DepNode, Req, Version, VersionReq},
     util, Config,
 };
 use regex::Regex;
@@ -11,7 +11,7 @@ use termion::{color, style};
 
 /// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
 /// we should update the version.
-pub fn add_dependencies(filename: &str, added: &[Dependency]) {
+pub fn add_dependencies(filename: &str, added: &[Req]) {
     if !added.is_empty() {
         println!("{}Adding dependencies via the CLI is not yet supported. Please specify dependencies in `pyproject.toml`.{}", color::Fg(color::Yellow), style::Reset);
         return;
@@ -27,7 +27,7 @@ pub fn add_dependencies(filename: &str, added: &[Dependency]) {
     // todo: use this? https://doc.rust-lang.org/std/macro.writeln.html
 
     // todo: Handle Vec<VersionReq> vs VersionReq.
-    let mut already_installed = vec![];
+    let mut already_installed: Vec<Req> = vec![];
 
     let mut result = String::new();
 
@@ -51,7 +51,7 @@ pub fn add_dependencies(filename: &str, added: &[Dependency]) {
             }
 
             if in_dep {
-                if let Ok(req) = Dependency::from_str(&l, false) {
+                if let Ok(req) = Req::from_str(&l, false) {
                     already_installed.push(req);
                 } else {
                     util::abort(&format!(
@@ -71,7 +71,7 @@ pub fn add_dependencies(filename: &str, added: &[Dependency]) {
                 println!(
                     "{} is already included in `pyproject.toml`. Do you want to update its \
                      version requirement from {:?} to {:?}?",
-                    added.name, installed.version_reqs, added.version_reqs
+                    added.name, installed.reqs, added.reqs
                 );
 
                 let mut input = String::new();
@@ -136,10 +136,10 @@ pub fn parse_req_dot_text(cfg: &mut Config) {
 
     for line in BufReader::new(file).lines() {
         if let Ok(l) = line {
-            match Dependency::from_pip_str(&l) {
+            match Req::from_pip_str(&l) {
                 Some(d) => {
                     cfg.dependencies.push(d.clone());
-                    println!("Added {} from requirements.txt", d.to_cfg_string())
+                    println!("Added {} from requirements.txt", d.name)
                 }
                 None => println!("Problem parsing {} from requirements.txt", &l),
             };
@@ -262,7 +262,7 @@ pub fn parse_poetry(cfg: &mut Config) {}
 pub fn update_pyproject(cfg: &Config) {}
 
 /// Remove dependencies from pyproject.toml
-pub fn remove_dependencies(filename: &str, dependencies: &[Dependency]) {
+pub fn remove_dependencies(filename: &str, dependencies: &[Req]) {
     let data = fs::read_to_string("pyproject.toml")
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 

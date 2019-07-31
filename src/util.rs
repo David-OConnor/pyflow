@@ -1,7 +1,7 @@
 use crate::dep_types::Version;
 use std::str::FromStr;
 use std::{env, path::PathBuf, process, thread, time};
-use termion::{color, style}
+use termion::{color, style};
 
 /// A convenience function
 pub fn abort(message: &str) {

@@ -1,8 +1,8 @@
-use crate::dep_types::{Dependency, DependencyError, Lock, LockPackage, Package, Version};
+use crate::dep_types::{DepNode, Lock, LockPackage, Package, Req, Version, VersionReq};
+use crate::util::abort;
 use regex::Regex;
 use serde::Deserialize;
 use std::{
-    cmp,
     collections::HashMap,
     env,
     error::Error,
@@ -13,7 +13,6 @@ use std::{
 };
 use structopt::StructOpt;
 use termion::{color, style};
-use crate::util::abort;
 
 mod build;
 mod commands;
@@ -22,7 +21,7 @@ mod dep_types;
 mod edit_files;
 mod util;
 
-type CleanedDeps = HashMap<String, (u32, Vec<(Version, Version)>)>;
+//type CleanedDeps = HashMap<String, (u32, Vec<(Version, Version)>)>;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Pypackage", about = "Python packaging and publishing")]
@@ -97,15 +96,13 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
 // todo: Auto-desr some of these!
 pub struct Config {
     py_version: Option<Version>,
-//    dependencies: Vec<Dependency>,
-    dependencies: Vec<Dependency>,
+    dependencies: Vec<Req>, // name, requirements.
     name: Option<String>,
     version: Option<Version>,
     author: Option<String>,
     author_email: Option<String>,
     description: Option<String>,
-    // https://pypi.org/classifiers/
-    classifiers: Vec<String>,
+    classifiers: Vec<String>, // https://pypi.org/classifiers/
     keywords: Vec<String>,
     homepage: Option<String>,
     repo_url: Option<String>,
@@ -185,9 +182,7 @@ impl Config {
                     }
                 } else if in_dep {
                     if !l.is_empty() {
-                        result
-                            .dependencies
-                            .push(Dependency::from_str(&l, false).unwrap());
+                        result.dependencies.push(Req::from_str(&l, false).unwrap());
                     }
                 }
             }
@@ -465,45 +460,45 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
 /// Remove duplicates. If the requirements are different but compatible, pick the more-restrictive
 /// one. If incompatible, return Err.
 /// todo: We'll have to think about how to resolve the errors, likely elsewhere.
-fn clean_flattened_deps(deps: &[(u32, Dependency)]) -> Result<CleanedDeps, DependencyError> {
-    // result is a (min, max) tuple
-    let mut result: HashMap<String, (u32, Vec<(Version, Version)>)> = HashMap::new(); // todo remove annotation
-
-    for (level, dep) in deps.iter() {
-        match result.get(&dep.name) {
-            Some(reqs) => {
-                result.insert(
-                    dep.name.to_owned(),
-                    (
-                        cmp::max(*level, reqs.0),
-                        dep_types::intersection_convert_one(&dep.version_reqs, &reqs.1),
-                    ),
-                );
-            }
-            None => {
-                // Not already present; without any checks.
-                result.insert(
-                    dep.name.to_owned(),
-                    (*level, dep_types::to_ranges(&dep.version_reqs)),
-                );
-            }
-        }
-    }
-
-    Ok(result)
-}
+//fn clean_flattened_deps(deps: &[(u32, DepNode)]) -> Result<CleanedDeps, DependencyError> {
+//    // result is a (min, max) tuple
+//    let mut result: HashMap<String, (u32, Vec<(Version, Version)>)> = HashMap::new(); // todo remove annotation
+//
+//    for (level, dep) in deps.iter() {
+//        match result.get(&dep.name) {
+//            Some(reqs) => {
+//                result.insert(
+//                    dep.name.to_owned(),
+//                    (
+//                        cmp::max(*level, reqs.0),
+//                        dep_types::intersection_convert_one(&dep.version_reqs, &reqs.1),
+//                    ),
+//                );
+//            }
+//            None => {
+//                // Not already present; without any checks.
+//                result.insert(
+//                    dep.name.to_owned(),
+//                    (*level, dep_types::to_ranges(&dep.version_reqs.reqs)),
+//                );
+//            }
+//        }
+//    }
+//
+//    Ok(result)
+//}
 
 /// Extract dependencies from a nested hierarchy. Ultimately, we can only (practially) have
 /// one copy per dep. Record what level they came from.
 /// // todo: Is there a clever way to have multiple versions of a dep installed???
-fn flatten_deps(result: &mut Vec<(u32, Dependency)>, level: u32, deps: &[Dependency]) {
-    for dep in deps.iter() {
+fn flatten_deps(result: &mut Vec<(u32, DepNode)>, level: u32, tree: &DepNode) {
+    for node in tree.dependencies.iter() {
         // We don't need sub-deps in the result; they're extraneous info. We only really care about
         // the name and version requirements.
-        let mut result_dep = dep.clone();
+        let mut result_dep = node.clone();
         result_dep.dependencies = vec![];
         result.push((level, result_dep));
-        flatten_deps(result, level + 1, &dep.dependencies);
+        flatten_deps(result, level + 1, &node);
     }
 }
 
@@ -541,17 +536,21 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
     result
 }
 
-fn download_and_install_package(url: &str, filename: &str, hash: &str, lib_path: &PathBuf, bin: bool) -> Result<(), reqwest::Error> {
+fn download_and_install_package(
+    url: &str,
+    filename: &str,
+    hash: &str,
+    lib_path: &PathBuf,
+    bin: bool,
+) -> Result<(), reqwest::Error> {
     // todo: Md5 isn't secure! sha256 instead?
     let mut resp = reqwest::get(url)?;
-    let mut out = fs::File::create(lib_path.join(filename))
-        .expect("Failed to save downloaded package file");
+    let mut out =
+        fs::File::create(lib_path.join(filename)).expect("Failed to save downloaded package file");
 
     io::copy(&mut resp, &mut out).expect("failed to copy content");
 
     // todo: Impl hash.
-
-
 
     Ok(())
 }
@@ -583,7 +582,13 @@ fn sync_packages_with_lock(
             // Uninstall the package
             // package folders appear to be lowercase, while metadata keeps the package title's casing.
             if fs::remove_dir_all(lib_path.join(name_ins.to_lowercase())).is_err() {
-                println!("{}Problem uninstalling {} {}{}", color::Fg(color::Orange), name_ins, vers_ins.to_string(), style::Reset)
+                println!(
+                    "{}Problem uninstalling {} {}{}",
+                    color::Fg(color::LightRed),
+                    name_ins,
+                    vers_ins.to_string(),
+                    style::Reset
+                )
             }
 
             // Only report error if both dist-info and egg-info removal fail.
@@ -609,7 +614,7 @@ fn sync_packages_with_lock(
             if !meta_folder_removed {
                 println!(
                     "{}Problem uninstalling metadata for {}: {}{}",
-                    color::Fg(color::Orange)
+                    color::Fg(color::LightRed),
                     name_ins,
                     vers_ins.to_string(),
                     style::Reset,
@@ -639,10 +644,10 @@ fn sync_packages_with_lock(
         //            lock_pack.name, lock_pack.version
         //        ));
 
-//        if commands::install(&bin_path, &[p], false, false).is_err() {
-//            abort("Problem installing packages");
-//        }
-        download_and_install_package(url, filename, hash_, lib_path, false)
+        //        if commands::install(&bin_path, &[p], false, false).is_err() {
+        //            abort("Problem installing packages");
+        //        }
+        download_and_install_package(p.file_url, p.filename, p.hash_, lib_path, false);
     }
 }
 
@@ -651,26 +656,35 @@ fn sync_deps(
     lock_filename: &str,
     bin_path: &PathBuf,
     lib_path: &PathBuf,
-    deps: &mut Vec<Dependency>,
+    deps: &mut Vec<Req>,
     installed: &Vec<(String, Version)>,
 ) {
     println!("Resolving dependencies...");
     // Recursively add sub-dependencies.
-    for mut dep in deps.iter_mut() {
-        dep_resolution::populate_subdeps(&mut dep, &[]);
-    }
+    let mut tree = DepNode {
+        // dummy parent
+        name: String::from("root"),
+        version: Version::new(0, 0, 0),
+        reqs: vec![],
+        dependencies: vec![],
+        filename: String::new(),
+        hash: String::new(),
+        file_url: String::new(),
+    };
+
+    //    dep_resolution::create_dep_tree(reqs, &mut tree,&[]);
 
     // todo: Write tests for a few dep res cases.
-    let mut flattened_deps = vec![];
-    flatten_deps(&mut flattened_deps, 0, &deps);
+    //    let mut flattened_deps = vec![];
+    //    flatten_deps(&mut flattened_deps, 0, &tree);
 
-    let mut cleaned = match clean_flattened_deps(&flattened_deps) {
-        Ok(c) => c,
-        Err(e) => {
-            abort(&e.details);
-            HashMap::new() // todo dummy to satisfy compiler
-        }
-    };
+    //    let mut cleaned = match clean_flattened_deps(&flattened_deps) {
+    //        Ok(c) => c,
+    //        Err(e) => {
+    //            abort(&e.details);
+    //            HashMap::new() // todo dummy to satisfy compiler
+    //        }
+    //    };
 
     //            println!("Flattened: {:#?}", flattened_deps);
     //            println!("Cleaned: {:#?}", cleaned);
@@ -679,19 +693,19 @@ fn sync_deps(
 
     // todo big DRY from dep_resolution
     // todo: And you're making redundant warehouse calls to populate versions/find the best.. Fix this by caching.
-    for (name, (level, req)) in cleaned {
-        let versions = dep_resolution::get_warehouse_versions(&name).unwrap();
-        let compatible_versions = dep_resolution::filter_compatible2(&req, versions);
-
-        let newest_compat = compatible_versions.into_iter().max().unwrap();
-
-        lock_packs.push(LockPackage {
-            name,
-            version: newest_compat.to_string(),
-            source: None,       // todo
-            dependencies: None, // todo??
-        });
-    }
+    //    for (name, (level, req)) in cleaned {
+    //        let versions = dep_resolution::get_warehouse_versions(&name).unwrap();
+    //        let compatible_versions = dep_resolution::filter_compatible2(&req, versions);
+    //
+    //        let newest_compat = compatible_versions.into_iter().max().unwrap();
+    //
+    //        lock_packs.push(LockPackage {
+    //            name: name.to_owned(),
+    //            version: newest_compat.to_string(),
+    //            source: None,       // todo
+    //            dependencies: None, // todo??
+    //        });
+    //    }
 
     // todo: Sort by level (deeper gets installed first) before discarding level info.
 
@@ -839,30 +853,26 @@ py_version = \"3.7\"",
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
-            let mut added_deps: Vec<Dependency> = packages
+            let mut added_deps: Vec<Req> = packages
                 .into_iter()
-                .map(|p| Dependency::from_str(&p, false).unwrap())
+                .map(|p| Req::from_str(&p, false).unwrap())
                 .collect();
 
             let installed = find_installed(&lib_path);
 
             // todo: Compare to existing listed lock_packs and merge appropriately.
             edit_files::add_dependencies(cfg_filename, &added_deps);
-            cfg.dependencies.append(&mut added_deps);
 
-            sync_deps(
-                lock_filename,
-                &bin_path,
-                &lib_path,
-                &mut cfg.dependencies,
-                &installed,
-            );
+            let mut deps = cfg.dependencies.clone();
+            deps.append(&mut added_deps);
+
+            sync_deps(lock_filename, &bin_path, &lib_path, &mut deps, &installed);
         }
         SubCommand::Uninstall { packages } => {
             // todo: DRY with ::Install
-            let removed_deps: Vec<Dependency> = packages
+            let removed_deps: Vec<Req> = packages
                 .into_iter()
-                .map(|p| Dependency::from_str(&p, false).unwrap())
+                .map(|p| Req::from_str(&p, false).unwrap())
                 .collect();
 
             edit_files::remove_dependencies(cfg_filename, &removed_deps);

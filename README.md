@@ -143,6 +143,8 @@ database of dependencies, vice downloading and checking each package.
 - Multiple versions of a dependency can be installed, allowing resolution
 of conflicting sub-dependencies.
 
+- Doesn't use `Pip`. Only uses a virtualenv for Python binaries/scripts.
+
 - By not requiring Python to install or run, it remains intallation-agnostic.
 This is especially important on Linux, where there may be several versions
 of Python installed, with different versions and access levels. This avoids

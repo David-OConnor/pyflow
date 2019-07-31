@@ -510,67 +510,17 @@ pub fn intersection(
     result
 }
 
-/// Includes information for describing a `Python` dependency. Can be used in a dependency
-/// graph. Uses a set of requirements, compared to `Package`, which is tied to an exact version.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct Dependency {
+pub struct Req {
     pub name: String,
-    pub version_reqs: Vec<VersionReq>,
-    pub dependencies: Vec<Dependency>,
-
-    pub version: Option<Version>,
-    pub filename: String,
-    pub hash: String,
-    pub file_url: String,
+    pub reqs: Vec<VersionReq>,
 }
 
-/// [Ref](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
-impl Dependency {
-     /// eg `saturn>=0.3.1`, or `'stevedore>=1.3.0,<1.4.0'` (Note single quotes
-    /// when there are multiple requirements specified.
-    pub fn _to_pip_string(&self) -> String {
-        // Note that ^= may not be valid in Pip, but ~= is.
-        match self.version_reqs.len() {
-            0 => self.name.to_string(),
-            1 => format!(
-                "{}{}",
-                self.name,
-                self.version_reqs[0].to_string(false, true),
-            ),
-            _ => {
-                let req_str = self
-                    .version_reqs
-                    .iter()
-                    .map(|r| r.to_string(false, true))
-                    .collect::<Vec<String>>()
-                    .join(",");
-
-                // Note the single quotes here, as required by pip when specifying
-                // multiple requirements
-                format!("'{}{}'", self.name, req_str)
-            }
-        }
+impl Req {
+    pub fn new(name: String, reqs: Vec<VersionReq>) -> Self {
+        Self { name, reqs }
     }
 
-    /// eg `saturn = "^0.3.1"` or `matplotlib = "3.1.1"`
-    pub fn to_cfg_string(&self) -> String {
-        match self.version_reqs.len() {
-            0 => self.name.to_owned(),
-            _ => format!(
-                r#"{} = "{}""#,
-                self.name,
-                self.version_reqs
-                    .iter()
-                    .map(|r| r.to_string(true, false))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-        }
-    }
-}
-
-/// This would be used when parsing from something like `pyproject.toml`
-impl Dependency {
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
         let re = if pypi_fmt {
             // ie saturn (>=0.3.4)
@@ -584,11 +534,7 @@ impl Dependency {
             let reqs_m = caps.get(2).unwrap();
             let reqs = VersionReq::from_str_multiple(reqs_m.as_str())?;
 
-            return Ok(Self {
-                name,
-                version_reqs: reqs,
-                dependencies: vec![],
-            });
+            return Ok(Self::new(name, reqs));
         };
 
         // Check if no version is specified.
@@ -599,11 +545,7 @@ impl Dependency {
         };
 
         if let Some(m) = novers_re.captures(s) {
-            return Ok(Self {
-                name: m.get(1).unwrap().as_str().to_string(),
-                version_reqs: vec![],
-                dependencies: vec![],
-            });
+            return Ok(Self::new(m.get(1).unwrap().as_str().to_string(), vec![]));
         }
 
         Err(DependencyError::new(&format!(
@@ -620,11 +562,7 @@ impl Dependency {
             .captures(s)
             .is_some()
         {
-            return Some(Self {
-                name: s.to_string(),
-                version_reqs: vec![],
-                dependencies: vec![],
-            });
+            return Some(Self::new(s.to_string(), vec![]));
         }
 
         let re = Regex::new(r"^(.*?)((?:\^|~|==|<=|>=|<|>|!=).*)$").unwrap();
@@ -639,21 +577,76 @@ impl Dependency {
         let req = VersionReq::from_str(caps.get(2).unwrap().as_str())
             .expect("Problem parsing requirement");
 
-        Some(Self {
-            name,
-            version_reqs: vec![req],
-            dependencies: vec![],
-        })
+        Some(Self::new(name, vec![req]))
+    }
+
+    /// eg `saturn = "^0.3.1"` or `matplotlib = "3.1.1"`
+    pub fn to_cfg_string(&self) -> String {
+        match self.reqs.len() {
+            0 => self.name.to_owned(),
+            _ => format!(
+                r#"{} = "{}""#,
+                self.name,
+                self.reqs
+                    .iter()
+                    .map(|r| format!("{}", r.to_string(true, false)))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+        }
     }
 }
+
+/// Includes information for describing a `Python` dependency. Can be used in a dependency
+/// graph. Uses a set of requirements, compared to `Package`, which is tied to an exact version.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct DepNode {
+    pub name: String,
+    pub version: Version,
+    pub filename: String,
+    pub hash: String,
+    pub file_url: String,
+    pub reqs: Vec<Req>,
+    pub dependencies: Vec<DepNode>,
+}
+
+/// [Ref](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
+//impl DepNode {
+/// eg `saturn>=0.3.1`, or `'stevedore>=1.3.0,<1.4.0'` (Note single quotes
+/// when there are multiple requirements specified.
+//    pub fn _to_pip_string(&self) -> String {
+//        // Note that ^= may not be valid in Pip, but ~= is.
+//        match self.version_reqs.len() {
+//            0 => self.name.to_string(),
+//            1 => format!(
+//                "{}{}",
+//                self.name,
+//                self.version_reqs[0].to_string(false, true),
+//            ),
+//            _ => {
+//                let req_str = self
+//                    .version_reqs
+//                    .iter()
+//                    .map(|r| format!("{} = \"{}\"", r.0, r.1.to_string(false, true)))
+//                    .collect::<Vec<String>>()
+//                    .join(",");
+//
+//                // Note the single quotes here, as required by pip when specifying
+//                // multiple requirements
+//                format!("'{}{}'", self.name, req_str)
+//            }
+//        }
+//    }
+//}
 
 /// An exact package to install. Meant to be stored in a list vice as a tree node. A bit of a Typed analog of LockPack.
 #[derive(Clone, Debug)]
 pub struct Package {
     pub name: String,
     pub version: Version,
-    pub deps: Vec<Dependency>,
+    pub deps: Vec<Req>,
     pub source: Option<String>,
+    // todo Hash, name etc here?
 }
 
 impl Package {
@@ -670,9 +663,7 @@ impl Package {
             deps: match &lock_pack.dependencies {
                 Some(deps) => deps
                     .iter()
-                    .map(|d| {
-                        Dependency::from_str(d, false).expect("Problem converting Dep from string")
-                    })
+                    .map(|d| Req::from_str(d, false).expect("Problem converting Dep from string"))
                     .collect(),
                 None => vec![],
             },
@@ -874,123 +865,112 @@ pub mod tests {
 
     #[test]
     fn parse_dep_novers() {
-        let actual1 = Dependency::from_str("saturn", false).unwrap();
-        let actual2 = Dependency::from_str("saturn", true).unwrap();
-        let actual3 = Dependency::from_str("saturn; extra == 'bcrypt", true).unwrap();
-        let expected = Dependency {
-            name: "saturn".into(),
-            version_reqs: vec![],
-            dependencies: vec![],
-        };
+        let actual1 = Req::from_str("saturn", false).unwrap();
+        let actual2 = Req::from_str("saturn", true).unwrap();
+        let actual3 = Req::from_str("saturn; extra == 'bcrypt", true).unwrap();
+        let expected = Req::new("saturn".into(), vec![]);
         assert_eq!(actual1, expected);
         assert_eq!(actual2, expected);
         assert_eq!(actual3, expected);
     }
 
     #[test]
-    fn parse_dep_pypi_semicolon() {
+    fn parse_req_pypi_semicolon() {
         // tod: Make this handle extras.
-        let actual =
-            Dependency::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", true).unwrap();
-        let expected = Dependency {
-            name: "pyOpenSSL".into(),
-            version_reqs: vec![VersionReq {
+        let actual = Req::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", true).unwrap();
+        let expected = Req::new(
+            "pyOpenSSL".into(),
+            vec![VersionReq {
                 type_: Gte,
                 major: 0,
                 minor: Some(14),
                 patch: None,
                 suffix: None,
             }],
-            dependencies: vec![],
-        };
+        );
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn parse_dep_withvers() {
-        let p = Dependency::from_str("bolt = \"3.1.4\"", false).unwrap();
+    fn parse_req_withvers() {
+        let p = Req::from_str("bolt = \"3.1.4\"", false).unwrap();
         assert_eq!(
             p,
-            Dependency {
-                name: "bolt".into(),
-                version_reqs: vec![VersionReq {
+            Req::new(
+                "bolt".into(),
+                vec![VersionReq {
                     major: 3,
                     minor: Some(1),
                     patch: Some(4),
                     type_: Exact,
                     suffix: None,
-                },],
-                dependencies: vec![],
-            }
+                }]
+            )
         )
     }
 
     #[test]
-    fn parse_dep_caret() {
-        let p = Dependency::from_str("chord = \"^2.7.18\"", false).unwrap();
+    fn parse_req_caret() {
+        let p = Req::from_str("chord = \"^2.7.18\"", false).unwrap();
         assert_eq!(
             p,
-            Dependency {
-                name: "chord".into(),
-                version_reqs: vec![VersionReq {
+            Req::new(
+                "chord".into(),
+                vec![VersionReq {
                     major: 2,
                     minor: Some(7),
                     patch: Some(18),
                     type_: Caret,
                     suffix: None,
-                }],
-                dependencies: vec![],
-            }
+                }]
+            )
         )
     }
 
     #[test]
-    fn parse_dep_tilde_short() {
-        let p = Dependency::from_str("sphere = \"~6.7\"", false).unwrap();
+    fn parse_req_tilde_short() {
+        let p = Req::from_str("sphere = \"~6.7\"", false).unwrap();
         assert_eq!(
             p,
-            Dependency {
-                name: "sphere".into(),
-                version_reqs: vec![VersionReq {
+            Req::new(
+                "sphere".into(),
+                vec![VersionReq {
                     major: 6,
                     minor: Some(7),
                     patch: None,
                     type_: Tilde,
                     suffix: None,
-                }],
-                dependencies: vec![],
-            }
+                }]
+            )
         )
     }
 
     #[test]
-    fn parse_dep_pip() {
-        let p = Dependency::from_pip_str("Django>=2.22").unwrap();
+    fn parse_req_pip() {
+        let p = Req::from_pip_str("Django>=2.22").unwrap();
         assert_eq!(
             p,
-            Dependency {
-                name: "Django".into(),
-                version_reqs: vec![VersionReq {
+            Req::new(
+                "Django".into(),
+                vec![VersionReq {
                     major: 2,
                     minor: Some(22),
                     patch: None,
                     type_: Gte,
                     suffix: None,
-                },],
-
-                dependencies: vec![],
-            }
+                }]
+            )
         )
     }
 
     #[test]
-    fn parse_dep_pypi_cplx() {
-        let p = Dependency::from_str("urllib3 (!=1.25.0,!=1.25.1,<=1.26)", true).unwrap();
+    fn parse_req_pypi_cplx() {
+        let p = Req::from_str("urllib3 (!=1.25.0,!=1.25.1,<=1.26)", true).unwrap();
         assert_eq!(
             p,
-            Dependency {
-                name: "urllib3".into(),
-                version_reqs: vec![
+            Req::new(
+                "urllib3".into(),
+                vec![
                     VersionReq::new(Ne, 1, 25, 0),
                     VersionReq::new(Ne, 1, 25, 1),
                     VersionReq {
@@ -1000,34 +980,28 @@ pub mod tests {
                         type_: Lte,
                         suffix: None,
                     }
-                ],
-
-                dependencies: vec![],
-            }
+                ]
+            )
         )
     }
 
     #[test]
-    fn dep_tostring_single_reqs() {
+    fn req_tostring_single_reqs() {
         // todo: Expand this with more cases
 
-        let a = Dependency {
-            name: "package".to_string(),
-            version_reqs: vec![VersionReq::new(Exact, 3, 3, 6)],
-            dependencies: vec![],
-        };
+        let a = Req::new("package".to_string(), vec![VersionReq::new(Exact, 3, 3, 6)]);
 
         assert_eq!(a._to_pip_string(), "package==3.3.6".to_string());
         assert_eq!(a.to_cfg_string(), r#"package = "3.3.6""#.to_string());
     }
 
     #[test]
-    fn dep_tostring_multiple_reqs() {
+    fn req_tostring_multiple_reqs() {
         // todo: Expand this with more cases
 
-        let a = Dependency {
-            name: "package".to_string(),
-            version_reqs: vec![
+        let a = Req::new(
+            "package".to_string(),
+            vec![
                 VersionReq::new(Ne, 2, 7, 4),
                 VersionReq {
                     major: 3,
@@ -1037,8 +1011,7 @@ pub mod tests {
                     suffix: None,
                 },
             ],
-            dependencies: vec![],
-        };
+        );
 
         assert_eq!(a._to_pip_string(), "'package!=2.7.4,>=3.7'".to_string());
         assert_eq!(
