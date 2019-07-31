@@ -1,4 +1,4 @@
-use crate::dep_types::{DepNode, Lock, LockPackage, Package, Req, Version, VersionReq};
+use crate::dep_types::{Constraint, DepNode, Lock, LockPackage, Package, Req, Version};
 use crate::util::abort;
 use regex::Regex;
 use serde::Deserialize;

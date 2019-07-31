@@ -1,5 +1,5 @@
 use crate::{
-    dep_types::{self, DepNode, Package, Req, Version, VersionReq},
+    dep_types::{self, Constraint, DepNode, Package, Req, Version},
     util,
 };
 use serde::Deserialize;
@@ -164,21 +164,40 @@ fn get_req_cache(name: &str) -> Result<(Vec<ReqCache>), reqwest::Error> {
 //
 //}
 
-/// Determine which dependencies we need to install, using the newest ones which meet
-/// all constraints. Gets data from a cached repo, and Pypi.
-pub fn resolve(deps: &[Req], working: Vec<DepNode>) -> Result<Vec<DepNode>, reqwest::Error> {
-    let mut working = working;
+// todo: Overlap with crate::flatten_deps.
+fn flatten(result: &mut Vec<DepNode>, tree: &DepNode) {
+    for node in tree.dependencies.iter() {
+        // We don't need sub-deps in the result; they're extraneous info. We only really care about
+        // the name and version requirements.
+        let mut result_dep = node.clone();
+        result_dep.dependencies = vec![];
+        result.push((level, result_dep));
+        flatten(result, &node);
+    }
+}
 
-    for req in deps {
+// Build a graph: Start by assuming we can pick the newest compatible dependency at each step.
+// If unable to resolve this way, subsequently run this with additional deconfliction reqs.
+fn guess_graph(node: &mut DepNode, deconfliction_reqs: &[Req]) {
+    // We gradually add constraits in subsequent iterations of this function, to resolve
+    // conflicts as required.
+    for req in node.reqs.iter() {
         // todo: Is Depnode the data structure we want here? Lots of unused fields.
         let mut sub_reqs: Vec<DepNode> = get_req_cache(&req.name)?
-            .iter()
+            .into_iter()
             .filter(|r| {
                 // We only care about examining subdependencies that meet our criteria.
                 let mut compat = true;
-                for req in req.reqs {
-                    if !req.is_compatible(&Version::from_str(&r.version).unwrap()) {
+                for constraint in req.constraint {
+                    if !constraint.is_compatible(&Version::from_str(&r.version).unwrap()) {
                         compat = false;
+                    }
+                }
+                for decon_req in deconfliction_reqs {
+                    for constraint in decon_req.constraints {
+                        if !constraint.is_compatible(&Version::from_str(&r.version).unwrap()) {
+                            compat = false;
+                        }
                     }
                 }
                 compat
@@ -199,9 +218,73 @@ pub fn resolve(deps: &[Req], working: Vec<DepNode>) -> Result<Vec<DepNode>, reqw
             })
             .collect();
 
-        working.append(&mut sub_reqs);
+        //        cache.append(&mut sub_reqs.clone());
+        // todo: Reimplemment cache to cut down on http calls.
+
+        if sub_reqs.is_empty() {
+            util::abort(&format!(
+                "Can't find a compatible version for {}",
+                &req.name
+            ));
+        }
+        let newest_compat = sub_reqs
+            .into_iter()
+            .max_by(|a, b| a.version.cmp(&b.version))
+            .unwrap();
+        node.dependencies.push(newest_compat)
     }
-    Ok(working_reqs)
+}
+
+/// Determine which dependencies we need to install, using the newest ones which meet
+/// all constraints. Gets data from a cached repo, and Pypi.
+pub fn resolve(tree: &mut DepNode, cache: Vec<DepNode>) -> Result<Vec<Package>, reqwest::Error> {
+    // The tree starts as leafless.
+    guess_graph(tree, vec![]);
+    let mut flattened = vec![];
+    flatten(&mut flattened, &tree);
+
+    let mut by_name: HashMap<String, Vec<DepNode>> = HashMap::new(); // todo need annotations
+
+    for dep in flattened {
+        if by_name.contains_key(&dep.name) {
+            by_name.get(&dep.name).unwrap().push(dep.clone());
+        } else {
+            by_name.insert(dep.name.clone(), vec![dep.clone()]);
+        }
+    }
+
+    for (name, deps) in by_name.iter() {
+//        if dep.len() <= 1 {
+//            continue; // Only specified once; no need to resolve.
+//        }  todo put this back if necessary.
+
+        let constraints: Vec<Vec<Constraint>> =
+            deps.iter().map(|d| d.constraints_for_this).collect();
+        let inter = dep_types::intersection_many(&constraints);
+    }
+
+    // Cache stores info for every dep/version we've looked up, while working attempts to build
+    // a tree of only what we need.
+    //        let mut working = working;
+    //        let mut cache = cache;
+    //
+
+    //
+    //
+
+    //
+    //        // Organize by name, so we can compare if there are multiple instances of one
+    //        // package required, ie by different parents.
+
+    //
+    //        // Check if deps are specified by multiple parents, and if so, pick a version
+    //        // that works for all requirements.
+    //        for (name, dep) in flattened.iter() {
+    //
+    //        }
+
+    //    }
+    Ok(vec![])
 }
 
 ///// Recursively add all dependencies. Pull avail versions from the PyPi warehouse, and sub-dep
@@ -246,7 +329,7 @@ pub fn resolve(deps: &[Req], working: Vec<DepNode>) -> Result<Vec<DepNode>, reqw
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::dep_types::VersionReq;
+    use crate::dep_types::Constraint;
 
     #[test]
     fn warehouse_versions() {
@@ -278,8 +361,8 @@ pub mod tests {
             // To reduce repetition
             Req::new(name.to_owned(), version_reqs)
         };
-        let vrnew = |t, ma, mi, p| VersionReq::new(t, ma, mi, p);
-        let vrnew_short = |t, ma, mi| VersionReq {
+        let vrnew = |t, ma, mi, p| Constraint::new(t, ma, mi, p);
+        let vrnew_short = |t, ma, mi| Constraint {
             type_: t,
             major: ma,
             minor: Some(mi),

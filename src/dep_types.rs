@@ -205,7 +205,7 @@ impl FromStr for ReqType {
 /// For holding semvar-style version requirements with Caret, tilde etc
 /// [Ref](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct VersionReq {
+pub struct Constraint {
     pub type_: ReqType,
     pub major: u32,
     pub minor: Option<u32>,
@@ -213,7 +213,7 @@ pub struct VersionReq {
     pub suffix: Option<String>, // Used for storing extra info like beta, rc, dev etc.
 }
 
-impl FromStr for VersionReq {
+impl FromStr for Constraint {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -272,7 +272,7 @@ impl FromStr for VersionReq {
 }
 
 /// A single version req. Can be chained together.
-impl VersionReq {
+impl Constraint {
     pub fn new(type_: ReqType, major: u32, minor: u32, patch: u32) -> Self {
         Self {
             type_,
@@ -440,7 +440,7 @@ impl VersionReq {
 //
 //}
 
-pub fn to_ranges(reqs: &[VersionReq]) -> Vec<(Version, Version)> {
+pub fn to_ranges(reqs: &[Constraint]) -> Vec<(Version, Version)> {
     // If no requirement specified, return the full range.
     if reqs.is_empty() {
         vec![(Version::new(0, 0, 0), Version::new(MAX_VER, 0, 0))]
@@ -454,7 +454,7 @@ pub fn to_ranges(reqs: &[VersionReq]) -> Vec<(Version, Version)> {
 
 /// todo: Find a more elegant way to handle this; diff is second arg's type.
 pub fn intersection_convert_one(
-    reqs1: &[VersionReq],
+    reqs1: &[Constraint],
     ranges2: &[(Version, Version)],
 ) -> Vec<(Version, Version)> {
     let mut ranges1 = vec![];
@@ -468,10 +468,25 @@ pub fn intersection_convert_one(
     intersection(&ranges1, ranges2)
 }
 
+/// Interface an arbitrary number of constraint sets into the intersection fn(s), which
+/// handle 2 at a time.
+pub fn intersection_many(sets: &[Vec<Constraint>]) -> Vec<(Version, Version)> {
+    // Keep adding constraints to (limiting) a cumulative set, and comparing it to individual sets.
+    //    let mut cum_set = vec![];
+    //    for constraint_set in sets {
+    //        cum_set = intersection_convert_one(constraint_set, &cum_set)
+    //    }
+    //    cum_set  // todo delete this procedural logic if functional works.
+
+    sets.fold(vec![], |acc, constraint_set, vec![]| {
+        intersection_convert_one(constraint_set, &acc)
+    })
+}
+
 /// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
 pub fn intersection_convert_both(
-    reqs1: &[VersionReq],
-    reqs2: &[VersionReq],
+    reqs1: &[Constraint],
+    reqs2: &[Constraint],
 ) -> Vec<(Version, Version)> {
     let mut ranges1 = vec![];
     for req in reqs1 {
@@ -510,15 +525,38 @@ pub fn intersection(
     result
 }
 
+///// Find the intersection of sets of version requirements. Result is a Vec of (min, max) tuples.
+///// Note that each set contains OR constraints internally, but mixing sets uses AND constraints.
+//pub fn intersection(
+//    ranges: &[&[(Version, Version)]],
+//) -> Vec<(Version, Version)> {
+//    // Note that within each set of ranges, we use OR constraints. Between the two, we use AND.
+//    let mut result = vec![];
+//    // Each range imposes an additonal constraint.
+//    for rng in ranges {
+//        for rng2 in ranges2 {
+//            // 0 is min, 1 is max.
+//            if rng2.1 >= rng1.0 && rng1.1 >= rng2.0 || rng1.1 >= rng2.0 && rng2.1 >= rng1.0 {
+//                result.push((cmp::max(rng2.0, rng1.0), cmp::min(rng1.1, rng2.1)));
+//            }
+//        }
+//    }
+//
+//    result
+//}
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Req {
     pub name: String,
-    pub reqs: Vec<VersionReq>,
+    pub constraints: Vec<Constraint>,
 }
 
 impl Req {
-    pub fn new(name: String, reqs: Vec<VersionReq>) -> Self {
-        Self { name, reqs }
+    pub fn new(name: String, reqs: Vec<Constraint>) -> Self {
+        Self {
+            name,
+            constraints: reqs,
+        }
     }
 
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
@@ -532,7 +570,7 @@ impl Req {
         if let Some(caps) = re.captures(s) {
             let name = caps.get(1).unwrap().as_str().to_string();
             let reqs_m = caps.get(2).unwrap();
-            let reqs = VersionReq::from_str_multiple(reqs_m.as_str())?;
+            let reqs = Constraint::from_str_multiple(reqs_m.as_str())?;
 
             return Ok(Self::new(name, reqs));
         };
@@ -574,7 +612,7 @@ impl Req {
         };
 
         let name = caps.get(1).unwrap().as_str().to_string();
-        let req = VersionReq::from_str(caps.get(2).unwrap().as_str())
+        let req = Constraint::from_str(caps.get(2).unwrap().as_str())
             .expect("Problem parsing requirement");
 
         Some(Self::new(name, vec![req]))
@@ -582,12 +620,12 @@ impl Req {
 
     /// eg `saturn = "^0.3.1"` or `matplotlib = "3.1.1"`
     pub fn to_cfg_string(&self) -> String {
-        match self.reqs.len() {
+        match self.constraints.len() {
             0 => self.name.to_owned(),
             _ => format!(
                 r#"{} = "{}""#,
                 self.name,
-                self.reqs
+                self.constraints
                     .iter()
                     .map(|r| format!("{}", r.to_string(true, false)))
                     .collect::<Vec<String>>()
@@ -604,9 +642,13 @@ pub struct DepNode {
     pub name: String,
     pub version: Version,
     pub filename: String,
-    pub hash: String,
+
+    pub hash: String, // todo do you want hash, url, filename here?
     pub file_url: String,
     pub reqs: Vec<Req>,
+
+    pub constraints_for_this: Vec<Constraint>, // Ie what constraints drove this node's version?
+
     pub dependencies: Vec<DepNode>,
 }
 
@@ -646,7 +688,11 @@ pub struct Package {
     pub version: Version,
     pub deps: Vec<Req>,
     pub source: Option<String>,
-    // todo Hash, name etc here?
+
+    // todo do you want Hash, name etc here? How about DepNode?
+    pub filename: String,
+    pub hash: String,
+    pub file_url: String,
 }
 
 impl Package {
@@ -724,9 +770,9 @@ pub mod tests {
 
     #[test]
     fn compat_caret() {
-        let req1 = VersionReq::new(Caret, 1, 2, 3);
-        let req2 = VersionReq::new(Caret, 0, 2, 3);
-        let req3 = VersionReq::new(Caret, 0, 0, 3);
+        let req1 = Constraint::new(Caret, 1, 2, 3);
+        let req2 = Constraint::new(Caret, 0, 2, 3);
+        let req3 = Constraint::new(Caret, 0, 0, 3);
 
         assert!(req1.is_compatible(&Version::new(1, 9, 9)));
         assert!(!req1.is_compatible(&Version::new(2, 0, 0)));
@@ -738,9 +784,9 @@ pub mod tests {
 
     #[test]
     fn compat_gt_eq() {
-        let req1 = VersionReq::new(Gte, 1, 2, 3);
-        let req2 = VersionReq::new(Gt, 0, 2, 3);
-        let req3 = VersionReq::new(Exact, 0, 0, 3);
+        let req1 = Constraint::new(Gte, 1, 2, 3);
+        let req2 = Constraint::new(Gt, 0, 2, 3);
+        let req3 = Constraint::new(Exact, 0, 0, 3);
 
         assert!(req1.is_compatible(&Version::new(1, 2, 3)));
         assert!(req1.is_compatible(&Version::new_short(4, 2)));
@@ -793,21 +839,21 @@ pub mod tests {
         let b = "^1.3.32rc1";
         let c = "^1.3.32.dep1";
 
-        let req_a = VersionReq {
+        let req_a = Constraint {
             major: 2,
             minor: Some(3),
             patch: None,
             type_: Ne,
             suffix: Some("b3".to_string()),
         };
-        let req_b = VersionReq {
+        let req_b = Constraint {
             major: 1,
             minor: Some(3),
             patch: Some(32),
             type_: Caret,
             suffix: Some("rc1".to_string()),
         };
-        let req_c = VersionReq {
+        let req_c = Constraint {
             major: 1,
             minor: Some(3),
             patch: Some(32),
@@ -815,9 +861,9 @@ pub mod tests {
             suffix: Some(".dep1".to_string()),
         };
 
-        assert_eq!(VersionReq::from_str(a).unwrap(), req_a);
-        assert_eq!(VersionReq::from_str(b).unwrap(), req_b);
-        assert_eq!(VersionReq::from_str(c).unwrap(), req_c);
+        assert_eq!(Constraint::from_str(a).unwrap(), req_a);
+        assert_eq!(Constraint::from_str(b).unwrap(), req_b);
+        assert_eq!(Constraint::from_str(c).unwrap(), req_c);
     }
 
     #[test]
@@ -830,37 +876,37 @@ pub mod tests {
         let f = ">=0.0.1";
         let f = ">=0.0.1";
 
-        let req_a = VersionReq {
+        let req_a = Constraint {
             major: 2,
             minor: Some(3),
             patch: None,
             type_: Ne,
             suffix: None,
         };
-        let req_b = VersionReq::new(Caret, 1, 3, 32);
-        let req_c = VersionReq {
+        let req_b = Constraint::new(Caret, 1, 3, 32);
+        let req_c = Constraint {
             major: 2,
             minor: Some(3),
             patch: None,
             type_: Tilde,
             suffix: None,
         };
-        let req_d = VersionReq {
+        let req_d = Constraint {
             major: 5,
             minor: None,
             patch: None,
             type_: Exact,
             suffix: None,
         };
-        let req_e = VersionReq::new(Lte, 11, 2, 3);
-        let req_f = VersionReq::new(Gte, 0, 0, 1);
+        let req_e = Constraint::new(Lte, 11, 2, 3);
+        let req_f = Constraint::new(Gte, 0, 0, 1);
 
-        assert_eq!(VersionReq::from_str(a).unwrap(), req_a);
-        assert_eq!(VersionReq::from_str(b).unwrap(), req_b);
-        assert_eq!(VersionReq::from_str(c).unwrap(), req_c);
-        assert_eq!(VersionReq::from_str(d).unwrap(), req_d);
-        assert_eq!(VersionReq::from_str(e).unwrap(), req_e);
-        assert_eq!(VersionReq::from_str(f).unwrap(), req_f);
+        assert_eq!(Constraint::from_str(a).unwrap(), req_a);
+        assert_eq!(Constraint::from_str(b).unwrap(), req_b);
+        assert_eq!(Constraint::from_str(c).unwrap(), req_c);
+        assert_eq!(Constraint::from_str(d).unwrap(), req_d);
+        assert_eq!(Constraint::from_str(e).unwrap(), req_e);
+        assert_eq!(Constraint::from_str(f).unwrap(), req_f);
     }
 
     #[test]
@@ -880,7 +926,7 @@ pub mod tests {
         let actual = Req::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", true).unwrap();
         let expected = Req::new(
             "pyOpenSSL".into(),
-            vec![VersionReq {
+            vec![Constraint {
                 type_: Gte,
                 major: 0,
                 minor: Some(14),
@@ -898,7 +944,7 @@ pub mod tests {
             p,
             Req::new(
                 "bolt".into(),
-                vec![VersionReq {
+                vec![Constraint {
                     major: 3,
                     minor: Some(1),
                     patch: Some(4),
@@ -916,7 +962,7 @@ pub mod tests {
             p,
             Req::new(
                 "chord".into(),
-                vec![VersionReq {
+                vec![Constraint {
                     major: 2,
                     minor: Some(7),
                     patch: Some(18),
@@ -934,7 +980,7 @@ pub mod tests {
             p,
             Req::new(
                 "sphere".into(),
-                vec![VersionReq {
+                vec![Constraint {
                     major: 6,
                     minor: Some(7),
                     patch: None,
@@ -952,7 +998,7 @@ pub mod tests {
             p,
             Req::new(
                 "Django".into(),
-                vec![VersionReq {
+                vec![Constraint {
                     major: 2,
                     minor: Some(22),
                     patch: None,
@@ -971,9 +1017,9 @@ pub mod tests {
             Req::new(
                 "urllib3".into(),
                 vec![
-                    VersionReq::new(Ne, 1, 25, 0),
-                    VersionReq::new(Ne, 1, 25, 1),
-                    VersionReq {
+                    Constraint::new(Ne, 1, 25, 0),
+                    Constraint::new(Ne, 1, 25, 1),
+                    Constraint {
                         major: 1,
                         minor: Some(26),
                         patch: None,
@@ -989,7 +1035,7 @@ pub mod tests {
     fn req_tostring_single_reqs() {
         // todo: Expand this with more cases
 
-        let a = Req::new("package".to_string(), vec![VersionReq::new(Exact, 3, 3, 6)]);
+        let a = Req::new("package".to_string(), vec![Constraint::new(Exact, 3, 3, 6)]);
 
         assert_eq!(a._to_pip_string(), "package==3.3.6".to_string());
         assert_eq!(a.to_cfg_string(), r#"package = "3.3.6""#.to_string());
@@ -1002,8 +1048,8 @@ pub mod tests {
         let a = Req::new(
             "package".to_string(),
             vec![
-                VersionReq::new(Ne, 2, 7, 4),
-                VersionReq {
+                Constraint::new(Ne, 2, 7, 4),
+                Constraint {
                     major: 3,
                     minor: Some(7),
                     patch: None,
@@ -1036,11 +1082,11 @@ pub mod tests {
 
     #[test]
     fn intersections_empty() {
-        let reqs1 = vec![VersionReq::new(Exact, 4, 9, 4)];
-        let reqs2 = vec![VersionReq::new(Gte, 4, 9, 7)];
+        let reqs1 = vec![Constraint::new(Exact, 4, 9, 4)];
+        let reqs2 = vec![Constraint::new(Gte, 4, 9, 7)];
 
-        let reqs3 = vec![VersionReq::new(Lte, 4, 9, 6)];
-        let reqs4 = vec![VersionReq::new(Gte, 4, 9, 7)];
+        let reqs3 = vec![Constraint::new(Lte, 4, 9, 6)];
+        let reqs4 = vec![Constraint::new(Gte, 4, 9, 7)];
 
         assert!(intersection_convert_both(&reqs1, &reqs2).is_empty());
         assert!(intersection_convert_both(&reqs3, &reqs4).is_empty());
@@ -1048,11 +1094,11 @@ pub mod tests {
 
     #[test]
     fn intersections_simple() {
-        let reqs1 = vec![VersionReq::new(Gte, 4, 9, 4)];
-        let reqs2 = vec![VersionReq::new(Gte, 4, 3, 1)];
+        let reqs1 = vec![Constraint::new(Gte, 4, 9, 4)];
+        let reqs2 = vec![Constraint::new(Gte, 4, 3, 1)];
 
-        let reqs3 = vec![VersionReq::new(Caret, 3, 0, 0)];
-        let reqs4 = vec![VersionReq::new(Exact, 3, 3, 6)];
+        let reqs3 = vec![Constraint::new(Caret, 3, 0, 0)];
+        let reqs4 = vec![Constraint::new(Exact, 3, 3, 6)];
 
         assert_eq!(
             intersection_convert_both(&reqs1, &reqs2),

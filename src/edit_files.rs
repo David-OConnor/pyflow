@@ -1,5 +1,5 @@
 use crate::{
-    dep_types::{self, DepNode, Req, Version, VersionReq},
+    dep_types::{self, Constraint, DepNode, Req, Version},
     util, Config,
 };
 use regex::Regex;
@@ -71,7 +71,7 @@ pub fn add_dependencies(filename: &str, added: &[Req]) {
                 println!(
                     "{} is already included in `pyproject.toml`. Do you want to update its \
                      version requirement from {:?} to {:?}?",
-                    added.name, installed.reqs, added.reqs
+                    added.name, installed.constraints, added.constraints
                 );
 
                 let mut input = String::new();
@@ -119,7 +119,7 @@ pub fn add_dependencies(filename: &str, added: &[Req]) {
 
             if in_dep {
                 // There should be no more parsing errors here, since this is our second pass.
-                let req = VersionReq::from_str(&l).unwrap();
+                let req = Constraint::from_str(&l).unwrap();
             }
         }
     }
