@@ -54,8 +54,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-        name = "install",
-        help = "
+    name = "install",
+    help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -526,7 +526,7 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
             result.push((name.to_owned(), vers));
 
-        // todo dry
+            // todo dry
         } else if let Some(caps) = re_egg.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
@@ -598,7 +598,7 @@ fn sync_packages_with_lock(
                 name_ins,
                 vers_ins.to_string()
             )))
-            .is_ok()
+                .is_ok()
             {
                 meta_folder_removed = true;
             }
@@ -607,7 +607,7 @@ fn sync_packages_with_lock(
                 name_ins,
                 vers_ins.to_string()
             )))
-            .is_ok()
+                .is_ok()
             {
                 meta_folder_removed = true;
             }
@@ -647,7 +647,7 @@ fn sync_packages_with_lock(
         //        if commands::install(&bin_path, &[p], false, false).is_err() {
         //            abort("Problem installing packages");
         //        }
-        download_and_install_package(p.file_url, p.filename, p.hash_, lib_path, false);
+//        download_and_install_package(p.file_url, p.filename, p.hash_, lib_path, false);
     }
 }
 
@@ -667,27 +667,26 @@ fn sync_deps(
         version: Version::new(0, 0, 0),
         reqs: vec![],
         dependencies: vec![],
-        filename: String::new(),
-        hash: String::new(),
-        file_url: String::new(),
+        constraints_for_this: vec![],
+//        filename: String::new(),
+//        hash: String::new(),
+//        file_url: String::new(),
     };
 
-    //    dep_resolution::create_dep_tree(reqs, &mut tree,&[]);
+    let resolved = match dep_resolution::resolve(&mut tree) {
+        Ok(r) => r,
+        Err(_) => {
+            abort("Problem resolving dependencies");
+            vec![] // todo find proper way to equlaize mathc arms.
+        },
+    };
 
-    // todo: Write tests for a few dep res cases.
-    //    let mut flattened_deps = vec![];
-    //    flatten_deps(&mut flattened_deps, 0, &tree);
+    println!("RESOLVED: {:?}", &resolved);
 
-    //    let mut cleaned = match clean_flattened_deps(&flattened_deps) {
-    //        Ok(c) => c,
-    //        Err(e) => {
-    //            abort(&e.details);
-    //            HashMap::new() // todo dummy to satisfy compiler
-    //        }
-    //    };
+    for dep in resolved {
+        let data = dep_resolution::get_warehouse_release(&dep.name, &dep.version);
+    }
 
-    //            println!("Flattened: {:#?}", flattened_deps);
-    //            println!("Cleaned: {:#?}", cleaned);
 
     let mut lock_packs = vec![];
 

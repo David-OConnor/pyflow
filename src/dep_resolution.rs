@@ -72,6 +72,17 @@ fn get_warehouse_data_w_version(
     Ok(resp)
 }
 
+/// Get release data from the warehouse, ie the file url, name, and hash.
+pub fn get_warehouse_release(name: &str, version: &Version)  -> Result<WarehouseRelease, reqwest::Error> {
+    let data = get_warehouse_data(name)?;
+    let release_data = data.releases.get(&version.to_string())
+        .expect(&format!("Unable to find release for {} = \"{}\"", name, version.to_string()));
+
+    // todo: We need to find the right release! Notably for binary crates on diff oses.
+    // todo: For now, go with the first while prototyping.
+    Ok(*release_data.get(0).expect("No release data found."))
+}
+
 /// Find dependencies for a specific version of a package.
 fn get_warehouse_dep_data(name: &str, version: &Version) -> Result<DepNode, reqwest::Error> {
     // todo return Result with custom fetch error type
@@ -82,18 +93,19 @@ fn get_warehouse_dep_data(name: &str, version: &Version) -> Result<DepNode, reqw
         reqs: vec![],
         dependencies: vec![],
 
-        hash: "".into(),
-        file_url: "".into(),
-        filename: "".into(),
+        constraints_for_this: vec![],
+        //        hash: "".into(),
+        //        file_url: "".into(),
+        //        filename: "".into(),
     };
 
     for url in data.urls.iter() {
         if url.packagetype != "bdist_wheel" {
             continue; // todo: Handle missing wheels
         }
-        result.file_url = url.url;
-        result.filename = url.filename;
-        result.hash = url.md5_digest;
+//        result.file_url = url.url;
+//        result.filename = url.filename;
+//        result.hash = url.md5_digest;
         break;
     }
 
@@ -112,8 +124,10 @@ fn get_warehouse_dep_data(name: &str, version: &Version) -> Result<DepNode, reqw
 }
 
 // todo: Perhaps just use DepNode etc instead of a special type
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct ReqCache {
+    //    #[serde(default)] // We'll populate it after the fetch.
+    //    name: String,
     version: String,
     requires_python: Option<String>,
     requires_dist: Vec<String>,
@@ -123,46 +137,12 @@ struct ReqCache {
 fn get_req_cache(name: &str) -> Result<(Vec<ReqCache>), reqwest::Error> {
     // todo return Result with custom fetch error type
     let url = format!("https://pydeps.herokuapp.com/{}", name,);
+    //    let mut data = reqwest::get(&url)?.json()?;
+    //    // We don't pass name over the internet to reduce size: add it now.
+    //    data.name = name.to_owned();
+    //    Ok(data)
     Ok(reqwest::get(&url)?.json()?)
 }
-
-///// Filter versions compatible with a set of requirements.
-//pub fn filter_compatible(reqs: &[VersionReq], versions: Vec<Version>) -> Vec<Version> {
-//    // todo: Test this
-//    versions
-//        .into_iter()
-//        .filter(|v| {
-//            let mut compat = true;
-//            for req in reqs {
-//                if !req.is_compatible(v) {
-//                    compat = false;
-//                }
-//            }
-//            compat
-//        })
-//        .collect()
-//}
-//
-///// Alternative reqs format
-//pub fn filter_compatible2(reqs: &[(Version, Version)], versions: Vec<Version>) -> Vec<Version> {
-//    // todo: Test this
-//    versions
-//        .into_iter()
-//        .filter(|v| {
-//            let mut compat = true;
-//            for req in reqs {
-//                if *v > req.1 || *v < req.0 {
-//                    compat = false;
-//                }
-//            }
-//            compat
-//        })
-//        .collect()
-//}
-
-//fn resolve_inner() -> {
-//
-//}
 
 // todo: Overlap with crate::flatten_deps.
 fn flatten(result: &mut Vec<DepNode>, tree: &DepNode) {
@@ -171,24 +151,38 @@ fn flatten(result: &mut Vec<DepNode>, tree: &DepNode) {
         // the name and version requirements.
         let mut result_dep = node.clone();
         result_dep.dependencies = vec![];
-        result.push((level, result_dep));
+        result.push(result_dep);
         flatten(result, &node);
     }
 }
 
 // Build a graph: Start by assuming we can pick the newest compatible dependency at each step.
 // If unable to resolve this way, subsequently run this with additional deconfliction reqs.
-fn guess_graph(node: &mut DepNode, deconfliction_reqs: &[Req]) {
+fn guess_graph(
+    node: &mut DepNode,
+    deconfliction_reqs: &[Req],
+    cache: &mut HashMap<String, Vec<ReqCache>>,
+) -> Result<(), reqwest::Error> {
     // We gradually add constraits in subsequent iterations of this function, to resolve
     // conflicts as required.
     for req in node.reqs.iter() {
+        let subreqs = match cache.get(&req.name) {
+            Some(r) => *r,
+            None => {
+                // http call and cache
+                let sr = get_req_cache(&req.name)?;
+                cache.insert(req.name.to_owned(), sr.clone());
+                sr
+            }
+        };
+
         // todo: Is Depnode the data structure we want here? Lots of unused fields.
-        let mut sub_reqs: Vec<DepNode> = get_req_cache(&req.name)?
+        let mut sub_reqs: Vec<DepNode> = subreqs
             .into_iter()
             .filter(|r| {
                 // We only care about examining subdependencies that meet our criteria.
                 let mut compat = true;
-                for constraint in req.constraint {
+                for constraint in req.constraints {
                     if !constraint.is_compatible(&Version::from_str(&r.version).unwrap()) {
                         compat = false;
                     }
@@ -211,9 +205,10 @@ fn guess_graph(node: &mut DepNode, deconfliction_reqs: &[Req]) {
                     .map(|vr| Req::from_str(vr, false).unwrap())
                     .collect(),
 
-                filename: "".into(),
-                hash: "".into(),
-                file_url: "".into(),
+                constraints_for_this: req.constraints,
+                //                filename: "".into(),
+                //                hash: "".into(),
+                //                file_url: "".into(),
                 dependencies: vec![],
             })
             .collect();
@@ -227,23 +222,29 @@ fn guess_graph(node: &mut DepNode, deconfliction_reqs: &[Req]) {
                 &req.name
             ));
         }
-        let newest_compat = sub_reqs
+        let mut newest_compat = sub_reqs
             .into_iter()
             .max_by(|a, b| a.version.cmp(&b.version))
             .unwrap();
-        node.dependencies.push(newest_compat)
+
+        node.dependencies.push(newest_compat);
+
+        guess_graph(&mut newest_compat, deconfliction_reqs, cache);
     }
+    Ok(())
 }
 
 /// Determine which dependencies we need to install, using the newest ones which meet
 /// all constraints. Gets data from a cached repo, and Pypi.
-pub fn resolve(tree: &mut DepNode, cache: Vec<DepNode>) -> Result<Vec<Package>, reqwest::Error> {
+pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
     // The tree starts as leafless.
-    guess_graph(tree, vec![]);
+    // todo: Do we want to return DepNode, Package, or something else?
+    let mut cache = HashMap::new();
+    guess_graph(tree, &vec![], &mut cache);
     let mut flattened = vec![];
     flatten(&mut flattened, &tree);
 
-    let mut by_name: HashMap<String, Vec<DepNode>> = HashMap::new(); // todo need annotations
+    let mut by_name: HashMap<String, Vec<DepNode>> = HashMap::new();
 
     for dep in flattened {
         if by_name.contains_key(&dep.name) {
@@ -254,77 +255,17 @@ pub fn resolve(tree: &mut DepNode, cache: Vec<DepNode>) -> Result<Vec<Package>, 
     }
 
     for (name, deps) in by_name.iter() {
-//        if dep.len() <= 1 {
-//            continue; // Only specified once; no need to resolve.
-//        }  todo put this back if necessary.
+        //        if dep.len() <= 1 {
+        //            continue; // Only specified once; no need to resolve.
+        //        }  todo put this back if necessary.
 
         let constraints: Vec<Vec<Constraint>> =
             deps.iter().map(|d| d.constraints_for_this).collect();
         let inter = dep_types::intersection_many(&constraints);
     }
 
-    // Cache stores info for every dep/version we've looked up, while working attempts to build
-    // a tree of only what we need.
-    //        let mut working = working;
-    //        let mut cache = cache;
-    //
-
-    //
-    //
-
-    //
-    //        // Organize by name, so we can compare if there are multiple instances of one
-    //        // package required, ie by different parents.
-
-    //
-    //        // Check if deps are specified by multiple parents, and if so, pick a version
-    //        // that works for all requirements.
-    //        for (name, dep) in flattened.iter() {
-    //
-    //        }
-
-    //    }
-    Ok(vec![])
+    Ok(flattened)
 }
-
-///// Recursively add all dependencies. Pull avail versions from the PyPi warehouse, and sub-dep
-///// requirements from our cached DB
-///// // todo perhaps obsolete.
-//pub fn create_dep_tree(reqs: &[Req], node: &mut DepNode, cache: &[DepNode]) {
-//    for req in reqs {
-//        println!("Getting available versions for {}", &req.name);
-//        let versions = match get_warehouse_versions(&req.name) {
-//            Ok(v) => v,
-//            Err(_) => {
-//                util::abort(&format!("Can't find dependencies for {}", &req.name));
-//                vec![] // todo makes compile
-//            }
-//        };
-//
-//        let compatible_versions = filter_compatible(&req.reqs, versions);
-//        if compatible_versions.is_empty() {
-//            util::abort(&format!("Can't find a compatible version for {}", &req.name));
-//        }
-//
-//        // todo cache these results.
-//
-//        // todo: We currently assume the dep graph is resolvable using only the best match.
-//        // todo: This logic is flawed, but should work in many cases.
-//        // Let's start with the best match, and see if the tree resolves without conflicts using it.
-//        let newest_compat = compatible_versions.iter().max().unwrap();
-//
-//        match get_warehouse_dep_data(&req.name, newest_compat) {
-//            Ok(mut d) => {
-//                create_dep_tree(subdep, &mut d, cache);
-//            }
-//            Err(_) => util::abort(&format!(
-//                "Can't find dependencies for {}: {}",
-//                req.name,
-//                newest_compat.to_string())
-//            ),
-//        };
-//    }
-//}
 
 #[cfg(test)]
 pub mod tests {
@@ -396,4 +337,6 @@ pub mod tests {
 
         // todo Add more of these, for variety.
     }
+
+    // todo: Make dep-resolver tests, including both simple, conflicting/resolvable, and confliction/unresolvable.
 }

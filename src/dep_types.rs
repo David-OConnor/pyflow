@@ -478,7 +478,7 @@ pub fn intersection_many(sets: &[Vec<Constraint>]) -> Vec<(Version, Version)> {
     //    }
     //    cum_set  // todo delete this procedural logic if functional works.
 
-    sets.fold(vec![], |acc, constraint_set, vec![]| {
+    sets.iter().fold(vec![], |acc, constraint_set| {
         intersection_convert_one(constraint_set, &acc)
     })
 }
@@ -641,10 +641,10 @@ impl Req {
 pub struct DepNode {
     pub name: String,
     pub version: Version,
-    pub filename: String,
 
-    pub hash: String, // todo do you want hash, url, filename here?
-    pub file_url: String,
+    //    pub filename: String,
+    //    pub hash: String, // todo do you want hash, url, filename here?
+    //    pub file_url: String,
     pub reqs: Vec<Req>,
 
     pub constraints_for_this: Vec<Constraint>, // Ie what constraints drove this node's version?
@@ -688,11 +688,10 @@ pub struct Package {
     pub version: Version,
     pub deps: Vec<Req>,
     pub source: Option<String>,
-
     // todo do you want Hash, name etc here? How about DepNode?
-    pub filename: String,
-    pub hash: String,
-    pub file_url: String,
+//    pub filename: String,
+//    pub hash: String,
+//    pub file_url: String,
 }
 
 impl Package {
