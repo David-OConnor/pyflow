@@ -10,6 +10,8 @@ The virtual environment is created in the same diretory as `lib`.
 This is a new project undergoing active development: expect breaking changes
 in the near future. 
 
+Python ≥ 3.3 is required.
+
 
 ## Installation
 There are 2 main ways to install:
@@ -160,7 +162,6 @@ of binaries from `PyPi`.
 
 
 ## Not-yet-implemented
-- Support for Python < 3.3
 - Installing multiple versions of a sub-dependency when required
 
 

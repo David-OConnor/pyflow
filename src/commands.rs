@@ -52,31 +52,6 @@ pub(crate) fn find_py_version(alias: &str) -> Option<crate::Version> {
     }
 }
 
-/// Used for Python versions 3.2 and below, which do not include `venv`.  Note that
-/// this affects files outside the project directory.
-pub(crate) fn install_virtualenv_global(alias: &str) -> Result<(), Box<Error>> {
-    Command::new(alias)
-        .args(&["-m", "pip", "install", "virtualenv"])
-        .status()?;
-
-    Ok(())
-}
-
-/// See note on `install_virtualenv_global
-pub(crate) fn create_legacy_virtualenv(
-    py_alias: &str,
-    lib_path: &PathBuf,
-    name: &str,
-) -> Result<(), Box<Error>> {
-    // While creating the lib path, we're creating the __pypackages__ structure.
-    Command::new("virtualenv")
-        .arg(name)
-        .current_dir(lib_path.join("../"))
-        .spawn()?;
-
-    Ok(())
-}
-
 /// Create the virtual env. Assume we're running Python 3.3+, where `venv` is included.
 /// Additionally, create the __pypackages__ directory if not already created.
 pub(crate) fn create_venv(

@@ -54,8 +54,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-    name = "install",
-    help = "
+        name = "install",
+        help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -432,19 +432,8 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
 
     println!("Setting up Python environment...");
 
-    // If the Python version's below 3.3, we must download and install the
-    // `virtualenv` package, since `venv` isn't included.
-    if py_ver_from_alias < Version::new_short(3, 3) {
-        if commands::install_virtualenv_global(&alias).is_err() {
-            util::abort("Problem installing the virtualenv package, required by Python versions older than 3.3)");
-        }
-        if commands::create_legacy_virtualenv(&alias, &lib_path, ".venv").is_err() {
-            util::abort("Problem creating virtual environment");
-        }
-    } else {
-        if commands::create_venv(&alias, &lib_path, ".venv").is_err() {
-            util::abort("Problem creating virtual environment");
-        }
+    if commands::create_venv(&alias, &lib_path, ".venv").is_err() {
+        util::abort("Problem creating virtual environment");
     }
 
     // Wait until the venv's created before continuing, or we'll get errors
@@ -526,7 +515,7 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
             result.push((name.to_owned(), vers));
 
-            // todo dry
+        // todo dry
         } else if let Some(caps) = re_egg.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
@@ -598,7 +587,7 @@ fn sync_packages_with_lock(
                 name_ins,
                 vers_ins.to_string()
             )))
-                .is_ok()
+            .is_ok()
             {
                 meta_folder_removed = true;
             }
@@ -607,7 +596,7 @@ fn sync_packages_with_lock(
                 name_ins,
                 vers_ins.to_string()
             )))
-                .is_ok()
+            .is_ok()
             {
                 meta_folder_removed = true;
             }
@@ -647,7 +636,7 @@ fn sync_packages_with_lock(
         //        if commands::install(&bin_path, &[p], false, false).is_err() {
         //            abort("Problem installing packages");
         //        }
-//        download_and_install_package(p.file_url, p.filename, p.hash_, lib_path, false);
+        //        download_and_install_package(p.file_url, p.filename, p.hash_, lib_path, false);
     }
 }
 
@@ -656,7 +645,7 @@ fn sync_deps(
     lock_filename: &str,
     bin_path: &PathBuf,
     lib_path: &PathBuf,
-    deps: &mut Vec<Req>,
+    reqs: &mut Vec<Req>,
     installed: &Vec<(String, Version)>,
 ) {
     println!("Resolving dependencies...");
@@ -665,12 +654,12 @@ fn sync_deps(
         // dummy parent
         name: String::from("root"),
         version: Version::new(0, 0, 0),
-        reqs: vec![],
+        reqs: reqs.clone(), // todo clone?
         dependencies: vec![],
         constraints_for_this: vec![],
-//        filename: String::new(),
-//        hash: String::new(),
-//        file_url: String::new(),
+        //        filename: String::new(),
+        //        hash: String::new(),
+        //        file_url: String::new(),
     };
 
     let resolved = match dep_resolution::resolve(&mut tree) {
@@ -678,17 +667,45 @@ fn sync_deps(
         Err(_) => {
             abort("Problem resolving dependencies");
             vec![] // todo find proper way to equlaize mathc arms.
-        },
+        }
     };
 
-    println!("RESOLVED: {:?}", &resolved);
-
+    //    println!("RESOLVED: {:#?}", &resolved);
+    //    let mut to_install = vec![];
     for dep in resolved {
-        let data = dep_resolution::get_warehouse_release(&dep.name, &dep.version);
+        let data = dep_resolution::get_warehouse_release(&dep.name, &dep.version)
+            .expect("Problem getting warehouse data");
+
+        // todo: Pick the correct release.
+        let release = &data[0];
+
+        //        let packge = Package {
+        //            name: dep.name.clone(),
+        //            version: dep.version.clone(),
+        //            deps: vec![], // todo: I think we may have purged these.fix
+        //            source: None,  // todo
+        //            filename: release.filename,
+        //            file_url: release.url,
+        //            hash: release.md5_digest,
+        //        };
+        println!(
+            "Downloading {} = \"{}\"",
+            &dep.name,
+            &dep.version.to_string()
+        );
+        // todo: Make download-and_install accept a package instead of sep args?
+        if download_and_install_package(
+            &release.url,
+            &release.filename,
+            &release.md5_digest,
+            lib_path,
+            false,
+        )
+        .is_err()
+        {
+            abort("Problem downloading packages");
+        }
     }
-
-
-    let mut lock_packs = vec![];
 
     // todo big DRY from dep_resolution
     // todo: And you're making redundant warehouse calls to populate versions/find the best.. Fix this by caching.
@@ -708,6 +725,7 @@ fn sync_deps(
 
     // todo: Sort by level (deeper gets installed first) before discarding level info.
 
+    let lock_packs = vec![];
     let lock = Lock {
         metadata: None, // todo
         package: Some(lock_packs),
@@ -866,6 +884,7 @@ py_version = \"3.7\"",
             deps.append(&mut added_deps);
 
             sync_deps(lock_filename, &bin_path, &lib_path, &mut deps, &installed);
+            println!("Installation complete")
         }
         SubCommand::Uninstall { packages } => {
             // todo: DRY with ::Install

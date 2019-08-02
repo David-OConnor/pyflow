@@ -87,6 +87,13 @@ impl Version {
             patch: 0,
         }
     }
+
+    pub fn to_string_med(&self) -> String {
+        format!("{}.{}", self.major, self.minor)
+    }
+    pub fn to_string_short(&self) -> String {
+        format!("{}", self.major,)
+    }
 }
 
 impl FromStr for Version {
@@ -225,7 +232,7 @@ impl FromStr for Constraint {
 
         let caps = match re.captures(s) {
             Some(c) => c,
-            None => return Err(DependencyError::new("Problem parsing Version requirement")),
+            None => return Err(DependencyError::new("Problem parsing version requirement")),
         };
 
         // Only major is required.
@@ -689,9 +696,9 @@ pub struct Package {
     pub deps: Vec<Req>,
     pub source: Option<String>,
     // todo do you want Hash, name etc here? How about DepNode?
-//    pub filename: String,
-//    pub hash: String,
-//    pub file_url: String,
+    //    pub filename: String,
+    //    pub hash: String,
+    //    pub file_url: String,
 }
 
 impl Package {
@@ -909,7 +916,7 @@ pub mod tests {
     }
 
     #[test]
-    fn parse_dep_novers() {
+    fn parse_req_novers() {
         let actual1 = Req::from_str("saturn", false).unwrap();
         let actual2 = Req::from_str("saturn", true).unwrap();
         let actual3 = Req::from_str("saturn; extra == 'bcrypt", true).unwrap();
@@ -1009,6 +1016,24 @@ pub mod tests {
     }
 
     #[test]
+    fn parse_req_pypi() {
+        let p = Req::from_str("pytz (>=2016.3)", true).unwrap();
+        assert_eq!(
+            p,
+            Req::new(
+                "pytz".into(),
+                vec![Constraint {
+                    type_: Gte,
+                    major: 2016,
+                    minor: Some(3),
+                    patch: None,
+                    suffix: None,
+                }]
+            )
+        )
+    }
+
+    #[test]
     fn parse_req_pypi_cplx() {
         let p = Req::from_str("urllib3 (!=1.25.0,!=1.25.1,<=1.26)", true).unwrap();
         assert_eq!(
@@ -1036,7 +1061,7 @@ pub mod tests {
 
         let a = Req::new("package".to_string(), vec![Constraint::new(Exact, 3, 3, 6)]);
 
-        assert_eq!(a._to_pip_string(), "package==3.3.6".to_string());
+        //        assert_eq!(a._to_pip_string(), "package==3.3.6".to_string());
         assert_eq!(a.to_cfg_string(), r#"package = "3.3.6""#.to_string());
     }
 
@@ -1058,7 +1083,7 @@ pub mod tests {
             ],
         );
 
-        assert_eq!(a._to_pip_string(), "'package!=2.7.4,>=3.7'".to_string());
+        //        assert_eq!(a._to_pip_string(), "'package!=2.7.4,>=3.7'".to_string());
         assert_eq!(
             a.to_cfg_string(),
             r#"package = "!=2.7.4, >=3.7""#.to_string()

@@ -13,18 +13,18 @@ struct WarehouseInfo {
     version: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct WarehouseRelease {
+#[derive(Clone, Debug, Deserialize)]
+pub struct WarehouseRelease {
     // Could use digests field, which has sha256 as well as md5.
     // md5 is faster, and should be good enough.
-    filename: String,
-    has_sig: bool,
-    md5_digest: String,
-    packagetype: String,
-    python_version: String,
-    requires_python: Option<String>,
-    url: String,
-    dependencies: Option<Vec<String>>,
+    pub filename: String,
+    pub has_sig: bool,
+    pub md5_digest: String,
+    pub packagetype: String,
+    pub python_version: String,
+    pub requires_python: Option<String>,
+    pub url: String,
+    pub dependencies: Option<Vec<String>>,
 }
 
 /// Only deserialize the info we need to resolve dependencies etc.
@@ -73,14 +73,31 @@ fn get_warehouse_data_w_version(
 }
 
 /// Get release data from the warehouse, ie the file url, name, and hash.
-pub fn get_warehouse_release(name: &str, version: &Version)  -> Result<WarehouseRelease, reqwest::Error> {
+pub fn get_warehouse_release(
+    name: &str,
+    version: &Version,
+) -> Result<Vec<WarehouseRelease>, reqwest::Error> {
     let data = get_warehouse_data(name)?;
-    let release_data = data.releases.get(&version.to_string())
-        .expect(&format!("Unable to find release for {} = \"{}\"", name, version.to_string()));
+
+    // If there are 0s in the version, and unable to find one, try 1 and 2 digit versions on Pypi.
+    let mut release_data = data.releases.get(&version.to_string());
+    if release_data.is_none() && version.patch == 0 {
+        release_data = data.releases.get(&version.to_string_med());
+        if release_data.is_none() && version.minor == 0 {
+            release_data = data.releases.get(&version.to_string_short());
+        }
+    }
+
+    let release_data = release_data.expect(&format!(
+            "Unable to find release for {} = \"{}\"",
+            name,
+            version.to_string()
+        ));
 
     // todo: We need to find the right release! Notably for binary crates on diff oses.
     // todo: For now, go with the first while prototyping.
-    Ok(*release_data.get(0).expect("No release data found."))
+
+    Ok(release_data.clone())
 }
 
 /// Find dependencies for a specific version of a package.
@@ -103,9 +120,9 @@ fn get_warehouse_dep_data(name: &str, version: &Version) -> Result<DepNode, reqw
         if url.packagetype != "bdist_wheel" {
             continue; // todo: Handle missing wheels
         }
-//        result.file_url = url.url;
-//        result.filename = url.filename;
-//        result.hash = url.md5_digest;
+        //        result.file_url = url.url;
+        //        result.filename = url.filename;
+        //        result.hash = url.md5_digest;
         break;
     }
 
@@ -165,53 +182,65 @@ fn guess_graph(
 ) -> Result<(), reqwest::Error> {
     // We gradually add constraits in subsequent iterations of this function, to resolve
     // conflicts as required.
+
     for req in node.reqs.iter() {
-        let subreqs = match cache.get(&req.name) {
-            Some(r) => *r,
+        // Get subdependency info on all versions of this requirement.
+        let info = match cache.get(&req.name) {
+            Some(r) => r.clone(),
             None => {
                 // http call and cache
                 let sr = get_req_cache(&req.name)?;
                 cache.insert(req.name.to_owned(), sr.clone());
-                sr
+                sr.clone()
             }
         };
 
         // todo: Is Depnode the data structure we want here? Lots of unused fields.
-        let mut sub_reqs: Vec<DepNode> = subreqs
-            .into_iter()
-            .filter(|r| {
-                // We only care about examining subdependencies that meet our criteria.
-                let mut compat = true;
-                for constraint in req.constraints {
-                    if !constraint.is_compatible(&Version::from_str(&r.version).unwrap()) {
+        let info1 = info.into_iter().filter(|r| {
+            // We only care about examining subdependencies that meet our criteria.
+            let mut compat = true;
+            for constraint in req.constraints.iter() {
+                if let Ok(v) = Version::from_str(&r.version) {
+                    if !constraint.is_compatible(&v) {
+                        compat = false;
+                    }
+                } else {
+                    compat = false;
+                }
+            }
+            // todo DRY
+            for decon_req in deconfliction_reqs {
+                for constraint in decon_req.constraints.iter() {
+                    if let Ok(v) = Version::from_str(&r.version) {
+                        if !constraint.is_compatible(&v) {
+                            compat = false;
+                        }
+                    } else {
                         compat = false;
                     }
                 }
-                for decon_req in deconfliction_reqs {
-                    for constraint in decon_req.constraints {
-                        if !constraint.is_compatible(&Version::from_str(&r.version).unwrap()) {
-                            compat = false;
-                        }
-                    }
-                }
-                compat
-            })
-            .map(|r| DepNode {
-                name: req.name,
-                version: Version::from_str(&r.version).unwrap(),
-                reqs: r
-                    .requires_dist
-                    .iter()
-                    .map(|vr| Req::from_str(vr, false).unwrap())
-                    .collect(),
+            }
+            compat
+        });
 
-                constraints_for_this: req.constraints,
-                //                filename: "".into(),
-                //                hash: "".into(),
-                //                file_url: "".into(),
-                dependencies: vec![],
-            })
-            .collect();
+        let mut sub_reqs = vec![];
+        for r in info1 {
+            // We may not be able to parse the version if it's something like "2004a".
+            if let Ok(v) = Version::from_str(&r.version) {
+                sub_reqs.push(DepNode {
+                    name: req.name.to_owned(),
+                    version: v,
+                    reqs: r
+                        .requires_dist
+                        .iter()
+                        .map(|vr| Req::from_str(vr, true).unwrap())
+                        .collect(),
+
+                    constraints_for_this: req.constraints.clone(),
+                    dependencies: vec![],
+                });
+            }
+        }
 
         //        cache.append(&mut sub_reqs.clone());
         // todo: Reimplemment cache to cut down on http calls.
@@ -229,7 +258,9 @@ fn guess_graph(
 
         node.dependencies.push(newest_compat);
 
-        guess_graph(&mut newest_compat, deconfliction_reqs, cache);
+        for mut dep in node.dependencies.iter_mut() {
+            guess_graph(&mut dep, deconfliction_reqs, cache).unwrap();
+        }
     }
     Ok(())
 }
@@ -240,15 +271,16 @@ pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
     // The tree starts as leafless.
     // todo: Do we want to return DepNode, Package, or something else?
     let mut cache = HashMap::new();
-    guess_graph(tree, &vec![], &mut cache);
+    guess_graph(tree, &vec![], &mut cache).unwrap();
+
     let mut flattened = vec![];
     flatten(&mut flattened, &tree);
 
     let mut by_name: HashMap<String, Vec<DepNode>> = HashMap::new();
 
-    for dep in flattened {
+    for dep in flattened.iter() {
         if by_name.contains_key(&dep.name) {
-            by_name.get(&dep.name).unwrap().push(dep.clone());
+            //            by_name.get(&dep.name).unwrap().push(dep.clone());  // todo!
         } else {
             by_name.insert(dep.name.clone(), vec![dep.clone()]);
         }
@@ -259,8 +291,10 @@ pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
         //            continue; // Only specified once; no need to resolve.
         //        }  todo put this back if necessary.
 
-        let constraints: Vec<Vec<Constraint>> =
-            deps.iter().map(|d| d.constraints_for_this).collect();
+        let constraints: Vec<Vec<Constraint>> = deps
+            .iter()
+            .map(|d| d.constraints_for_this.clone())
+            .collect();
         let inter = dep_types::intersection_many(&constraints);
     }
 
