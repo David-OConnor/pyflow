@@ -524,7 +524,9 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
     }
     result
 }
-
+use std::{thread, time};
+/// Download and install a package. For wheels, we can just extract the contents into
+/// the lib folder.
 fn download_and_install_package(
     url: &str,
     filename: &str,
@@ -532,14 +534,45 @@ fn download_and_install_package(
     lib_path: &PathBuf,
     bin: bool,
 ) -> Result<(), reqwest::Error> {
+    // todo: Figure out how to handle non-wheels.
     // todo: Md5 isn't secure! sha256 instead?
-    let mut resp = reqwest::get(url)?;
-    let mut out =
-        fs::File::create(lib_path.join(filename)).expect("Failed to save downloaded package file");
+    let mut resp = reqwest::get(url)?; // Download the file
+    let archive_path = lib_path.join(filename);
 
+    // Save the file
+    let mut out = fs::File::create(&archive_path).expect("Failed to save downloaded package file");
     io::copy(&mut resp, &mut out).expect("failed to copy content");
 
     // todo: Impl hash.
+
+    // Extract the wheel. (It's like a zip)
+    let file = fs::File::open(&archive_path).unwrap();
+    let mut archive = zip::ZipArchive::new(file).expect("A");
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).expect("B");
+        let outpath = lib_path.join(file.sanitized_name());
+
+        if (&*file.name()).ends_with('/') {
+            fs::create_dir_all(&outpath).expect("C");
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(&p).expect("D");
+                }
+            }
+            let mut outfile = fs::File::create(&outpath).unwrap();
+            io::copy(&mut file, &mut outfile).unwrap();
+        }
+    }
+
+    // Remove the archive
+    if fs::remove_file(&archive_path).is_err() {
+        abort(&format!(
+            "Problem removing this downloaded package: {:?}",
+            &archive_path
+        ));
+    }
 
     Ok(())
 }
@@ -689,7 +722,7 @@ fn sync_deps(
         //            hash: release.md5_digest,
         //        };
         println!(
-            "Downloading {} = \"{}\"",
+            "Downloading and installing {} = \"{}\"",
             &dep.name,
             &dep.version.to_string()
         );

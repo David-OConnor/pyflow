@@ -89,10 +89,10 @@ pub fn get_warehouse_release(
     }
 
     let release_data = release_data.expect(&format!(
-            "Unable to find release for {} = \"{}\"",
-            name,
-            version.to_string()
-        ));
+        "Unable to find release for {} = \"{}\"",
+        name,
+        version.to_string()
+    ));
 
     // todo: We need to find the right release! Notably for binary crates on diff oses.
     // todo: For now, go with the first while prototyping.
