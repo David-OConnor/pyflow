@@ -1,5 +1,5 @@
 use crate::{
-    dep_types::{self, Constraint, DepNode, Package, Req, Version},
+    dep_types::{self, Constraint, DepNode, Req, Version},
     util,
 };
 use serde::Deserialize;
@@ -39,6 +39,7 @@ struct WarehouseData {
 /// Fetch data about a package from the Pypi Warehouse.
 /// https://warehouse.pypa.io/api-reference/json/
 fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
+    println!("Getting warehouse data for {}", name);
     let url = format!("https://pypi.org/pypi/{}/json", name);
     let resp = reqwest::get(&url)?.json()?;
     Ok(resp)
@@ -63,6 +64,11 @@ fn get_warehouse_data_w_version(
     name: &str,
     version: &Version,
 ) -> Result<WarehouseData, reqwest::Error> {
+    println!(
+        "Getting warehouse data for {} {}",
+        name,
+        version.to_string()
+    );
     let url = format!(
         "https://pypi.org/pypi/{}/{}/json",
         name,
@@ -161,7 +167,6 @@ fn get_req_cache(name: &str) -> Result<(Vec<ReqCache>), reqwest::Error> {
     Ok(reqwest::get(&url)?.json()?)
 }
 
-// todo: Overlap with crate::flatten_deps.
 fn flatten(result: &mut Vec<DepNode>, tree: &DepNode) {
     for node in tree.dependencies.iter() {
         // We don't need sub-deps in the result; they're extraneous info. We only really care about
@@ -183,6 +188,25 @@ fn guess_graph(
     // We gradually add constraits in subsequent iterations of this function, to resolve
     // conflicts as required.
 
+    println!(
+        "DEBUG: IN guess graph for {:#?} {:?}",
+        node.name,
+        node.version.to_string()
+    );
+
+    let filter_compat = |constraints: &[Constraint], r: &ReqCache| {
+        for constraint in constraints.iter() {
+            if let Ok(v) = Version::from_str(&r.version) {
+                if !constraint.is_compatible(&v) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        true
+    };
+
     for req in node.reqs.iter() {
         // Get subdependency info on all versions of this requirement.
         let info = match cache.get(&req.name) {
@@ -195,27 +219,13 @@ fn guess_graph(
             }
         };
 
-        // todo: Is Depnode the data structure we want here? Lots of unused fields.
         let info1 = info.into_iter().filter(|r| {
             // We only care about examining subdependencies that meet our criteria.
             let mut compat = true;
-            for constraint in req.constraints.iter() {
-                if let Ok(v) = Version::from_str(&r.version) {
-                    if !constraint.is_compatible(&v) {
-                        compat = false;
-                    }
-                } else {
-                    compat = false;
-                }
-            }
-            // todo DRY
-            for decon_req in deconfliction_reqs {
-                for constraint in decon_req.constraints.iter() {
-                    if let Ok(v) = Version::from_str(&r.version) {
-                        if !constraint.is_compatible(&v) {
-                            compat = false;
-                        }
-                    } else {
+            compat = filter_compat(&req.constraints, r);
+            if compat {
+                for decon_req in deconfliction_reqs {
+                    if !filter_compat(&decon_req.constraints, r) {
                         compat = false;
                     }
                 }
@@ -279,6 +289,8 @@ pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
     let mut by_name: HashMap<String, Vec<DepNode>> = HashMap::new();
 
     for dep in flattened.iter() {
+        println!("Resolving {}, {}", dep.name, dep.version.to_string());
+
         if by_name.contains_key(&dep.name) {
             //            by_name.get(&dep.name).unwrap().push(dep.clone());  // todo!
         } else {

@@ -19,9 +19,26 @@ mod commands;
 mod dep_resolution;
 mod dep_types;
 mod edit_files;
+mod install;
 mod util;
 
-//type CleanedDeps = HashMap<String, (u32, Vec<(Version, Version)>)>;
+#[derive(Copy, Clone, Debug)]
+pub enum PackageType {
+    Wheel,
+    Source,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+/// Used to determine which version of a binary package to download. Assume 64-bit.
+enum Os {
+    Linux32,
+    Linux,
+    Windows32,
+    Windows,
+    Mac32,
+    Mac,
+    Any,
+}
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Pypackage", about = "Python packaging and publishing")]
@@ -226,7 +243,6 @@ impl Config {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
 
-        println!("FILE: {:?}", file);
         match fs::write(file, result) {
             Ok(_) => println!("Created `pyproject.toml`"),
             Err(_) => abort("Problem writing `pyproject.toml`"),
@@ -397,6 +413,37 @@ fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
     Ok(())
 }
 
+/// Find the operating system from a wheel filename. This doesn't appear to be available
+/// anywhere else on the Pypi Warehouse.
+fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyError> {
+    // Format is "name-version-pythonversion-?-os"
+    let re = Regex::new(r"^.*-.*-.*-.*-(.*).whl$").unwrap();
+    if let Some(caps) = re.captures(filename) {
+        let parsed = caps.get(1).unwrap().as_str();
+
+        let result = match parsed {
+            "manylinux1_i686" => Os::Linux32,
+            "manylinux1_x86_64" => Os::Linux,
+            "win32" => Os::Windows32,
+            "win_amd64" => Os::Windows,
+            "any" => Os::Any,
+            _ => {
+                if parsed.contains("mac") {
+                    Os::Mac
+                } else {
+                    abort(&format!("Unknown OS type in wheel filename: {}", parsed));
+                    Os::Linux // todo dummy for match
+                }
+            }
+        };
+        return Ok(result);
+    }
+
+    Err(dep_types::DependencyError::new(
+        "Problem parsing os from wheel name",
+    ))
+}
+
 fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     // We only use the alias for creating the virtual environment. After that,
     // we call our venv's executable directly.
@@ -480,16 +527,16 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
 /// Extract dependencies from a nested hierarchy. Ultimately, we can only (practially) have
 /// one copy per dep. Record what level they came from.
 /// // todo: Is there a clever way to have multiple versions of a dep installed???
-fn flatten_deps(result: &mut Vec<(u32, DepNode)>, level: u32, tree: &DepNode) {
-    for node in tree.dependencies.iter() {
-        // We don't need sub-deps in the result; they're extraneous info. We only really care about
-        // the name and version requirements.
-        let mut result_dep = node.clone();
-        result_dep.dependencies = vec![];
-        result.push((level, result_dep));
-        flatten_deps(result, level + 1, &node);
-    }
-}
+//fn flatten_deps(result: &mut Vec<(u32, DepNode)>, level: u32, tree: &DepNode) {
+//    for node in tree.dependencies.iter() {
+//        // We don't need sub-deps in the result; they're extraneous info. We only really care about
+//        // the name and version requirements.
+//        let mut result_dep = node.clone();
+//        result_dep.dependencies = vec![];
+//        result.push((level, result_dep));
+//        flatten_deps(result, level + 1, &node);
+//    }
+//}
 
 /// Find teh packages installed, by browsing the lib folder.
 fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
@@ -524,58 +571,6 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
     }
     result
 }
-use std::{thread, time};
-/// Download and install a package. For wheels, we can just extract the contents into
-/// the lib folder.
-fn download_and_install_package(
-    url: &str,
-    filename: &str,
-    hash: &str,
-    lib_path: &PathBuf,
-    bin: bool,
-) -> Result<(), reqwest::Error> {
-    // todo: Figure out how to handle non-wheels.
-    // todo: Md5 isn't secure! sha256 instead?
-    let mut resp = reqwest::get(url)?; // Download the file
-    let archive_path = lib_path.join(filename);
-
-    // Save the file
-    let mut out = fs::File::create(&archive_path).expect("Failed to save downloaded package file");
-    io::copy(&mut resp, &mut out).expect("failed to copy content");
-
-    // todo: Impl hash.
-
-    // Extract the wheel. (It's like a zip)
-    let file = fs::File::open(&archive_path).unwrap();
-    let mut archive = zip::ZipArchive::new(file).expect("A");
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).expect("B");
-        let outpath = lib_path.join(file.sanitized_name());
-
-        if (&*file.name()).ends_with('/') {
-            fs::create_dir_all(&outpath).expect("C");
-        } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    fs::create_dir_all(&p).expect("D");
-                }
-            }
-            let mut outfile = fs::File::create(&outpath).unwrap();
-            io::copy(&mut file, &mut outfile).unwrap();
-        }
-    }
-
-    // Remove the archive
-    if fs::remove_file(&archive_path).is_err() {
-        abort(&format!(
-            "Problem removing this downloaded package: {:?}",
-            &archive_path
-        ));
-    }
-
-    Ok(())
-}
 
 /// Uninstall and install packages to be in accordance with the lock.
 fn sync_packages_with_lock(
@@ -599,50 +594,7 @@ fn sync_packages_with_lock(
             || name_ins.to_lowercase() == "twine"
             || name_ins.to_lowercase() == "setuptools"
             || name_ins.to_lowercase() == "setuptools"
-        {
-            println!("Uninstalling {}: {}", name_ins, vers_ins.to_string());
-            // Uninstall the package
-            // package folders appear to be lowercase, while metadata keeps the package title's casing.
-            if fs::remove_dir_all(lib_path.join(name_ins.to_lowercase())).is_err() {
-                println!(
-                    "{}Problem uninstalling {} {}{}",
-                    color::Fg(color::LightRed),
-                    name_ins,
-                    vers_ins.to_string(),
-                    style::Reset
-                )
-            }
-
-            // Only report error if both dist-info and egg-info removal fail.
-            let mut meta_folder_removed = false;
-            if fs::remove_dir_all(lib_path.join(format!(
-                "{}-{}.dist-info",
-                name_ins,
-                vers_ins.to_string()
-            )))
-            .is_ok()
-            {
-                meta_folder_removed = true;
-            }
-            if fs::remove_dir_all(lib_path.join(format!(
-                "{}-{}.egg-info",
-                name_ins,
-                vers_ins.to_string()
-            )))
-            .is_ok()
-            {
-                meta_folder_removed = true;
-            }
-            if !meta_folder_removed {
-                println!(
-                    "{}Problem uninstalling metadata for {}: {}{}",
-                    color::Fg(color::LightRed),
-                    name_ins,
-                    vers_ins.to_string(),
-                    style::Reset,
-                )
-            }
-        }
+        {}
     }
 
     for lock_pack in lock_packs {
@@ -680,8 +632,11 @@ fn sync_deps(
     lib_path: &PathBuf,
     reqs: &mut Vec<Req>,
     installed: &Vec<(String, Version)>,
+    python_vers: &Version,
+    os: Os,
 ) {
     println!("Resolving dependencies...");
+
     // Recursively add sub-dependencies.
     let mut tree = DepNode {
         // dummy parent
@@ -690,9 +645,6 @@ fn sync_deps(
         reqs: reqs.clone(), // todo clone?
         dependencies: vec![],
         constraints_for_this: vec![],
-        //        filename: String::new(),
-        //        hash: String::new(),
-        //        file_url: String::new(),
     };
 
     let resolved = match dep_resolution::resolve(&mut tree) {
@@ -703,36 +655,110 @@ fn sync_deps(
         }
     };
 
-    //    println!("RESOLVED: {:#?}", &resolved);
-    //    let mut to_install = vec![];
-    for dep in resolved {
+    for dep in resolved.iter() {
+        // Move on if we've already installed this specific package/version
+        let mut already_installed = false;
+        for (inst_name, inst_ver) in installed.iter() {
+            if *inst_name.to_lowercase() == dep.name.to_lowercase() && *inst_ver == dep.version {
+                already_installed = true;
+            }
+        }
+        if already_installed {
+            continue;
+        }
+
         let data = dep_resolution::get_warehouse_release(&dep.name, &dep.version)
             .expect("Problem getting warehouse data");
 
-        // todo: Pick the correct release.
-        let release = &data[0];
+        let mut compatible_releases = vec![];
+        // Store source releases as a fallback, for if no wheels are found.
+        let mut source_releases = vec![];
 
-        //        let packge = Package {
-        //            name: dep.name.clone(),
-        //            version: dep.version.clone(),
-        //            deps: vec![], // todo: I think we may have purged these.fix
-        //            source: None,  // todo
-        //            filename: release.filename,
-        //            file_url: release.url,
-        //            hash: release.md5_digest,
-        //        };
+        for rel in data.iter() {
+            let mut compatible = true;
+            match rel.packagetype.as_ref() {
+                "bdist_wheel" => {
+                    if let Some(py_ver) = &rel.requires_python {
+                        // If a version constraint exists, make sure it's compatible.
+                        let py_req = Constraint::from_str(&py_ver)
+                            .expect("Problem parsing constraint from requires_python");
+
+                        if !py_req.is_compatible(&python_vers) {
+                            compatible = false;
+                        }
+                    }
+
+                    let wheel_os = os_from_wheel_fname(&rel.filename)
+                        .expect("Problem getting os from wheel name");
+                    if wheel_os != os && wheel_os != Os::Any {
+                        compatible = false;
+                    }
+
+                    // Packages that use C code(eg numpy) may fail to load C extensions if installing
+                    // for the wrong version of python (eg  cp35 when python 3.7 is installed), even
+                    // if `requires_python` doesn't indicate an incompatibility. Check `python_version`.
+                    match Version::from_cp_str(&rel.python_version) {
+                        Ok(req_v) => {
+                            if req_v != *python_vers {
+                                compatible = false;
+                            }
+                        }
+                        Err(e) => {
+                            (println!(
+                                "Unable to match python version from python_version: {}",
+                                &rel.python_version
+                            ))
+                        } // todo
+                    }
+
+                    if compatible {
+                        compatible_releases.push(rel.clone());
+                    }
+                }
+                //                "source" => (), // todo: Figure out if you're going to build from source, use pip etc.
+                "sdist" => source_releases.push(rel.clone()),
+                _ => abort(&format!(
+                    "Found surprising package type: {}",
+                    rel.packagetype
+                )),
+            }
+        }
+
+        let best_release;
+        let package_type;
+        // todo: Sort further / try to match exact python_version if able.
+        if compatible_releases.is_empty() {
+            if source_releases.is_empty() {
+                abort(&format!(
+                    "Unable to find a compatible release for {}: {}",
+                    dep.name,
+                    dep.version.to_string()
+                ));
+                best_release = &compatible_releases[0]; // todo temp
+                package_type = PackageType::Wheel // todo temp to satisfy match
+            } else {
+                best_release = &source_releases[0];
+                package_type = PackageType::Source;
+            }
+        } else {
+            best_release = &compatible_releases[0];
+            package_type = PackageType::Wheel;
+        }
+
         println!(
             "Downloading and installing {} = \"{}\"",
             &dep.name,
             &dep.version.to_string()
         );
         // todo: Make download-and_install accept a package instead of sep args?
-        if download_and_install_package(
-            &release.url,
-            &release.filename,
-            &release.md5_digest,
+        if install::download_and_install_package(
+            &best_release.url,
+            &best_release.filename,
+            &best_release.md5_digest,
             lib_path,
+            bin_path,
             false,
+            package_type,
         )
         .is_err()
         {
@@ -740,23 +766,17 @@ fn sync_deps(
         }
     }
 
-    // todo big DRY from dep_resolution
-    // todo: And you're making redundant warehouse calls to populate versions/find the best.. Fix this by caching.
-    //    for (name, (level, req)) in cleaned {
-    //        let versions = dep_resolution::get_warehouse_versions(&name).unwrap();
-    //        let compatible_versions = dep_resolution::filter_compatible2(&req, versions);
-    //
-    //        let newest_compat = compatible_versions.into_iter().max().unwrap();
-    //
-    //        lock_packs.push(LockPackage {
-    //            name: name.to_owned(),
-    //            version: newest_compat.to_string(),
-    //            source: None,       // todo
-    //            dependencies: None, // todo??
-    //        });
-    //    }
-
-    // todo: Sort by level (deeper gets installed first) before discarding level info.
+    for (inst_name, inst_vers) in installed.iter() {
+        let mut required = false;
+        for dep in resolved.iter() {
+            if dep.name.to_lowercase() == *inst_name.to_lowercase() && dep.version == *inst_vers {
+                required = true;
+            }
+        }
+        if !required {
+            install::uninstall(inst_name, inst_vers, lib_path)
+        }
+    }
 
     let lock_packs = vec![];
     let lock = Lock {
@@ -767,11 +787,11 @@ fn sync_deps(
     // Now that the deps are resolved, flattened, cleaned, and only have one per package name, we can
     // pick the best match of each, download, and lock.
 
-    if let Some(lock_packs) = &lock.package {
-        sync_packages_with_lock(bin_path, lib_path, &lock_packs, installed)
-    } else {
-        println!("Found no dependencies in `pyproject.toml` to install")
-    }
+    //    if let Some(lock_packs) = &lock.package {
+    //        sync_packages_with_lock(bin_path, lib_path, &lock_packs, installed)
+    //    } else {
+    //        println!("Found no dependencies in `pyproject.toml` to install")
+    //    }
 
     if write_lock(lock_filename, &lock).is_err() {
         abort("Problem writing lock file");
@@ -822,6 +842,8 @@ fn main() {
 
     // Check for environments. Create one if none exist. Set `vers_path`.
     let mut vers_path = PathBuf::new();
+    let mut py_vers = Version::new(0, 0, 0);
+
     match py_version_cfg {
         // The version's explicitly specified; check if an environment for that version
         // exists. If not, create one, and make sure it's the right version.
@@ -831,6 +853,7 @@ fn main() {
 
             // Don't include version patch in the directory name, per PEP 582.
             vers_path = pypackage_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor));
+            py_vers = Version::new_short(cfg_v.major, cfg_v.minor);
 
             if !util::venv_exists(&vers_path.join(".venv")) {
                 let created_vers = create_venv(Some(&cfg_v), &pypackage_dir);
@@ -855,12 +878,17 @@ fn main() {
                     let created_vers = create_venv(None, &pypackage_dir);
                     vers_path = pypackage_dir
                         .join(&format!("{}.{}", created_vers.major, created_vers.minor));
+                    py_vers = Version::new_short(created_vers.major, created_vers.minor);
                 }
                 1 => {
                     vers_path = pypackage_dir.join(&format!(
                         "{}.{}",
                         venv_versions_found[0].major, venv_versions_found[0].minor
                     ));
+                    py_vers = Version::new_short(
+                        venv_versions_found[0].major,
+                        venv_versions_found[0].minor,
+                    );
                 }
                 _ => abort(
                     "Multiple Python environments found
@@ -916,7 +944,16 @@ py_version = \"3.7\"",
             let mut deps = cfg.dependencies.clone();
             deps.append(&mut added_deps);
 
-            sync_deps(lock_filename, &bin_path, &lib_path, &mut deps, &installed);
+            // todo: Determine os.
+            sync_deps(
+                lock_filename,
+                &bin_path,
+                &lib_path,
+                &mut deps,
+                &installed,
+                &py_vers,
+                Os::Linux,
+            );
             println!("Installation complete")
         }
         SubCommand::Uninstall { packages } => {
@@ -935,6 +972,8 @@ py_version = \"3.7\"",
                 &lib_path,
                 &mut cfg.dependencies,
                 &installed,
+                &py_vers,
+                Os::Linux,
             )
         }
 

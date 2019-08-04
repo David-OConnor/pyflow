@@ -94,6 +94,31 @@ impl Version {
     pub fn to_string_short(&self) -> String {
         format!("{}", self.major,)
     }
+
+    /// ie cp37, a version from Pypi.
+    pub fn from_cp_str(s: &str) -> Result<Self, DependencyError> {
+        if s == "py2.py3" {
+            return Ok(Self::new(3, 3, 0));
+        }
+
+        let re = Regex::new(r"^(?:(?:cp)|(?:py))?(\d)(\d)?$").unwrap();
+
+        if let Some(caps) = re.captures(s) {
+            return Ok(Self {
+                major: caps.get(1).unwrap().as_str().parse::<u32>()?,
+                minor: match caps.get(2) {
+                    Some(m) => m.as_str().parse::<u32>()?,
+                    None => 0,
+                },
+                patch: 0,
+            });
+        }
+
+        Err(DependencyError::new(&format!(
+            "Problem parsing Python version from {}",
+            s
+        )))
+    }
 }
 
 impl FromStr for Version {
