@@ -108,7 +108,6 @@ pub fn get_warehouse_release(
 
 /// Find dependencies for a specific version of a package.
 fn get_warehouse_dep_data(name: &str, version: &Version) -> Result<DepNode, reqwest::Error> {
-    // todo return Result with custom fetch error type
     let data = get_warehouse_data_w_version(name, version)?;
     let mut result = DepNode {
         name: name.to_owned(),
@@ -117,20 +116,7 @@ fn get_warehouse_dep_data(name: &str, version: &Version) -> Result<DepNode, reqw
         dependencies: vec![],
 
         constraints_for_this: vec![],
-        //        hash: "".into(),
-        //        file_url: "".into(),
-        //        filename: "".into(),
     };
-
-    for url in data.urls.iter() {
-        if url.packagetype != "bdist_wheel" {
-            continue; // todo: Handle missing wheels
-        }
-        //        result.file_url = url.url;
-        //        result.filename = url.filename;
-        //        result.hash = url.md5_digest;
-        break;
-    }
 
     if let Some(reqs) = data.info.requires_dist {
         for req in reqs {
@@ -182,17 +168,24 @@ fn flatten(result: &mut Vec<DepNode>, tree: &DepNode) {
 // If unable to resolve this way, subsequently run this with additional deconfliction reqs.
 fn guess_graph(
     node: &mut DepNode,
+    reqs_searched: &mut Vec<Req>,
+    deps_searched: &mut Vec<(String, Version)>, // name, version
     deconfliction_reqs: &[Req],
     cache: &mut HashMap<String, Vec<ReqCache>>,
 ) -> Result<(), reqwest::Error> {
-    // We gradually add constraits in subsequent iterations of this function, to resolve
+    // deconfliction_reqs: We gradually add constraits in subsequent iterations of this function, to resolve
     // conflicts as required.
+
+    // reqs_searched is a cache of nodes we've already searched, so we know to skip over in the future
+    // deps_searched is a cache of specific package/version combo's we've searched; similar idea.
 
     println!(
         "DEBUG: IN guess graph for {:#?} {:?}",
         node.name,
         node.version.to_string()
     );
+
+    deps_searched.push((node.name.clone(), node.version));
 
     let filter_compat = |constraints: &[Constraint], r: &ReqCache| {
         for constraint in constraints.iter() {
@@ -208,14 +201,19 @@ fn guess_graph(
     };
 
     for req in node.reqs.iter() {
+        // todo: Perhaps use the suffix later.
+        if req.suffix.is_some() || reqs_searched.contains(&req) {
+            continue;
+        }
+        reqs_searched.push(req.clone());
         // Get subdependency info on all versions of this requirement.
         let info = match cache.get(&req.name) {
             Some(r) => r.clone(),
             None => {
                 // http call and cache
-                let sr = get_req_cache(&req.name)?;
-                cache.insert(req.name.to_owned(), sr.clone());
-                sr.clone()
+                let subreq = get_req_cache(&req.name)?;
+                cache.insert(req.name.to_owned(), subreq.clone());
+                subreq
             }
         };
 
@@ -243,7 +241,7 @@ fn guess_graph(
                     reqs: r
                         .requires_dist
                         .iter()
-                        .map(|vr| Req::from_str(vr, true).unwrap())
+                        .map(|vr| Req::from_str(vr, true).expect("Problem parsing req from string"))
                         .collect(),
 
                     constraints_for_this: req.constraints.clone(),
@@ -251,9 +249,6 @@ fn guess_graph(
                 });
             }
         }
-
-        //        cache.append(&mut sub_reqs.clone());
-        // todo: Reimplemment cache to cut down on http calls.
 
         if sub_reqs.is_empty() {
             util::abort(&format!(
@@ -264,12 +259,35 @@ fn guess_graph(
         let mut newest_compat = sub_reqs
             .into_iter()
             .max_by(|a, b| a.version.cmp(&b.version))
-            .unwrap();
+            .expect("Problem finding newest compatible match");
 
         node.dependencies.push(newest_compat);
 
         for mut dep in node.dependencies.iter_mut() {
-            guess_graph(&mut dep, deconfliction_reqs, cache).unwrap();
+            // Without this check, we could get into infinite recursions with circular references,
+            // ie a requires b which requires c which requires a.
+            //            let mut searched_all_reqs = true;
+            //            for req in dep.reqs.iter() {
+            //                if !reqs_searched.contains(&req) {
+            //                    searched_all_reqs = false;
+            //                    break
+            //                }
+            //            }
+            //            println!("searched all reqs: {}", searched_all_reqs);
+            //            if !searched_all_reqs {
+
+            if deps_searched.contains(&(dep.name.clone(), dep.version)) {
+                continue;
+            }
+            guess_graph(
+                &mut dep,
+                reqs_searched,
+                deps_searched,
+                deconfliction_reqs,
+                cache,
+            )
+            .expect("Unable to resolve dependencies (recursion)");
+            //            }
         }
     }
     Ok(())
@@ -279,9 +297,17 @@ fn guess_graph(
 /// all constraints. Gets data from a cached repo, and Pypi.
 pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
     // The tree starts as leafless.
-    // todo: Do we want to return DepNode, Package, or something else?
+    let mut reqs_searched = Vec::new();
+    let mut deps_searched = Vec::new();
     let mut cache = HashMap::new();
-    guess_graph(tree, &vec![], &mut cache).unwrap();
+    guess_graph(
+        tree,
+        &mut reqs_searched,
+        &mut deps_searched,
+        &vec![],
+        &mut cache,
+    )
+    .expect("Unable to resolve dependencies");
 
     let mut flattened = vec![];
     flatten(&mut flattened, &tree);
@@ -291,10 +317,11 @@ pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
     for dep in flattened.iter() {
         println!("Resolving {}, {}", dep.name, dep.version.to_string());
 
-        if by_name.contains_key(&dep.name) {
-            //            by_name.get(&dep.name).unwrap().push(dep.clone());  // todo!
-        } else {
-            by_name.insert(dep.name.clone(), vec![dep.clone()]);
+        match by_name.get_mut(&dep.name) {
+            Some(k) => k.push(dep.clone()),
+            None => {
+                by_name.insert(dep.name.clone(), vec![dep.clone()]);
+            }
         }
     }
 

@@ -1,7 +1,8 @@
-use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
+
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 
@@ -242,7 +243,6 @@ pub struct Constraint {
     pub major: u32,
     pub minor: Option<u32>,
     pub patch: Option<u32>,
-    pub suffix: Option<String>, // Used for storing extra info like beta, rc, dev etc.
 }
 
 impl FromStr for Constraint {
@@ -281,24 +281,11 @@ impl FromStr for Constraint {
             None => None,
         };
 
-        let suffix = match caps.get(5) {
-            Some(s) => {
-                let s_str = s.as_str();
-                if s_str.is_empty() {
-                    None
-                } else {
-                    Some(s_str.to_owned())
-                }
-            }
-            None => None,
-        };
-
         Ok(Self {
             major,
             minor,
             patch,
             type_,
-            suffix,
         })
     }
 }
@@ -311,7 +298,7 @@ impl Constraint {
             major,
             minor: Some(minor),
             patch: Some(patch),
-            suffix: None,
+            //            suffix: None,
         }
     }
 
@@ -343,19 +330,14 @@ impl Constraint {
             }
         }
 
-        let suffix_text = if let Some(suffix) = self.suffix.clone() {
-            suffix
-        } else {
-            "".to_owned()
-        };
         if let Some(mi) = self.minor {
             if let Some(p) = self.patch {
-                format!("{}{}.{}.{}{}", type_str, self.major, mi, p, suffix_text)
+                format!("{}{}.{}.{}", type_str, self.major, mi, p)
             } else {
-                format!("{}{}.{}{}", type_str, self.major, mi, suffix_text)
+                format!("{}{}.{}", type_str, self.major, mi)
             }
         } else {
-            format!("{}{}{}", type_str, self.major, suffix_text)
+            format!("{}{}", type_str, self.major)
         }
     }
 
@@ -581,41 +563,62 @@ pub fn intersection(
 pub struct Req {
     pub name: String,
     pub constraints: Vec<Constraint>,
+    pub suffix: Option<String>,
 }
 
 impl Req {
-    pub fn new(name: String, reqs: Vec<Constraint>) -> Self {
+    pub fn new(name: String, constraints: Vec<Constraint>) -> Self {
         Self {
             name,
-            constraints: reqs,
+            constraints,
+            suffix: None,
         }
     }
 
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
         let re = if pypi_fmt {
             // ie saturn (>=0.3.4)
-            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s*;.*)?$").unwrap()
+            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s*;(.*))?$").unwrap()
         } else {
-            // ie saturn = ">=0.3.4"
+            // ie saturn = ">=0.3.4", as in pyproject.toml
+            // todo extras in this format
             Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
         };
         if let Some(caps) = re.captures(s) {
-            let name = caps.get(1).unwrap().as_str().to_string();
+            let name = caps.get(1).unwrap().as_str().to_owned();
             let reqs_m = caps.get(2).unwrap();
-            let reqs = Constraint::from_str_multiple(reqs_m.as_str())?;
+            let constraints = Constraint::from_str_multiple(reqs_m.as_str())?;
 
-            return Ok(Self::new(name, reqs));
+            let suffix = match caps.get(3) {
+                Some(s) => Some(s.as_str().to_owned()),
+                None => None,
+            };
+
+            return Ok(Self {
+                name,
+                constraints,
+                suffix,
+            });
         };
 
         // Check if no version is specified.
         let novers_re = if pypi_fmt {
-            Regex::new(r"^([a-zA-Z\-0-9]+)(?:\s*;)?").unwrap()
+            Regex::new(r"^([a-zA-Z\-0-9]+)(?:\s*;(.*))?").unwrap()
         } else {
+            // todo extras
             Regex::new(r"^([a-zA-Z\-0-9]+)$").unwrap()
         };
 
-        if let Some(m) = novers_re.captures(s) {
-            return Ok(Self::new(m.get(1).unwrap().as_str().to_string(), vec![]));
+        if let Some(caps) = novers_re.captures(s) {
+            let suffix = match caps.get(2) {
+                Some(s) => Some(s.as_str().to_owned()),
+                None => None,
+            };
+            return Ok(Self {
+                name: caps.get(1).unwrap().as_str().to_string(),
+                constraints: vec![],
+                suffix,
+            });
         }
 
         Err(DependencyError::new(&format!(
@@ -624,6 +627,7 @@ impl Req {
         )))
     }
 
+    /// We use this for parsing requirements.txt.
     pub fn from_pip_str(s: &str) -> Option<Self> {
         // todo multiple ie single quotes support?
         // Check if no version is specified.
@@ -652,6 +656,13 @@ impl Req {
 
     /// eg `saturn = "^0.3.1"` or `matplotlib = "3.1.1"`
     pub fn to_cfg_string(&self) -> String {
+        // todo suffix?
+        //                let suffix_text = if let Some(suffix) = self.suffix.clone() {
+        //            suffix
+        //        } else {
+        //            "".to_owned()
+        //        };
+
         match self.constraints.len() {
             0 => self.name.to_owned(),
             _ => format!(
@@ -796,8 +807,9 @@ impl Lock {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
     use ReqType::{Caret, Exact, Gt, Gte, Lte, Ne, Tilde};
+
+    use super::*;
 
     #[test]
     fn compat_caret() {

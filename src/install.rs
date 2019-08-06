@@ -6,7 +6,6 @@ use std::{fs, io, path::PathBuf, process::Command};
 use tar::Archive;
 use termion::{color, style};
 
-
 /// Extract the wheel. (It's like a zip)
 fn install_wheel(file: &fs::File, lib_path: &PathBuf) {
     // Separate function, since we use it twice.
@@ -87,13 +86,24 @@ pub fn download_and_install_package(
             // todo: wheel must be installed (Probably as binary) prior to this step.
             // Build a wheel from source.
             Command::new(format!("{}/python", bin_path.to_str().unwrap()))
-                .current_dir(&extracted_parent) // todo: bin path
+                .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])
-//                .spawn()
+                //                .spawn()
                 .output()
                 .unwrap();
 
             let built_wheel_filename = "toolz-0.10.0-py3-none-any.whl"; // todo
+
+            let mut built_wheel_filename= String::new();
+            for entry in fs::read_dir(extracted_parent.join("dist")).unwrap() {
+                let entry = entry.unwrap();
+                built_wheel_filename = entry.path().file_name().unwrap().to_str().unwrap().to_owned();
+                break
+            }
+            let built_wheel_filename = &built_wheel_filename;
+            if built_wheel_filename.is_empty() {
+                util::abort("Problem finding built wheel")
+            }
 
             // todo: Again, try to move vice copy.
             println!("ex par: {:?}", extracted_parent);
@@ -105,7 +115,8 @@ pub fn download_and_install_package(
             )
                 .expect("Problem copying wheel built from source");
 
-            let file_created = fs::File::open(&lib_path.join(built_wheel_filename)).expect("Can't find created wheel.");
+            let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
+                .expect("Can't find created wheel.");
             install_wheel(&file_created, lib_path);
 
             // Remove the created and moved wheel

@@ -699,7 +699,8 @@ fn sync_deps(
                     // if `requires_python` doesn't indicate an incompatibility. Check `python_version`.
                     match Version::from_cp_str(&rel.python_version) {
                         Ok(req_v) => {
-                            if req_v != *python_vers {
+                            if req_v > *python_vers {
+                                // Assume Python is backwards compatible.
                                 compatible = false;
                             }
                         }
