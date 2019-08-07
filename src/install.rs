@@ -40,8 +40,6 @@ pub fn download_and_install_package(
     bin: bool, // todo what is this for?
     package_type: crate::PackageType,
 ) -> Result<(), reqwest::Error> {
-    // todo: Figure out how to handle non-wheels.
-    // todo: Md5 isn't secure! sha256 instead?
     let mut resp = reqwest::get(url)?; // Download the file
     let archive_path = lib_path.join(filename);
 
@@ -50,6 +48,7 @@ pub fn download_and_install_package(
     io::copy(&mut resp, &mut out).expect("failed to copy content");
     let file = fs::File::open(&archive_path).unwrap();
 
+    // todo: Md5 isn't secure! sha256 instead?
     // todo: Impl hash.
 
     // todo: Setup 'binary'scripts.
@@ -94,11 +93,17 @@ pub fn download_and_install_package(
 
             let built_wheel_filename = "toolz-0.10.0-py3-none-any.whl"; // todo
 
-            let mut built_wheel_filename= String::new();
+            let mut built_wheel_filename = String::new();
             for entry in fs::read_dir(extracted_parent.join("dist")).unwrap() {
                 let entry = entry.unwrap();
-                built_wheel_filename = entry.path().file_name().unwrap().to_str().unwrap().to_owned();
-                break
+                built_wheel_filename = entry
+                    .path()
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_owned();
+                break;
             }
             let built_wheel_filename = &built_wheel_filename;
             if built_wheel_filename.is_empty() {
@@ -113,7 +118,7 @@ pub fn download_and_install_package(
                 lib_path.join(built_wheel_filename),
                 &options,
             )
-                .expect("Problem copying wheel built from source");
+            .expect("Problem copying wheel built from source");
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");

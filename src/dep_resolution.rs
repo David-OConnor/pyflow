@@ -326,10 +326,6 @@ pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
     }
 
     for (name, deps) in by_name.iter() {
-        //        if dep.len() <= 1 {
-        //            continue; // Only specified once; no need to resolve.
-        //        }  todo put this back if necessary.
-
         let constraints: Vec<Vec<Constraint>> = deps
             .iter()
             .map(|d| d.constraints_for_this.clone())

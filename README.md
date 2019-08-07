@@ -1,11 +1,12 @@
 # Py Packages
 
-This tool attempts to implement 
+This tool implements
 [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/). 
-It abstracts over commands used for creating
-activating, modifying, and using virtual environments. Per PEP 582, dependencies
+It manages dependencies, keeping them isolated in the project directory, and runs
+python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
-The virtual environment is created in the same diretory as `lib`.
+A virtual environment is created in the same diretory as `lib`, and is used
+transparently.
 
 This is a new project undergoing active development: expect breaking changes
 in the near future. 
@@ -15,11 +16,11 @@ Python ≥ 3.3 is required.
 
 ## Installation
 There are 2 main ways to install:
-- Download a binary from the `releases` page. For example, on Ubuntu, download and run
+- Download a binary from the `releases` page. On Debian or Ubuntu, download and run
 [This deb](https:). 
-    -- On W
 
-For example, place it under `/usr/bin` in linux, 
+On other Operating systems, download the appropriate binary, and place it somewhere
+accessible by the system path. For example, place it under `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 
 - If you have `Rust` installed, the most convenient way is to 
@@ -87,14 +88,16 @@ Running `pypackage install` loads the project's requirements from `pyproject.tom
 package name, eg `pypackage install matplotlib` simply adds that requirement before proceeding.
 Compatible versions of dependencies are determined using info from 
 the [PyPi Warehosue](https://github.com/pypa/warehouse) (available versions, and hash info), 
-and the `pydeps` database (dependency requirements). A dependency graph is built
-using a cached database online. They're downloaded using pip, verified using
-hashes, and the exact versions usedare stored in a lock file.
+and the `pydeps` database. We use `pydeps`, which is built specifically for this project,
+due to inconsistent dependency information stored on `pypi`. A dependency graph is built
+using this cached atabase. This tool downloads and unpacks wheels from `pypi`, or builds
+wheels from source if none are availabile. It verifies hashes, and the exact versions usedare stored 
+in a lock file.
 
 Important caveat: There appears to be no way install multiple versions of a package
 simultaneously without renaming them; this is a factor when encountering incompatible sub-dependencies.
 Perhaps this can be sorted around through behind-the-scenes renaming and import-line
-edits. 
+edits, but for now may result in unresolvable trees.
 
 ## Why?
 Using a Python installation directly when installing dependencies can become messy.
@@ -121,11 +124,11 @@ python main.py
 deactivate
 ```
 
-This signifcant impacts the usability of Python, especially for new users. 
+This signifcantly impacts the usability of Python, especially for new users. 
 IDEs like `PyCharm` abstract this away, but are a specific solution
 to a general problem. See [this section of PEP 582](https://www.python.org/dev/peps/pep-0582/#id3).
 
-Additionally, if multiple versions of Python are installed, verifying you're using
+If multiple versions of Python are installed, verifying you're using
 the one you want may be difficult.
 
 When building and deploying packages, a set of other, redudant files are 
@@ -136,25 +139,26 @@ traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`
 `Pipenv` and `Poetry` both address this problem. Some reasons why this tool is different:
 
 - It keeps dependencies in the project directory, in `__pypackages__`, and
-doesn't modify files outside
-the project directory.
+doesn't modify files outside the project directory.
 
-- It's dependency resolution and locking is much faster due to using a cached
-database of dependencies, vice downloading and checking each package.
+- It doesn't use Pip.
+
+- Its dependency resolution and locking is faster due to using a cached
+database of dependencies, vice downloading and checking each package, or relying
+on the incomplete data available on the `pypi warehouse`.
 
 - Multiple versions of a dependency can be installed, allowing resolution
 of conflicting sub-dependencies.
-
-- Doesn't use `Pip`. Only uses a virtualenv for Python binaries/scripts.
 
 - By not requiring Python to install or run, it remains intallation-agnostic.
 This is especially important on Linux, where there may be several versions
 of Python installed, with different versions and access levels. This avoids
 complications, especially for new users. It's common for Python-based CLI tools
 to not run properly when installed from `pip` due to the `PATH` 
-not being configured in the expected way.
+not being configured in the expected way. Rust is both a natural choice for making
+a standalone CLI app, and an example of well-designed dependency management.
 
-- If multiple python versions are found, it allows the user to select the desired 
+- If multiple Python installations are found, it allows the user to select the desired 
 one to set up the environment with.
 
 `Conda` addresses this as well, but focuses on maintining a separate repository
@@ -163,6 +167,10 @@ of binaries from `PyPi`.
 
 ## Not-yet-implemented
 - Installing multiple versions of a sub-dependency when required
+- Binary/script installations (Important feature!)
+- Installing extra dependencies for features
+- `SHA256` hashing vice the less-secure `MD5`
+- The lock file is missing some info like dependencies.
 
 
 ## Building and uploading your project to PyPi.
@@ -196,7 +204,6 @@ curl https://sh.rustup.rs -sSf | sh
 git clone https://github.com/david-oconnor/pypackage.git
 cd pypackage
 cargo build --release
-
 ```
 
 ## Updating
@@ -204,7 +211,19 @@ If installed via `Cargo`, run `cargo install pypackage --force`.
 
 ## Contributing
 If you notice unexpected behavior or missing features, please post an issue,
-or submit a PR.
+or submit a PR. There are likely many problems with the dependency resolver
+due to the complicated history of Python package management. If you see unexpected
+behavior, it's probably a bug! Post an issue listing the dependencies that did
+not install correctly.
+
+## Dependency cache repo:
+- [Github](https://github.com/David-OConnor/pydeps)
+Example API call: `https://pydeps.herokuapp.com/numpy`. This pulls all top-level
+dependencies for the `numpy` package. The first time this command is run
+for a package/version combo, it may be slow. Subsequent calls, by anyone,
+should be faster. This is due to having to download and install each package
+on the server to properly determine dependencies, due to unreliable information
+ on the `pypi warehouse`.
 
 
 ## Gotchas

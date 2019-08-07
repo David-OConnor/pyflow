@@ -1,1 +1,4 @@
-package = []
+[[package]]
+name = "siunits"
+version = "0.0.3"
+source = "pypi+https://pypi.org/pypi/siunits/0.0.3/json"

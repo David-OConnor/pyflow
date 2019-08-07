@@ -403,12 +403,6 @@ fn read_lock(filename: &str) -> Result<(Lock), Box<Error>> {
 /// Write dependency data to a lock file.
 fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
     let data = toml::to_string(data)?;
-    //    let f = fs::File::open(filename).expect("cannot open pypackage.lock");
-
-    // Wipe the existing data
-    //    f.set_len(0).unwrap();
-    //    fs::remove_file(filename).unwrap();
-
     fs::write(filename, data)?;
     Ok(())
 }
@@ -492,51 +486,6 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
 
     py_ver_from_alias
 }
-
-/// Remove duplicates. If the requirements are different but compatible, pick the more-restrictive
-/// one. If incompatible, return Err.
-/// todo: We'll have to think about how to resolve the errors, likely elsewhere.
-//fn clean_flattened_deps(deps: &[(u32, DepNode)]) -> Result<CleanedDeps, DependencyError> {
-//    // result is a (min, max) tuple
-//    let mut result: HashMap<String, (u32, Vec<(Version, Version)>)> = HashMap::new(); // todo remove annotation
-//
-//    for (level, dep) in deps.iter() {
-//        match result.get(&dep.name) {
-//            Some(reqs) => {
-//                result.insert(
-//                    dep.name.to_owned(),
-//                    (
-//                        cmp::max(*level, reqs.0),
-//                        dep_types::intersection_convert_one(&dep.version_reqs, &reqs.1),
-//                    ),
-//                );
-//            }
-//            None => {
-//                // Not already present; without any checks.
-//                result.insert(
-//                    dep.name.to_owned(),
-//                    (*level, dep_types::to_ranges(&dep.version_reqs.reqs)),
-//                );
-//            }
-//        }
-//    }
-//
-//    Ok(result)
-//}
-
-/// Extract dependencies from a nested hierarchy. Ultimately, we can only (practially) have
-/// one copy per dep. Record what level they came from.
-/// // todo: Is there a clever way to have multiple versions of a dep installed???
-//fn flatten_deps(result: &mut Vec<(u32, DepNode)>, level: u32, tree: &DepNode) {
-//    for node in tree.dependencies.iter() {
-//        // We don't need sub-deps in the result; they're extraneous info. We only really care about
-//        // the name and version requirements.
-//        let mut result_dep = node.clone();
-//        result_dep.dependencies = vec![];
-//        result.push((level, result_dep));
-//        flatten_deps(result, level + 1, &node);
-//    }
-//}
 
 /// Find teh packages installed, by browsing the lib folder.
 fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
@@ -655,6 +604,7 @@ fn sync_deps(
         }
     };
 
+    // Resolve is made from non-nested deps, with their subdeps stripped: It's flattened.
     for dep in resolved.iter() {
         // Move on if we've already installed this specific package/version
         let mut already_installed = false;
@@ -699,8 +649,11 @@ fn sync_deps(
                     // if `requires_python` doesn't indicate an incompatibility. Check `python_version`.
                     match Version::from_cp_str(&rel.python_version) {
                         Ok(req_v) => {
-                            if req_v > *python_vers {
-                                // Assume Python is backwards compatible.
+                            if req_v != *python_vers
+                                // todo: Awk place for this logic.
+                                && rel.python_version != "py2.py3"
+                                && rel.python_version != "py3"
+                            {
                                 compatible = false;
                             }
                         }
@@ -716,7 +669,6 @@ fn sync_deps(
                         compatible_releases.push(rel.clone());
                     }
                 }
-                //                "source" => (), // todo: Figure out if you're going to build from source, use pip etc.
                 "sdist" => source_releases.push(rel.clone()),
                 _ => abort(&format!(
                     "Found surprising package type: {}",
@@ -751,7 +703,7 @@ fn sync_deps(
             &dep.name,
             &dep.version.to_string()
         );
-        // todo: Make download-and_install accept a package instead of sep args?
+
         if install::download_and_install_package(
             &best_release.url,
             &best_release.filename,
@@ -779,22 +731,33 @@ fn sync_deps(
         }
     }
 
-    let lock_packs = vec![];
-    let lock = Lock {
-        metadata: None, // todo
+    //    let lock_metadata = resolved.iter().map(|dep|
+    //        // todo: Probably incorporate hash etc info in the depNode.
+    //        format!("\"checksum {} {} ({})\" = \"{}\"", &dep.name, &dep.version.to_string(), "", "placeholder")
+    //    )
+    //        .collect();
+
+    let lock_packs = resolved
+        .into_iter()
+        .map(|dep| LockPackage {
+            name: dep.name.clone(),
+            version: dep.version.to_string(),
+            source: Some(format!(
+                "pypi+https://pypi.org/pypi/{}/{}/json",
+                dep.name,
+                dep.version.to_string()
+            )), // todo
+            dependencies: None, // todo!
+        })
+        .collect();
+
+    let new_lock = Lock {
+        //        metadata: Some(lock_metadata),
+        metadata: None, // todo: Problem with toml conversion.
         package: Some(lock_packs),
     };
 
-    // Now that the deps are resolved, flattened, cleaned, and only have one per package name, we can
-    // pick the best match of each, download, and lock.
-
-    //    if let Some(lock_packs) = &lock.package {
-    //        sync_packages_with_lock(bin_path, lib_path, &lock_packs, installed)
-    //    } else {
-    //        println!("Found no dependencies in `pyproject.toml` to install")
-    //    }
-
-    if write_lock(lock_filename, &lock).is_err() {
+    if write_lock(lock_filename, &new_lock).is_err() {
         abort("Problem writing lock file");
     }
 }
@@ -942,18 +905,55 @@ py_version = \"3.7\"",
             // todo: Compare to existing listed lock_packs and merge appropriately.
             edit_files::add_dependencies(cfg_filename, &added_deps);
 
-            let mut deps = cfg.dependencies.clone();
-            deps.append(&mut added_deps);
+            let mut reqs = cfg.dependencies.clone();
+
+            // todo excessive nesting
+            if let Some(lock_packs) = lock.package {
+                for req in reqs.iter_mut() {
+                    for lock_pack in lock_packs.iter() {
+                        let lock_vers = Version::from_str(&lock_pack.version).unwrap();
+                        if lock_pack.name == req.name {
+                            let mut compatible = true;
+                            for constraint in req.constraints.iter() {
+                                if !constraint.is_compatible(&lock_vers) {
+                                    compatible = false;
+                                    break;
+                                }
+                            }
+                            if compatible {
+                                // Fix the constraint to the lock if compatible.
+                                // todo printline temp
+                                println!("Locking constraint: {} -> {}", &req.to_cfg_string(), lock_vers.to_string());
+                                req.constraints = vec![Constraint::new(
+                                    dep_types::ReqType::Exact,
+                                    lock_vers.major,
+                                    lock_vers.minor,
+                                    lock_vers.patch,
+                                )];
+                            }
+                        }
+                    }
+                }
+            }
+
+            reqs.append(&mut added_deps);
+
+            #[cfg(target_os = "windows")]
+            let os = Os::Windows;
+            #[cfg(target_os = "linux")]
+            let os = Os::Linux;
+            #[cfg(target_os = "macos")]
+            let os = Os::Mac;
 
             // todo: Determine os.
             sync_deps(
                 lock_filename,
                 &bin_path,
                 &lib_path,
-                &mut deps,
+                &mut reqs,
                 &installed,
                 &py_vers,
-                Os::Linux,
+                os,
             );
             println!("Installation complete")
         }

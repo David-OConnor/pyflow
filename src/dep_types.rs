@@ -250,6 +250,10 @@ impl FromStr for Constraint {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // todo: You could delegate part of this out, or at least share the regex with Version::from_string
+        if s == "*" {
+            return Ok(Self::new(ReqType::Gte, 0, 0, 0));
+        }
+
         let re = Regex::new(
             r"^(\^|~|==|<=|>=|<|>|!=)?(\d{1,9})\.?(?:(?:(\d{1,9})\.?)?\.?(\d{1,9})?)?(\.?.*)$",
         )
@@ -731,10 +735,6 @@ pub struct Package {
     pub version: Version,
     pub deps: Vec<Req>,
     pub source: Option<String>,
-    // todo do you want Hash, name etc here? How about DepNode?
-    //    pub filename: String,
-    //    pub hash: String,
-    //    pub file_url: String,
 }
 
 impl Package {
@@ -759,7 +759,6 @@ impl Package {
         }
     }
 }
-// todo: Implement to/from Lockpack for Package?
 
 /// Similar to that used by Cargo.lock. Represents an exact package to download. // todo(Although
 /// todo the dependencies field isn't part of that/?)
@@ -779,10 +778,11 @@ pub struct LockPackage {
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Lock {
     pub package: Option<Vec<LockPackage>>,
-    pub metadata: Option<String>, // ie checksums
+    pub metadata: Option<Vec<String>>, // ie checksums
 }
 
 impl Lock {
+    // todo delete this?
     fn add_packages(&mut self, packages: &[Package]) {
         // todo: Write tests for this.
 
