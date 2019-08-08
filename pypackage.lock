@@ -1,4 +1,9 @@
 [[package]]
+name = "gunicorn"
+version = "19.9.0"
+source = "pypi+https://pypi.org/pypi/gunicorn/19.9.0/json"
+
+[[package]]
 name = "siunits"
-version = "0.0.3"
-source = "pypi+https://pypi.org/pypi/siunits/0.0.3/json"
+version = "0.0.4"
+source = "pypi+https://pypi.org/pypi/siunits/0.0.4/json"

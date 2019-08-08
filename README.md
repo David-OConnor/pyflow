@@ -85,14 +85,21 @@ a project: a readme, pyproject.toml, and directory for source code
 
 ## How dependencies are resolved
 Running `pypackage install` loads the project's requirements from `pyproject.toml`. Adding a
-package name, eg `pypackage install matplotlib` simply adds that requirement before proceeding.
+package name via the CLI, eg `pypackage install matplotlib` simply adds that requirement before proceeding.
 Compatible versions of dependencies are determined using info from 
 the [PyPi Warehosue](https://github.com/pypa/warehouse) (available versions, and hash info), 
 and the `pydeps` database. We use `pydeps`, which is built specifically for this project,
 due to inconsistent dependency information stored on `pypi`. A dependency graph is built
-using this cached atabase. This tool downloads and unpacks wheels from `pypi`, or builds
-wheels from source if none are availabile. It verifies hashes, and the exact versions usedare stored 
+using this cached database. We attempt to use the newest compatible version of each package,
+but older ones are used if needed to satisfy the dependency occuring with different requirements.
+
+This tool downloads and unpacks wheels from `pypi`, or builds
+wheels from source if none are availabile. It verifies hashes using `SHA256`, and the exact 
+versions usedare stored 
 in a lock file.
+
+If a lockfile already exists, package versions stored in it which are compatible with those
+in `pyproject.toml` and resolved subdependencies are used.
 
 Important caveat: There appears to be no way install multiple versions of a package
 simultaneously without renaming them; this is a factor when encountering incompatible sub-dependencies.

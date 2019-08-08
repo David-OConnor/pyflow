@@ -2,6 +2,7 @@ use crate::util;
 use crate::{dep_types::Version, PackageType};
 use flate2::read::GzDecoder;
 use regex::Regex;
+use ring::digest;
 use std::{fs, io, path::PathBuf, process::Command};
 use tar::Archive;
 use termion::{color, style};
@@ -29,12 +30,28 @@ fn install_wheel(file: &fs::File, lib_path: &PathBuf) {
     }
 }
 
+/// https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
+fn sha256_digest<R: io::Read>(mut reader: R) -> Result<digest::Digest, std::io::Error> {
+    let mut context = digest::Context::new(&digest::SHA256);
+    let mut buffer = [0; 1024];
+
+    loop {
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        context.update(&buffer[..count]);
+    }
+
+    Ok(context.finish())
+}
+
 /// Download and install a package. For wheels, we can just extract the contents into
 /// the lib folder.
 pub fn download_and_install_package(
     url: &str,
     filename: &str,
-    hash: &str,
+    expected_digest: &str,
     lib_path: &PathBuf,
     bin_path: &PathBuf,
     bin: bool, // todo what is this for?
@@ -49,7 +66,14 @@ pub fn download_and_install_package(
     let file = fs::File::open(&archive_path).unwrap();
 
     // todo: Md5 isn't secure! sha256 instead?
-    // todo: Impl hash.
+    // https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
+    let reader = io::BufReader::new(&file);
+    let file_digest = sha256_digest(reader).expect(&format!("Problem reading hash for {}", filename));
+
+    let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
+    if file_digest_str.to_lowercase() != expected_digest.to_lowercase() {
+        util::abort(&format!("Hash failed for {}", filename))
+    }
 
     // todo: Setup 'binary'scripts.
 
@@ -90,8 +114,6 @@ pub fn download_and_install_package(
                 //                .spawn()
                 .output()
                 .unwrap();
-
-            let built_wheel_filename = "toolz-0.10.0-py3-none-any.whl"; // todo
 
             let mut built_wheel_filename = String::new();
             for entry in fs::read_dir(extracted_parent.join("dist")).unwrap() {

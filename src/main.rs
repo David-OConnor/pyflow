@@ -520,59 +520,59 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
     }
     result
 }
-
-/// Uninstall and install packages to be in accordance with the lock.
-fn sync_packages_with_lock(
-    bin_path: &PathBuf,
-    lib_path: &PathBuf,
-    lock_packs: &Vec<LockPackage>,
-    installed: &Vec<(String, Version)>,
-) {
-    // Uninstall packages no longer needed.
-    for (name_ins, vers_ins) in installed.iter() {
-        if !lock_packs
-            .iter()
-            .map(|lp| {
-                (
-                    lp.name.to_owned().to_lowercase(),
-                    Version::from_str(&lp.version).unwrap(),
-                )
-            })
-            .collect::<Vec<(String, Version)>>()
-            .contains(&(name_ins.to_owned().to_lowercase(), *vers_ins))
-            || name_ins.to_lowercase() == "twine"
-            || name_ins.to_lowercase() == "setuptools"
-            || name_ins.to_lowercase() == "setuptools"
-        {}
-    }
-
-    for lock_pack in lock_packs {
-        let p = Package::from_lock_pack(lock_pack);
-        if installed
-            .iter()
-            // Set both names to lowercase to ensure case doesn't preclude a match.
-            .map(|(p_name, p_vers)| (p_name.clone().to_lowercase(), *p_vers))
-            .collect::<Vec<(String, Version)>>()
-            .contains(&(p.name.clone().to_lowercase(), p.version))
-        {
-            continue; // Already installed.
-        }
-
-        // path_to_info is the path to the metadatafolder, ie dist-info (or egg-info for older packages).
-        // todo: egg-info
-        // when making the path, use the LockPackage vice p, since its version's already serialized.
-        //        let path_to_dep = lib_path.join(&lock_pack.name);
-        //        let path_to_info = lib_path.join(format!(
-        //            "{}-{}.dist-info",
-        //            lock_pack.name, lock_pack.version
-        //        ));
-
-        //        if commands::install(&bin_path, &[p], false, false).is_err() {
-        //            abort("Problem installing packages");
-        //        }
-        //        download_and_install_package(p.file_url, p.filename, p.hash_, lib_path, false);
-    }
-}
+//
+///// Uninstall and install packages to be in accordance with the lock.
+//fn sync_packages_with_lock(
+//    bin_path: &PathBuf,
+//    lib_path: &PathBuf,
+//    lock_packs: &Vec<LockPackage>,
+//    installed: &Vec<(String, Version)>,
+//) {
+//    // Uninstall packages no longer needed.
+//    for (name_ins, vers_ins) in installed.iter() {
+//        if !lock_packs
+//            .iter()
+//            .map(|lp| {
+//                (
+//                    lp.name.to_owned().to_lowercase(),
+//                    Version::from_str(&lp.version).unwrap(),
+//                )
+//            })
+//            .collect::<Vec<(String, Version)>>()
+//            .contains(&(name_ins.to_owned().to_lowercase(), *vers_ins))
+//            || name_ins.to_lowercase() == "twine"
+//            || name_ins.to_lowercase() == "setuptools"
+//            || name_ins.to_lowercase() == "setuptools"
+//        {}
+//    }
+//
+//    for lock_pack in lock_packs {
+//        let p = Package::from_lock_pack(lock_pack);
+//        if installed
+//            .iter()
+//            // Set both names to lowercase to ensure case doesn't preclude a match.
+//            .map(|(p_name, p_vers)| (p_name.clone().to_lowercase(), *p_vers))
+//            .collect::<Vec<(String, Version)>>()
+//            .contains(&(p.name.clone().to_lowercase(), p.version))
+//        {
+//            continue; // Already installed.
+//        }
+//
+//        // path_to_info is the path to the metadatafolder, ie dist-info (or egg-info for older packages).
+//        // todo: egg-info
+//        // when making the path, use the LockPackage vice p, since its version's already serialized.
+//        //        let path_to_dep = lib_path.join(&lock_pack.name);
+//        //        let path_to_info = lib_path.join(format!(
+//        //            "{}-{}.dist-info",
+//        //            lock_pack.name, lock_pack.version
+//        //        ));
+//
+//        //        if commands::install(&bin_path, &[p], false, false).is_err() {
+//        //            abort("Problem installing packages");
+//        //        }
+//        //        download_and_install_package(p.file_url, p.filename, p.hash_, lib_path, false);
+//    }
+//}
 
 /// Install/uninstall deps as required from the passed list, and re-write the lock file.
 fn sync_deps(
@@ -707,7 +707,7 @@ fn sync_deps(
         if install::download_and_install_package(
             &best_release.url,
             &best_release.filename,
-            &best_release.md5_digest,
+            &best_release.digests.sha256,
             lib_path,
             bin_path,
             false,
@@ -923,7 +923,11 @@ py_version = \"3.7\"",
                             if compatible {
                                 // Fix the constraint to the lock if compatible.
                                 // todo printline temp
-                                println!("Locking constraint: {} -> {}", &req.to_cfg_string(), lock_vers.to_string());
+                                println!(
+                                    "Locking constraint: {} -> {}",
+                                    &req.to_cfg_string(),
+                                    lock_vers.to_string()
+                                );
                                 req.constraints = vec![Constraint::new(
                                     dep_types::ReqType::Exact,
                                     lock_vers.major,
@@ -955,7 +959,7 @@ py_version = \"3.7\"",
                 &py_vers,
                 os,
             );
-            println!("Installation complete")
+            println!("{}{}{}", color::Fg(color::Green), "Installation complete", style::Reset);
         }
         SubCommand::Uninstall { packages } => {
             // todo: DRY with ::Install

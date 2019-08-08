@@ -12,11 +12,12 @@ categories = ["python", "packaging", "dependency-management", "build-tools",]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-md5 = "^0.6.1"
+data-encoding = "^2.1.2"
 flate2 = "1.0.9"
 fs_extra = "^1.1.0"
 regex = "^1.1.9"
 reqwest = "^0.9.19"
+ring = "^0.16.5"
 structopt = "^0.2.18"
 serde = {version = "^1.0.92", features = ["derive"]}
 tar = "^0.4.26"

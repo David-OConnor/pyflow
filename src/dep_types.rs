@@ -32,7 +32,7 @@ impl fmt::Display for DependencyError {
 }
 
 impl From<num::ParseIntError> for DependencyError {
-    fn from(error: num::ParseIntError) -> Self {
+    fn from(_: num::ParseIntError) -> Self {
         Self { details: "".into() }
     }
 }
@@ -542,26 +542,6 @@ pub fn intersection(
 
     result
 }
-
-///// Find the intersection of sets of version requirements. Result is a Vec of (min, max) tuples.
-///// Note that each set contains OR constraints internally, but mixing sets uses AND constraints.
-//pub fn intersection(
-//    ranges: &[&[(Version, Version)]],
-//) -> Vec<(Version, Version)> {
-//    // Note that within each set of ranges, we use OR constraints. Between the two, we use AND.
-//    let mut result = vec![];
-//    // Each range imposes an additonal constraint.
-//    for rng in ranges {
-//        for rng2 in ranges2 {
-//            // 0 is min, 1 is max.
-//            if rng2.1 >= rng1.0 && rng1.1 >= rng2.0 || rng1.1 >= rng2.0 && rng2.1 >= rng1.0 {
-//                result.push((cmp::max(rng2.0, rng1.0), cmp::min(rng1.1, rng2.1)));
-//            }
-//        }
-//    }
-//
-//    result
-//}
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Req {

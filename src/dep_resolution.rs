@@ -14,12 +14,17 @@ struct WarehouseInfo {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct WarehouseDigests {
+    pub md5: String,
+    pub sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct WarehouseRelease {
     // Could use digests field, which has sha256 as well as md5.
-    // md5 is faster, and should be good enough.
     pub filename: String,
     pub has_sig: bool,
-    pub md5_digest: String,
+    pub digests: WarehouseDigests,
     pub packagetype: String,
     pub python_version: String,
     pub requires_python: Option<String>,
@@ -256,7 +261,7 @@ fn guess_graph(
                 &req.name
             ));
         }
-        let mut newest_compat = sub_reqs
+        let newest_compat = sub_reqs
             .into_iter()
             .max_by(|a, b| a.version.cmp(&b.version))
             .expect("Problem finding newest compatible match");
@@ -377,7 +382,6 @@ pub mod tests {
             major: ma,
             minor: Some(mi),
             patch: None,
-            suffix: None,
         };
         use crate::dep_types::ReqType::{Gte, Lt, Ne};
 
