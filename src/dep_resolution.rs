@@ -50,6 +50,16 @@ fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
     Ok(resp)
 }
 
+/// Find the latest version of a package by querying the warehouse.
+pub fn get_latest_version(name: &str) -> Result<Version, reqwest::Error> {
+    let data = get_warehouse_data(name)?;
+    Ok(Version::from_str(&data.info.version).expect(&format!(
+        "Problem parsing version from the warehouse: {} {}",
+        name,
+        data.info.version
+    )))
+}
+
 pub fn get_warehouse_versions(name: &str) -> Result<Vec<Version>, reqwest::Error> {
     // todo return Result with custom fetch error type
     let data = get_warehouse_data(name)?;

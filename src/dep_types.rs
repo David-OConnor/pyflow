@@ -707,38 +707,38 @@ pub struct DepNode {
 //        }
 //    }
 //}
-
-/// An exact package to install. Meant to be stored in a list vice as a tree node. A bit of a Typed analog of LockPack.
-#[derive(Clone, Debug)]
-pub struct Package {
-    pub name: String,
-    pub version: Version,
-    pub deps: Vec<Req>,
-    pub source: Option<String>,
-}
-
-impl Package {
-    pub fn to_pip_string(&self) -> String {
-        format!("{}=={}", self.name, self.version.to_string())
-    }
-
-    pub fn from_lock_pack(lock_pack: &LockPackage) -> Self {
-        // todo: Return result /propogate parse errors.
-        Self {
-            name: lock_pack.name.to_owned(),
-            version: Version::from_str(&lock_pack.version)
-                .expect("Problem converting from lock pack version"),
-            deps: match &lock_pack.dependencies {
-                Some(deps) => deps
-                    .iter()
-                    .map(|d| Req::from_str(d, false).expect("Problem converting Dep from string"))
-                    .collect(),
-                None => vec![],
-            },
-            source: lock_pack.source.to_owned(),
-        }
-    }
-}
+//
+///// An exact package to install. Meant to be stored in a list vice as a tree node. A bit of a Typed analog of LockPack.
+//#[derive(Clone, Debug)]
+//pub struct Package {
+//    pub name: String,
+//    pub version: Version,
+//    pub deps: Vec<Req>,
+//    pub source: Option<String>,
+//}
+//
+//impl Package {
+//    pub fn to_pip_string(&self) -> String {
+//        format!("{}=={}", self.name, self.version.to_string())
+//    }
+//
+//    pub fn from_lock_pack(lock_pack: &LockPackage) -> Self {
+//        // todo: Return result /propogate parse errors.
+//        Self {
+//            name: lock_pack.name.to_owned(),
+//            version: Version::from_str(&lock_pack.version)
+//                .expect("Problem converting from lock pack version"),
+//            deps: match &lock_pack.dependencies {
+//                Some(deps) => deps
+//                    .iter()
+//                    .map(|d| Req::from_str(d, false).expect("Problem converting Dep from string"))
+//                    .collect(),
+//                None => vec![],
+//            },
+//            source: lock_pack.source.to_owned(),
+//        }
+//    }
+//}
 
 /// Similar to that used by Cargo.lock. Represents an exact package to download. // todo(Although
 /// todo the dependencies field isn't part of that/?)
@@ -761,29 +761,29 @@ pub struct Lock {
     pub metadata: Option<Vec<String>>, // ie checksums
 }
 
-impl Lock {
-    // todo delete this?
-    fn add_packages(&mut self, packages: &[Package]) {
-        // todo: Write tests for this.
-
-        for package in packages {
-            // Use the actual version installed, not the requirement!
-            // todo: reconsider your package etc structs
-            // todo: Perhaps impl to_lockpack etc from Package.
-            let lock_package = LockPackage {
-                name: package.name.to_owned(),
-                version: package.version.to_string(),
-                source: package.source.clone(),
-                dependencies: None,
-            };
-
-            match &mut self.package {
-                Some(p) => p.push(lock_package),
-                None => self.package = Some(vec![lock_package]),
-            }
-        }
-    }
-}
+//impl Lock {
+//    // todo delete this?
+//    fn add_packages(&mut self, packages: &[Package]) {
+//        // todo: Write tests for this.
+//
+//        for package in packages {
+//            // Use the actual version installed, not the requirement!
+//            // todo: reconsider your package etc structs
+//            // todo: Perhaps impl to_lockpack etc from Package.
+//            let lock_package = LockPackage {
+//                name: package.name.to_owned(),
+//                version: package.version.to_string(),
+//                source: package.source.clone(),
+//                dependencies: None,
+//            };
+//
+//            match &mut self.package {
+//                Some(p) => p.push(lock_package),
+//                None => self.package = Some(vec![lock_package]),
+//            }
+//        }
+//    }
+//}
 
 #[cfg(test)]
 pub mod tests {

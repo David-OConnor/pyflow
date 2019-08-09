@@ -7,119 +7,49 @@ use serde::Deserialize;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 use std::{fs, io};
-use termion::{color, style};
 
 /// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
-/// we should update the version.
-pub fn add_dependencies(filename: &str, added: &[Req]) {
-    if !added.is_empty() {
-        println!("{}Adding dependencies via the CLI is not yet supported. Please specify dependencies in `pyproject.toml`.{}", color::Fg(color::Yellow), style::Reset);
-        return;
-    }
-
-    //        let data = fs::read_to_string("pyproject.toml")
-    //            .expect("Unable to read pyproject.toml while attempting to add a dependency");
-    let file = fs::File::open(filename).expect("cannot open pyproject.toml");
+/// we should update the version. Assume we've already parsed the config, and are only
+/// adding new reqs, or ones with a changed version.
+pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
+    let mut result = String::new();
+    let data = fs::read_to_string("pyproject.toml")
+        .expect("Unable to read pyproject.toml while attempting to add a dependency");
 
     let mut in_dep = false;
-    let sect_re = Regex::new(r"\[.*\]").unwrap(); // todo: Will this catch double-bracket sections?
+    let sect_re = Regex::new(r"^\[.*\]$").unwrap();
 
-    // todo: use this? https://doc.rust-lang.org/std/macro.writeln.html
+    // We collect lines here so we can start the index at a non-0 point.
+    let lines_vec: Vec<&str> = data.lines().collect();
 
-    // todo: Handle Vec<VersionReq> vs VersionReq.
-    let mut already_installed: Vec<Req> = vec![];
+    for (i, line) in data.lines().enumerate() {
+        result.push_str(line);
+        result.push_str("\n");
+        if line == "[tool.pypackage.dependencies]" {
+            in_dep = true;
+            continue;
+        }
 
-    let mut result = String::new();
-
-    for line in BufReader::new(&file).lines() {
-        //    for line in data.lines() {
-        if let Ok(l) = line {
-            result.push_str(&l);
-            result.push_str("\n");
-            // todo replace this with something that clips off
-            // todo post-# part of strings; not just ignores ones starting with #
-            if l.starts_with('#') {
-                continue;
-            }
-
-            if &l == "[tool.pypackage.dependencies]" {
-                in_dep = true;
-                continue;
-            } else if sect_re.is_match(&l) {
-                in_dep = false;
-                continue;
-            }
-
-            if in_dep {
-                if let Ok(req) = Req::from_str(&l, false) {
-                    already_installed.push(req);
-                } else {
-                    util::abort(&format!(
-                        "Problem reading dependency {} in `pyproject.toml`",
-                        &l
-                    ));
+        if in_dep {
+            let mut ready_to_insert = true;
+            // Check if this is the last non-blank line in the dependencies section.
+            for i2 in i..lines_vec.len() {
+                let line2 = lines_vec[i2];
+                // We've hit the end of the section or file without encountering a non-empty line.
+                if sect_re.is_match(line2) || i2 == lines_vec.len() - 1 {
+                    break;
+                }
+                if !line2.is_empty() {
+                    // We haven't hit the end of the section yet; don't add the new reqs here.
+                    ready_to_insert = false;
+                    break;
                 }
             }
-        }
-    }
-
-    // Determine how to handle duplicates
-    for added in added {
-        for installed in already_installed.iter() {
-            if installed.name.to_lowercase() == added.name.to_lowercase() {
-                // todo ugly output due to Vec<VersionReq>
-                println!(
-                    "{} is already included in `pyproject.toml`. Do you want to update its \
-                     version requirement from {:?} to {:?}?",
-                    added.name, installed.constraints, added.constraints
-                );
-
-                let mut input = String::new();
-                io::stdin()
-                    .read_line(&mut input)
-                    .expect("Unable to read user input in overwrite prompt");
-
-                let input = input
-                    .chars()
-                    .next()
-                    .expect("Problem reading input")
-                    .to_string()
-                    .to_lowercase();
-
-                if input == "yes" || input == "y" {
-                    println!("Not yet implemented");
-                } else {
-
+            if ready_to_insert {
+                for req in added {
+                    result.push_str(&req.to_cfg_string());
+                    result.push_str("\n");
                 }
-                println!("Not yet implemented");
-            }
-        }
-    }
-
-    // todo: DRY: Clean this up.
-    // Now that we've determined which dependencies are already installed, add new ones.
-    for line in BufReader::new(file).lines() {
-        //    for line in data.lines() {
-        if let Ok(l) = line {
-            result.push_str(&l);
-            result.push_str("\n");
-            // todo replace this with something that clips off
-            // todo post-# part of strings; not just ignores ones starting with #
-            if l.starts_with('#') {
-                continue;
-            }
-
-            if &l == "[tool.pypackage.dependencies]" {
-                in_dep = true;
-                continue;
-            } else if sect_re.is_match(&l) {
-                in_dep = false;
-                continue;
-            }
-
-            if in_dep {
-                // There should be no more parsing errors here, since this is our second pass.
-                let req = Constraint::from_str(&l).unwrap();
             }
         }
     }
@@ -138,7 +68,7 @@ pub fn parse_req_dot_text(cfg: &mut Config) {
         if let Ok(l) = line {
             match Req::from_pip_str(&l) {
                 Some(d) => {
-                    cfg.dependencies.push(d.clone());
+                    cfg.reqs.push(d.clone());
                     println!("Added {} from requirements.txt", d.name)
                 }
                 None => println!("Problem parsing {} from requirements.txt", &l),

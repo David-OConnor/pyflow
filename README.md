@@ -94,9 +94,9 @@ using this cached database. We attempt to use the newest compatible version of e
 but older ones are used if needed to satisfy the dependency occuring with different requirements.
 
 This tool downloads and unpacks wheels from `pypi`, or builds
-wheels from source if none are availabile. It verifies hashes using `SHA256`, and the exact 
-versions usedare stored 
-in a lock file.
+wheels from source if none are availabile. It verifies the integrity of the downloaded file
+ against that listed on `pypi` using `SHA256`, and the exact 
+versions used are stored in a lock file.
 
 If a lockfile already exists, package versions stored in it which are compatible with those
 in `pyproject.toml` and resolved subdependencies are used.
@@ -174,10 +174,12 @@ of binaries from `PyPi`.
 
 ## Not-yet-implemented
 - Installing multiple versions of a sub-dependency when required
-- Binary/script installations (Important feature!)
+- Executable script installations (Important feature!)
 - Installing extra dependencies for features
-- `SHA256` hashing vice the less-secure `MD5`
-- The lock file is missing some info like dependencies.
+- The lock file is missing some info like dependencies and hashes.
+- Check hashes against lock file, instead of just when downloading.
+- Windows installer and Mac binaries.
+- Adding a dependency via the CLI with a specific version.
 
 
 ## Building and uploading your project to PyPi.

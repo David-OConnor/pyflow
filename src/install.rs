@@ -68,7 +68,8 @@ pub fn download_and_install_package(
     // todo: Md5 isn't secure! sha256 instead?
     // https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
     let reader = io::BufReader::new(&file);
-    let file_digest = sha256_digest(reader).expect(&format!("Problem reading hash for {}", filename));
+    let file_digest =
+        sha256_digest(reader).expect(&format!("Problem reading hash for {}", filename));
 
     let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
     if file_digest_str.to_lowercase() != expected_digest.to_lowercase() {

@@ -1,4 +1,4 @@
-use crate::dep_types::{Constraint, DepNode, Lock, LockPackage, Package, Req, Version};
+use crate::dep_types::{Constraint, DepNode, Lock, LockPackage, Req, ReqType, Version};
 use crate::util::abort;
 use regex::Regex;
 use serde::Deserialize;
@@ -113,7 +113,7 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
 // todo: Auto-desr some of these!
 pub struct Config {
     py_version: Option<Version>,
-    dependencies: Vec<Req>, // name, requirements.
+    reqs: Vec<Req>, // name, requirements.
     name: Option<String>,
     version: Option<Version>,
     author: Option<String>,
@@ -199,7 +199,7 @@ impl Config {
                     }
                 } else if in_dep {
                     if !l.is_empty() {
-                        result.dependencies.push(Req::from_str(&l, false).unwrap());
+                        result.reqs.push(Req::from_str(&l, false).unwrap());
                     }
                 }
             }
@@ -239,7 +239,7 @@ impl Config {
 
         result.push_str("\n\n");
         result.push_str("[tool.pypackage.dependencies]\n");
-        for dep in self.dependencies.iter() {
+        for dep in self.reqs.iter() {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
 
@@ -579,7 +579,7 @@ fn sync_deps(
     lock_filename: &str,
     bin_path: &PathBuf,
     lib_path: &PathBuf,
-    reqs: &mut Vec<Req>,
+    reqs: &Vec<Req>,
     installed: &Vec<(String, Version)>,
     python_vers: &Version,
     os: Os,
@@ -895,21 +895,73 @@ py_version = \"3.7\"",
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
-            let mut added_deps: Vec<Req> = packages
+            let mut added_reqs: Vec<Req> = packages
                 .into_iter()
                 .map(|p| Req::from_str(&p, false).unwrap())
                 .collect();
 
+            // Reqs to add to `pyproject.toml`
+            let mut added_reqs_unique: Vec<Req> = added_reqs
+                .into_iter()
+                .filter(|ar| {
+                    // return true if the added req's not in the cfg reqs, or if it is
+                    // and the version's different.
+                    let mut add = true;
+                    for cr in cfg.reqs.iter() {
+                        if cr == ar {
+                            // Same req/version exists
+                            add = false;
+                            break;
+                        }
+                    }
+                    add
+                })
+                .collect();
+
+            // If no constraints are specified, use a carot constraint with the latest
+            // version.
+            for added_req in added_reqs_unique.iter_mut() {
+                if added_req.constraints.is_empty() {
+                    let vers = dep_resolution::get_latest_version(&added_req.name).expect("Problem getting latest version of the package you added.");
+                    added_req.constraints.push(Constraint::new(
+                        ReqType::Caret,
+                        vers.major,
+                        vers.minor,
+                        vers.patch,
+                    ));
+                }
+            }
+
+            let mut merged_reqs = vec![]; // Reqs to sync
+
+            // Merge reqs from the config and added via CLI. If there's a conflict in version,
+            // use the added req.
+            for cr in cfg.reqs.into_iter() {
+                let mut replaced = false;
+                for added_req in added_reqs_unique.iter() {
+                    if added_req.name == cr.name && added_req.constraints != cr.constraints {
+                        merged_reqs.push(added_req.clone());
+                        replaced = true;
+                        break;
+                    }
+                }
+                if !replaced {
+                    merged_reqs.push(cr);
+                }
+            }
+
+            if !added_reqs_unique.is_empty() {
+                edit_files::add_reqs_to_cfg(cfg_filename, &added_reqs_unique);
+            }
+
+            merged_reqs.append(&mut added_reqs_unique);
+
             let installed = find_installed(&lib_path);
 
-            // todo: Compare to existing listed lock_packs and merge appropriately.
-            edit_files::add_dependencies(cfg_filename, &added_deps);
-
-            let mut reqs = cfg.dependencies.clone();
-
             // todo excessive nesting
+            // If able, tie reqs to a specific version specified in the lock.
             if let Some(lock_packs) = lock.package {
-                for req in reqs.iter_mut() {
+                for req in merged_reqs.iter_mut() {
                     for lock_pack in lock_packs.iter() {
                         let lock_vers = Version::from_str(&lock_pack.version).unwrap();
                         if lock_pack.name == req.name {
@@ -924,7 +976,7 @@ py_version = \"3.7\"",
                                 // Fix the constraint to the lock if compatible.
                                 // todo printline temp
                                 println!(
-                                    "Locking constraint: {} -> {}",
+                                    "Locking constraint: {} → {}",
                                     &req.to_cfg_string(),
                                     lock_vers.to_string()
                                 );
@@ -940,8 +992,6 @@ py_version = \"3.7\"",
                 }
             }
 
-            reqs.append(&mut added_deps);
-
             #[cfg(target_os = "windows")]
             let os = Os::Windows;
             #[cfg(target_os = "linux")]
@@ -954,12 +1004,17 @@ py_version = \"3.7\"",
                 lock_filename,
                 &bin_path,
                 &lib_path,
-                &mut reqs,
+                &merged_reqs,
                 &installed,
                 &py_vers,
                 os,
             );
-            println!("{}{}{}", color::Fg(color::Green), "Installation complete", style::Reset);
+            println!(
+                "{}{}{}",
+                color::Fg(color::Green),
+                "Installation complete",
+                style::Reset
+            );
         }
         SubCommand::Uninstall { packages } => {
             // todo: DRY with ::Install
@@ -975,7 +1030,7 @@ py_version = \"3.7\"",
                 lock_filename,
                 &bin_path,
                 &lib_path,
-                &mut cfg.dependencies,
+                &mut cfg.reqs,
                 &installed,
                 &py_vers,
                 Os::Linux,
