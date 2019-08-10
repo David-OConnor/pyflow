@@ -1,19 +1,18 @@
 use crate::{
-    dep_types::{self, Constraint, DepNode, Req, Version},
+    dep_types::{Req, ReqType},
     util, Config,
 };
 use regex::Regex;
 use serde::Deserialize;
+use std::fs;
 use std::io::{BufRead, BufReader};
-use std::str::FromStr;
-use std::{fs, io};
 
-/// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
+/// Write dependencies to pyproject.toml. If an entry for tha = true;t package already exists, ask if
 /// we should update the version. Assume we've already parsed the config, and are only
 /// adding new reqs, or ones with a changed version.
 pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
     let mut result = String::new();
-    let data = fs::read_to_string("pyproject.toml")
+    let data = fs::read_to_string(filename)
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 
     let mut in_dep = false;
@@ -54,7 +53,64 @@ pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
         }
     }
 
-    fs::write("pyproject.toml", result)
+    fs::write(filename, result)
+        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+}
+
+/// Remove dependencies from pyproject.toml.
+pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
+    let mut result = String::new();
+    let data = fs::read_to_string(filename)
+        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+
+    let mut in_dep = false;
+    let sect_re = Regex::new(r"^\[.*\]$").unwrap();
+
+    for line in data.lines() {
+        if line.starts_with("#") {
+            // todo handle mid-line comements
+            result.push_str(line);
+            result.push_str("\n");
+            continue;
+        }
+
+        if line == "[tool.pypackage.dependencies]" {
+            in_dep = true;
+            result.push_str(line);
+            result.push_str("\n");
+            continue;
+        }
+
+        if in_dep {
+            if sect_re.is_match(line) {
+                in_dep = false;
+            }
+            // todo: handle comments
+            let req_line = match Req::from_str(line, false) {
+                Ok(r) => r,
+                Err(_) => {
+                    util::abort(&format!(
+                        "Can't parse this line in `pyproject.toml`: {}",
+                        line
+                    ));
+                    Req::new(String::new(), vec![]) // todo temp to allow compiling
+                }
+            };
+
+            if reqs
+                .iter()
+                .map(|r| r.to_lowercase())
+                .collect::<Vec<String>>()
+                .contains(&req_line.name.to_lowercase())
+            {
+                continue; // ie don't append this line to result.
+            }
+        }
+        result.push_str(line);
+        result.push_str("\n");
+    }
+
+    fs::write(filename, result)
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 }
 
@@ -190,15 +246,3 @@ pub fn parse_poetry(cfg: &mut Config) {}
 
 /// Create or update a `pyproject.toml` file.
 pub fn update_pyproject(cfg: &Config) {}
-
-/// Remove dependencies from pyproject.toml
-pub fn remove_dependencies(filename: &str, dependencies: &[Req]) {
-    let data = fs::read_to_string("pyproject.toml")
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
-
-    // todo
-    let new_data = data;
-
-    fs::write(filename, new_data)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
-}

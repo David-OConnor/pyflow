@@ -37,7 +37,7 @@ Example contents:
 py_version = "3.7"
 name = "runcible"
 version = "0.1.0"
-author = " John Hackworth"
+author = "John Hackworth"
 
 
 [tool.pypackage.dependencies]
@@ -106,6 +106,9 @@ simultaneously without renaming them; this is a factor when encountering incompa
 Perhaps this can be sorted around through behind-the-scenes renaming and import-line
 edits, but for now may result in unresolvable trees.
 
+When a dependency is removed from `pyproject.toml`, it, and its subdependencies not
+also required by other packages are removed from the `__pypackages__` folder.
+
 ## Why?
 Using a Python installation directly when installing dependencies can become messy.
 If using a system-level Python, which is ubiqutious in Linux, altering dependencies
@@ -173,13 +176,15 @@ of binaries from `PyPi`.
 
 
 ## Not-yet-implemented
-- Installing multiple versions of a sub-dependency when required
+
 - Executable script installations (Important feature!)
 - Installing extra dependencies for features
 - The lock file is missing some info like dependencies and hashes.
 - Check hashes against lock file, instead of just when downloading.
 - Windows installer and Mac binaries.
 - Adding a dependency via the CLI with a specific version.
+- Installing multiple versions of a sub-dependency when there's no other
+way to resolve.
 
 
 ## Building and uploading your project to PyPi.
@@ -204,7 +209,7 @@ django = "2.0.0"
 
 ## Building this from source                      
 If you’d like to build from source, [download and install Rust]( https://www.rust-lang.org/tools/install),
-clone the repo, and in the repo directory, run `cargo build –release`.
+clone the repo, and in the repo directory, run `cargo build --release`.
 
 Ie on Linux:
 
@@ -237,7 +242,7 @@ on the server to properly determine dependencies, due to unreliable information
 
 ## Gotchas
 - Make sure the `pypackage` binary is accessible in your path. If installing
-via `Cargo`, this should be set up automatically.
+via a `deb` or `Cargo`, this should be set up automatically.
 - Make sure `__pypackages__` and `.venv` are in your `.gitignore` file.
 
 # References

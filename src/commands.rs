@@ -4,17 +4,17 @@ use std::{error::Error, fmt};
 use std::{path::PathBuf, process::Command};
 
 #[derive(Debug)]
-struct ExecutionError {
+struct _ExecutionError {
     details: String,
 }
 
-impl Error for ExecutionError {
+impl Error for _ExecutionError {
     fn description(&self) -> &str {
         &self.details
     }
 }
 
-impl fmt::Display for ExecutionError {
+impl fmt::Display for _ExecutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.details)
     }

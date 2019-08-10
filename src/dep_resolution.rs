@@ -55,8 +55,7 @@ pub fn get_latest_version(name: &str) -> Result<Version, reqwest::Error> {
     let data = get_warehouse_data(name)?;
     Ok(Version::from_str(&data.info.version).expect(&format!(
         "Problem parsing version from the warehouse: {} {}",
-        name,
-        data.info.version
+        name, data.info.version
     )))
 }
 
@@ -234,8 +233,7 @@ fn guess_graph(
 
         let info1 = info.into_iter().filter(|r| {
             // We only care about examining subdependencies that meet our criteria.
-            let mut compat = true;
-            compat = filter_compat(&req.constraints, r);
+            let mut compat = filter_compat(&req.constraints, r);
             if compat {
                 for decon_req in deconfliction_reqs {
                     if !filter_compat(&decon_req.constraints, r) {
@@ -302,7 +300,6 @@ fn guess_graph(
                 cache,
             )
             .expect("Unable to resolve dependencies (recursion)");
-            //            }
         }
     }
     Ok(())

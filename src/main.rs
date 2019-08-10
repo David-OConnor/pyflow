@@ -520,59 +520,6 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
     }
     result
 }
-//
-///// Uninstall and install packages to be in accordance with the lock.
-//fn sync_packages_with_lock(
-//    bin_path: &PathBuf,
-//    lib_path: &PathBuf,
-//    lock_packs: &Vec<LockPackage>,
-//    installed: &Vec<(String, Version)>,
-//) {
-//    // Uninstall packages no longer needed.
-//    for (name_ins, vers_ins) in installed.iter() {
-//        if !lock_packs
-//            .iter()
-//            .map(|lp| {
-//                (
-//                    lp.name.to_owned().to_lowercase(),
-//                    Version::from_str(&lp.version).unwrap(),
-//                )
-//            })
-//            .collect::<Vec<(String, Version)>>()
-//            .contains(&(name_ins.to_owned().to_lowercase(), *vers_ins))
-//            || name_ins.to_lowercase() == "twine"
-//            || name_ins.to_lowercase() == "setuptools"
-//            || name_ins.to_lowercase() == "setuptools"
-//        {}
-//    }
-//
-//    for lock_pack in lock_packs {
-//        let p = Package::from_lock_pack(lock_pack);
-//        if installed
-//            .iter()
-//            // Set both names to lowercase to ensure case doesn't preclude a match.
-//            .map(|(p_name, p_vers)| (p_name.clone().to_lowercase(), *p_vers))
-//            .collect::<Vec<(String, Version)>>()
-//            .contains(&(p.name.clone().to_lowercase(), p.version))
-//        {
-//            continue; // Already installed.
-//        }
-//
-//        // path_to_info is the path to the metadatafolder, ie dist-info (or egg-info for older packages).
-//        // todo: egg-info
-//        // when making the path, use the LockPackage vice p, since its version's already serialized.
-//        //        let path_to_dep = lib_path.join(&lock_pack.name);
-//        //        let path_to_info = lib_path.join(format!(
-//        //            "{}-{}.dist-info",
-//        //            lock_pack.name, lock_pack.version
-//        //        ));
-//
-//        //        if commands::install(&bin_path, &[p], false, false).is_err() {
-//        //            abort("Problem installing packages");
-//        //        }
-//        //        download_and_install_package(p.file_url, p.filename, p.hash_, lib_path, false);
-//    }
-//}
 
 /// Install/uninstall deps as required from the passed list, and re-write the lock file.
 fn sync_deps(
@@ -582,8 +529,14 @@ fn sync_deps(
     reqs: &Vec<Req>,
     installed: &Vec<(String, Version)>,
     python_vers: &Version,
-    os: Os,
 ) {
+    #[cfg(target_os = "windows")]
+    let os = Os::Windows;
+    #[cfg(target_os = "linux")]
+    let os = Os::Linux;
+    #[cfg(target_os = "macos")]
+    let os = Os::Mac;
+
     println!("Resolving dependencies...");
 
     // Recursively add sub-dependencies.
@@ -657,7 +610,7 @@ fn sync_deps(
                                 compatible = false;
                             }
                         }
-                        Err(e) => {
+                        Err(_) => {
                             (println!(
                                 "Unable to match python version from python_version: {}",
                                 &rel.python_version
@@ -895,7 +848,7 @@ py_version = \"3.7\"",
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
-            let mut added_reqs: Vec<Req> = packages
+            let added_reqs: Vec<Req> = packages
                 .into_iter()
                 .map(|p| Req::from_str(&p, false).unwrap())
                 .collect();
@@ -908,7 +861,10 @@ py_version = \"3.7\"",
                     // and the version's different.
                     let mut add = true;
                     for cr in cfg.reqs.iter() {
-                        if cr == ar {
+                        if cr == ar
+                            || (cr.name.to_lowercase() == ar.name.to_lowercase()
+                                && ar.constraints.is_empty())
+                        {
                             // Same req/version exists
                             add = false;
                             break;
@@ -922,7 +878,8 @@ py_version = \"3.7\"",
             // version.
             for added_req in added_reqs_unique.iter_mut() {
                 if added_req.constraints.is_empty() {
-                    let vers = dep_resolution::get_latest_version(&added_req.name).expect("Problem getting latest version of the package you added.");
+                    let vers = dep_resolution::get_latest_version(&added_req.name)
+                        .expect("Problem getting latest version of the package you added.");
                     added_req.constraints.push(Constraint::new(
                         ReqType::Caret,
                         vers.major,
@@ -992,14 +949,6 @@ py_version = \"3.7\"",
                 }
             }
 
-            #[cfg(target_os = "windows")]
-            let os = Os::Windows;
-            #[cfg(target_os = "linux")]
-            let os = Os::Linux;
-            #[cfg(target_os = "macos")]
-            let os = Os::Mac;
-
-            // todo: Determine os.
             sync_deps(
                 lock_filename,
                 &bin_path,
@@ -1007,7 +956,6 @@ py_version = \"3.7\"",
                 &merged_reqs,
                 &installed,
                 &py_vers,
-                os,
             );
             println!(
                 "{}{}{}",
@@ -1017,24 +965,36 @@ py_version = \"3.7\"",
             );
         }
         SubCommand::Uninstall { packages } => {
-            // todo: DRY with ::Install
-            let removed_deps: Vec<Req> = packages
+            let removed_reqs: Vec<String> = packages
                 .into_iter()
-                .map(|p| Req::from_str(&p, false).unwrap())
+                .map(|p| Req::from_str(&p, false).unwrap().name)
                 .collect();
 
-            edit_files::remove_dependencies(cfg_filename, &removed_deps);
+            edit_files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
+
+            let updated_reqs = cfg
+                .reqs
+                .into_iter()
+                .filter(|req| !removed_reqs.contains(&req.name))
+                .collect();
+
+            println!("UPDATED: {:#?}", &updated_reqs);
 
             let installed = find_installed(&lib_path);
             sync_deps(
                 lock_filename,
                 &bin_path,
                 &lib_path,
-                &mut cfg.reqs,
+                &updated_reqs,
                 &installed,
                 &py_vers,
-                Os::Linux,
-            )
+            );
+            println!(
+                "{}{}{}",
+                color::Fg(color::Green),
+                "Uninstall complete",
+                style::Reset
+            );
         }
 
         SubCommand::Python { args } => {

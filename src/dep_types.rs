@@ -501,27 +501,27 @@ pub fn intersection_many(sets: &[Vec<Constraint>]) -> Vec<(Version, Version)> {
     })
 }
 
-/// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
-pub fn intersection_convert_both(
-    reqs1: &[Constraint],
-    reqs2: &[Constraint],
-) -> Vec<(Version, Version)> {
-    let mut ranges1 = vec![];
-    for req in reqs1 {
-        for range in req.compatible_range() {
-            ranges1.push(range);
-        }
-    }
-
-    let mut ranges2 = vec![];
-    for req in reqs2 {
-        for range in req.compatible_range() {
-            ranges2.push(range);
-        }
-    }
-
-    intersection(&ranges1, &ranges2)
-}
+///// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
+//pub fn intersection_convert_both(
+//    reqs1: &[Constraint],
+//    reqs2: &[Constraint],
+//) -> Vec<(Version, Version)> {
+//    let mut ranges1 = vec![];
+//    for req in reqs1 {
+//        for range in req.compatible_range() {
+//            ranges1.push(range);
+//        }
+//    }
+//
+//    let mut ranges2 = vec![];
+//    for req in reqs2 {
+//        for range in req.compatible_range() {
+//            ranges2.push(range);
+//        }
+//    }
+//
+//    intersection(&ranges1, &ranges2)
+//}
 
 /// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
 pub fn intersection(
