@@ -43,33 +43,7 @@ pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub patch: u32,
-} //impl Serialize for Version {
-  //      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  //    where
-  //        S: Serializer,
-  //    {
-  //        // 3 is the number of fields in the struct.
-  //        let mut state = serializer.serialize_struct("Color", 3)?;
-  //        state.serialize_field("r", &self.r)?;
-  //        state.serialize_field("g", &self.g)?;
-  //        state.serialize_field("b", &self.b)?;
-  //        state.end()
-  //    }
-  //}
-
-//impl Serialize for Version {
-//      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//    where
-//        S: Serializer,
-//    {
-//        // 3 is the number of fields in the struct.
-//        let mut state = serializer.serialize_struct("Color", 3)?;
-//        state.serialize_field("r", &self.r)?;
-//        state.serialize_field("g", &self.g)?;
-//        state.serialize_field("b", &self.b)?;
-//        state.end()
-//    }
-//}
+}
 
 impl Version {
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
@@ -243,6 +217,12 @@ pub struct Constraint {
     pub major: u32,
     pub minor: Option<u32>,
     pub patch: Option<u32>,
+}
+
+impl Constraint {
+    pub fn version(&self) -> Version {
+        Version::new(self.major, self.minor.unwrap_or(0), self.patch.unwrap_or(0))
+    }
 }
 
 impl FromStr for Constraint {
@@ -447,28 +427,17 @@ impl Constraint {
     }
 }
 
-///// Find the intersection of two verison requirements
-//pub fn intersection_single(req1: &VersionReq, req2: &VersionReq) -> Vec<VersionReq> {
-//    // The maximum number of intersection requirements can be the lowest of the num
-//    // requirements of our two starting sets. We start with one, which will only get narrower
-//    // as we include requirements from the other.
-//
-//    let ranges1 = req1.compatible_range();
-//    let ranges2 = req2.compatible_range();
-//
+//pub fn to_ranges(reqs: &[Constraint]) -> Vec<(Version, Version)> {
+//    // If no requirement specified, return the full range.
+//    if reqs.is_empty() {
+//        vec![(Version::new(0, 0, 0), Version::new(MAX_VER, 0, 0))]
+//    } else {
+//        reqs.iter()
+//            .map(|r| r.compatible_range())
+//            .flatten()
+//            .collect()
+//    }
 //}
-
-pub fn to_ranges(reqs: &[Constraint]) -> Vec<(Version, Version)> {
-    // If no requirement specified, return the full range.
-    if reqs.is_empty() {
-        vec![(Version::new(0, 0, 0), Version::new(MAX_VER, 0, 0))]
-    } else {
-        reqs.iter()
-            .map(|r| r.compatible_range())
-            .flatten()
-            .collect()
-    }
-}
 
 /// todo: Find a more elegant way to handle this; diff is second arg's type.
 pub fn intersection_convert_one(
@@ -867,21 +836,18 @@ pub mod tests {
             minor: Some(3),
             patch: None,
             type_: Ne,
-            suffix: Some("b3".to_string()),
         };
         let req_b = Constraint {
             major: 1,
             minor: Some(3),
             patch: Some(32),
             type_: Caret,
-            suffix: Some("rc1".to_string()),
         };
         let req_c = Constraint {
             major: 1,
             minor: Some(3),
             patch: Some(32),
             type_: Caret,
-            suffix: Some(".dep1".to_string()),
         };
 
         assert_eq!(Constraint::from_str(a).unwrap(), req_a);
@@ -904,7 +870,6 @@ pub mod tests {
             minor: Some(3),
             patch: None,
             type_: Ne,
-            suffix: None,
         };
         let req_b = Constraint::new(Caret, 1, 3, 32);
         let req_c = Constraint {
@@ -912,14 +877,12 @@ pub mod tests {
             minor: Some(3),
             patch: None,
             type_: Tilde,
-            suffix: None,
         };
         let req_d = Constraint {
             major: 5,
             minor: None,
             patch: None,
             type_: Exact,
-            suffix: None,
         };
         let req_e = Constraint::new(Lte, 11, 2, 3);
         let req_f = Constraint::new(Gte, 0, 0, 1);
@@ -972,7 +935,6 @@ pub mod tests {
                     minor: Some(1),
                     patch: Some(4),
                     type_: Exact,
-                    suffix: None,
                 }]
             )
         )
@@ -990,7 +952,6 @@ pub mod tests {
                     minor: Some(7),
                     patch: Some(18),
                     type_: Caret,
-                    suffix: None,
                 }]
             )
         )
@@ -1008,7 +969,6 @@ pub mod tests {
                     minor: Some(7),
                     patch: None,
                     type_: Tilde,
-                    suffix: None,
                 }]
             )
         )
@@ -1026,7 +986,6 @@ pub mod tests {
                     minor: Some(22),
                     patch: None,
                     type_: Gte,
-                    suffix: None,
                 }]
             )
         )
@@ -1044,7 +1003,6 @@ pub mod tests {
                     major: 2016,
                     minor: Some(3),
                     patch: None,
-                    suffix: None,
                 }]
             )
         )
@@ -1065,7 +1023,6 @@ pub mod tests {
                         minor: Some(26),
                         patch: None,
                         type_: Lte,
-                        suffix: None,
                     }
                 ]
             )
@@ -1095,7 +1052,6 @@ pub mod tests {
                     minor: Some(7),
                     patch: None,
                     type_: Gte,
-                    suffix: None,
                 },
             ],
         );

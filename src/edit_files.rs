@@ -67,7 +67,7 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
     let sect_re = Regex::new(r"^\[.*\]$").unwrap();
 
     for line in data.lines() {
-        if line.starts_with("#") {
+        if line.starts_with("#") || line.is_empty() {
             // todo handle mid-line comements
             result.push_str(line);
             result.push_str("\n");

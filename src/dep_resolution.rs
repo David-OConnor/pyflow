@@ -1,5 +1,5 @@
 use crate::{
-    dep_types::{self, Constraint, DepNode, Req, Version},
+    dep_types::{self, Constraint, DepNode, Req, ReqType, Version},
     util,
 };
 use serde::Deserialize;
@@ -160,10 +160,14 @@ struct ReqCache {
 fn get_req_cache(name: &str) -> Result<(Vec<ReqCache>), reqwest::Error> {
     // todo return Result with custom fetch error type
     let url = format!("https://pydeps.herokuapp.com/{}", name,);
-    //    let mut data = reqwest::get(&url)?.json()?;
-    //    // We don't pass name over the internet to reduce size: add it now.
-    //    data.name = name.to_owned();
-    //    Ok(data)
+    Ok(reqwest::get(&url)?.json()?)
+}
+
+/// Fetch dependency data from our database, where it's cached. Only ask for reqs greater than
+/// or equal to a specific version. Used to mitigate caching on the server.
+fn get_req_cache_gte(name: &str, version: Version) -> Result<(Vec<ReqCache>), reqwest::Error> {
+    // todo return Result with custom fetch error type
+    let url = format!("https://pydeps.herokuapp.com/gte/{}/{}", name, version.to_string());
     Ok(reqwest::get(&url)?.json()?)
 }
 
@@ -193,11 +197,11 @@ fn guess_graph(
     // reqs_searched is a cache of nodes we've already searched, so we know to skip over in the future
     // deps_searched is a cache of specific package/version combo's we've searched; similar idea.
 
-    println!(
-        "DEBUG: IN guess graph for {:#?} {:?}",
-        node.name,
-        node.version.to_string()
-    );
+//    println!(
+//        "DEBUG: IN guess graph for {:#?} {:?}",
+//        node.name,
+//        node.version.to_string()
+//    );
 
     deps_searched.push((node.name.clone(), node.version));
 
@@ -225,7 +229,30 @@ fn guess_graph(
             Some(r) => r.clone(),
             None => {
                 // http call and cache
-                let subreq = get_req_cache(&req.name)?;
+//                let subreq = get_req_cache(&req.name)?; // todo
+
+                // todo: For now, we're only pulling info for versions gte our min req.
+                // todo: Not robust / may break.
+
+                let mut min_versions = vec![];
+                for constr in req.constraints.iter() {
+                    match constr.type_ {
+                        // todo not good logic!
+                        ReqType::Exact => min_versions.push(constr.version()),
+                        ReqType::Lt => min_versions.push(constr.version()),
+                        ReqType::Lte => min_versions.push(constr.version()),
+                        ReqType::Gt => min_versions.push(constr.version()),
+                        ReqType::Gte=> min_versions.push(constr.version()),
+                        ReqType::Ne => min_versions.push(constr.version()),
+                        ReqType::Caret=> min_versions.push(constr.version()),
+                        ReqType::Tilde => min_versions.push(constr.version()),
+                    }
+                }
+                if req.constraints.is_empty() {
+                    min_versions.push(get_latest_version(&req.name).expect("Problem finding latest v"));
+                }
+
+                let subreq = get_req_cache_gte(&req.name, *min_versions.iter().min().unwrap())?;
                 cache.insert(req.name.to_owned(), subreq.clone());
                 subreq
             }
@@ -269,6 +296,9 @@ fn guess_graph(
                 &req.name
             ));
         }
+
+        // Todo: Figure out when newest_compat isn't what you want, due to dealing with
+        // todo conflicting sub-reqs.
         let newest_compat = sub_reqs
             .into_iter()
             .max_by(|a, b| a.version.cmp(&b.version))
@@ -279,15 +309,16 @@ fn guess_graph(
         for mut dep in node.dependencies.iter_mut() {
             // Without this check, we could get into infinite recursions with circular references,
             // ie a requires b which requires c which requires a.
-            //            let mut searched_all_reqs = true;
-            //            for req in dep.reqs.iter() {
-            //                if !reqs_searched.contains(&req) {
-            //                    searched_all_reqs = false;
-            //                    break
-            //                }
-            //            }
-            //            println!("searched all reqs: {}", searched_all_reqs);
-            //            if !searched_all_reqs {
+            let mut searched_all_reqs = true;
+            for req in dep.reqs.iter() {
+                if !reqs_searched.contains(&req) {
+                    searched_all_reqs = false;
+                    break;
+                }
+            }
+            if !searched_all_reqs {
+                // todo
+            }
 
             if deps_searched.contains(&(dep.name.clone(), dep.version)) {
                 continue;

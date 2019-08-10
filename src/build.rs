@@ -25,6 +25,7 @@ setuptools.setup(
     version="{}",
     author="{}",
     author_email="{}",
+    license="{}"
     description="{}",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -38,6 +39,7 @@ setuptools.setup(
         version,
         cfg.author.unwrap_or_else(|| "".into()),
         cfg.author_email.unwrap_or_else(|| "".into()),
+        cfg.license.unwrap_or_else(|| "".into()),
         cfg.description.unwrap_or_else(|| "".into()),
         cfg.repo_url.unwrap_or_else(|| "".into()),
         classifiers,
@@ -46,7 +48,7 @@ setuptools.setup(
     fs::write(filename, data).expect("Problem writing dummy setup.py");
     if util::wait_for_dirs(&[env::current_dir()
         .expect("Problem finding current dir")
-        .join("setup.py")])
+        .join(filename)])
     .is_err()
     {
         util::abort("Problem waiting for setup.py to be created.")
@@ -91,7 +93,7 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
     let repo_url = cfg
         .package_url
         .clone()
-        .unwrap_or("https://test.pypi.org".to_string());
+        .unwrap_or("https://test.pypi.org/legacy".to_string());
 
     println!("Uploading to {}", repo_url);
     Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "twine"))
@@ -99,7 +101,8 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
             //            "-m",
             //            "twine upload",
             "upload",
-            &format!("--repository-url {}/", repo_url),
+            // todo - test repo / setting repos not working.
+//            &format!("--repository-url {}/", repo_url),
             "dist/*",
         ])
         .status()

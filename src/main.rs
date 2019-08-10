@@ -112,12 +112,13 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
 #[derive(Clone, Debug, Default, Deserialize)]
 // todo: Auto-desr some of these!
 pub struct Config {
-    py_version: Option<Version>,
+    py_version: Option<Constraint>,
     reqs: Vec<Req>, // name, requirements.
     name: Option<String>,
     version: Option<Version>,
     author: Option<String>,
     author_email: Option<String>,
+    license: Option<String>,
     description: Option<String>,
     classifiers: Vec<String>, // https://pypi.org/classifiers/
     keywords: Vec<String>,
@@ -125,7 +126,7 @@ pub struct Config {
     repo_url: Option<String>,
     package_url: Option<String>,
     readme_filename: Option<String>,
-    license: Option<String>,
+
 }
 
 fn key_re(key: &str) -> Regex {
@@ -193,7 +194,7 @@ impl Config {
                         if let Some(n) = n2.get(1) {
                             let n3 = n.as_str();
                             if !n3.is_empty() {
-                                result.py_version = Some(Version::from_str(n.as_str()).unwrap());
+                                result.py_version = Some(Constraint::from_str(n.as_str()).unwrap());
                             }
                         }
                     }
@@ -215,7 +216,6 @@ impl Config {
             abort("`pyproject.toml` already exists")
         }
 
-        // todo: Use a bufer instead of String?
         let mut result = String::new();
 
         result.push_str("[tool.pypackage]\n");
@@ -225,8 +225,8 @@ impl Config {
             // Give name, and a few other fields default values.
             result.push_str(&("name = \"\"".to_owned() + "\n"));
         }
-        if let Some(py_v) = self.py_version {
-            result.push_str(&("version = \"".to_owned() + &py_v.to_string() + "\"\n"));
+        if let Some(py_v) = &self.py_version {
+            result.push_str(&("version = \"".to_owned() + &py_v.to_string(false, false) + "\"\n"));
         } else {
             result.push_str(&("version = \"\"".to_owned() + "\n"));
         }
@@ -278,7 +278,7 @@ __pycache__/
     let pyproject_init = &format!(
         r##"[tool.pypackage]
 name = "{}"
-py_version = "3.7"
+py_version = "^3.7"
 version = "0.1.0"
 description = ""
 author = ""
@@ -438,7 +438,7 @@ fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyErro
     ))
 }
 
-fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
+fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version {
     // We only use the alias for creating the virtual environment. After that,
     // we call our venv's executable directly.
 
@@ -463,10 +463,9 @@ fn create_venv(cfg_v: Option<&Version>, pyypackage_dir: &PathBuf) -> Version {
     if let Some(c_v) = cfg_v {
         // We don't expect the config version to specify a patch, but if it does, take it
         // into account.
-        if c_v != &py_ver_from_alias {
-            println!("{:?}, {:?}", c_v, &py_ver_from_alias);
+        if !c_v.is_compatible(&py_ver_from_alias) {
             abort(&format!("The Python version you selected ({}) doesn't match the one specified in `pyprojecttoml` ({})",
-                           py_ver_from_alias.to_string(), c_v.to_string())
+                           py_ver_from_alias.to_string(), c_v.to_string(false, false))
             );
         }
     }
@@ -726,7 +725,7 @@ fn main() {
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
         None => {
-            abort("No command entered. For a list of what you can do, run `pyproject --help`.");
+            abort("No command entered. For a list of what you can do, run `pypackage --help`.");
             SubCommand::Init {} // Dummy to satisfy the compiler.
         }
     };
@@ -755,7 +754,7 @@ fn main() {
         .expect("Can't find current path")
         .join("__pypackages__");
 
-    let py_version_cfg = cfg.py_version;
+    let py_version_cfg = cfg.py_version.clone();
 
     // Check for environments. Create one if none exist. Set `vers_path`.
     let mut vers_path = PathBuf::new();
@@ -769,8 +768,11 @@ fn main() {
             // is setup.  // todo: Confirm using --version on the python bin, instead of relying on folder name.
 
             // Don't include version patch in the directory name, per PEP 582.
-            vers_path = pypackage_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor));
-            py_vers = Version::new_short(cfg_v.major, cfg_v.minor);
+            vers_path = pypackage_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor.unwrap_or(0)));
+
+            // todo: Take into account type of version! Currently ignores, and just takes the major/minor,
+            // todo, but we're dealing with a constraint.
+            py_vers = cfg_v.version();
 
             if !util::venv_exists(&vers_path.join(".venv")) {
                 let created_vers = create_venv(Some(&cfg_v), &pypackage_dir);
@@ -810,7 +812,7 @@ fn main() {
                 _ => abort(
                     "Multiple Python environments found
                 for this project; specify the desired one in `pyproject.toml`. Example:
-[tool.pyproject]
+[tool.pypackage]
 py_version = \"3.7\"",
                 ),
             }
@@ -848,10 +850,15 @@ py_version = \"3.7\"",
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
-            let added_reqs: Vec<Req> = packages
-                .into_iter()
-                .map(|p| Req::from_str(&p, false).unwrap())
-                .collect();
+            let mut added_reqs = vec![];
+            for p in packages.into_iter() {
+                match Req::from_str(&p, false) {
+                    Ok(r) => added_reqs.push(r),
+                    Err(_) => abort(&format!("Unable to parse this package: {}. \
+                    Note that installing a specific version via the CLI is currently unsupported. If you need to specify a version,\
+                     edit `pyproject.toml`", &p)),
+                }
+            }
 
             // Reqs to add to `pyproject.toml`
             let mut added_reqs_unique: Vec<Req> = added_reqs
@@ -977,8 +984,6 @@ py_version = \"3.7\"",
                 .into_iter()
                 .filter(|req| !removed_reqs.contains(&req.name))
                 .collect();
-
-            println!("UPDATED: {:#?}", &updated_reqs);
 
             let installed = find_installed(&lib_path);
             sync_deps(

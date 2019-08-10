@@ -12,3 +12,13 @@ source = "pypi+https://pypi.org/pypi/scinot/0.0.11/json"
 name = "colorama"
 version = "0.4.1"
 source = "pypi+https://pypi.org/pypi/colorama/0.4.1/json"
+
+[[package]]
+name = "siunits"
+version = "0.0.4"
+source = "pypi+https://pypi.org/pypi/siunits/0.0.4/json"
+
+[[package]]
+name = "djangorestframework"
+version = "3.10.2"
+source = "pypi+https://pypi.org/pypi/djangorestframework/3.10.2/json"

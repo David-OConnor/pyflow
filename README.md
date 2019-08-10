@@ -1,5 +1,7 @@
 # Py Packages
 
+*Early release - missing features, and will not work for some dependencies*
+
 This tool implements
 [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/). 
 It manages dependencies, keeping them isolated in the project directory, and runs
@@ -7,9 +9,6 @@ python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
 A virtual environment is created in the same diretory as `lib`, and is used
 transparently.
-
-This is a new project undergoing active development: expect breaking changes
-in the near future. 
 
 Python ≥ 3.3 is required.
 
@@ -74,10 +73,12 @@ the `-b` or `--bin` flag.
 ### Building and publishing:
 - `pypackage package` - Package for distribution (uses setuptools internally, and 
 builds both source and binary if applicable.)
-- `pypackage publish` - Upload to PyPi (Rep specified in `pyproject.toml`. Uses `Twine` internally.)
-
+- `pypackage publish` - Upload to PyPi (Repo specified in `pyproject.toml`. Uses `Twine` internally.)
+``
 ### Misc:
 - `pypackage new projname` - Create a directory containing the basics for
+- `pypackage init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
+`requirements.text`, `Pipfile` etc as required.
 a project: a readme, pyproject.toml, and directory for source code
 - `pypackage list` - Run `pip list` in the environment
 - `pypackage version` - Get the current version of this tool
@@ -179,12 +180,15 @@ of binaries from `PyPi`.
 
 - Executable script installations (Important feature!)
 - Installing extra dependencies for features
+- Installing from sources other than `pypi` (eg repos)
 - The lock file is missing some info like dependencies and hashes.
-- Check hashes against lock file, instead of just when downloading.
 - Windows installer and Mac binaries.
 - Adding a dependency via the CLI with a specific version.
 - Installing multiple versions of a sub-dependency when there's no other
 way to resolve.
+- There are some resolvable dependency graphs (ie that don't require renaming/multiple-versions)
+that will currently not be resolved.
+- Developer requirements
 
 
 ## Building and uploading your project to PyPi.
@@ -225,17 +229,18 @@ If installed via `Cargo`, run `cargo install pypackage --force`.
 
 ## Contributing
 If you notice unexpected behavior or missing features, please post an issue,
-or submit a PR. There are likely many problems with the dependency resolver
-due to the complicated history of Python package management. If you see unexpected
+or submit a PR. There are probably multiple problems with the dependency resolver. 
+If you see unexpected
 behavior, it's probably a bug! Post an issue listing the dependencies that did
 not install correctly.
+
 
 ## Dependency cache repo:
 - [Github](https://github.com/David-OConnor/pydeps)
 Example API call: `https://pydeps.herokuapp.com/numpy`. This pulls all top-level
 dependencies for the `numpy` package. The first time this command is run
 for a package/version combo, it may be slow. Subsequent calls, by anyone,
-should be faster. This is due to having to download and install each package
+should be fast. This is due to having to download and install each package
 on the server to properly determine dependencies, due to unreliable information
  on the `pypi warehouse`.
 
