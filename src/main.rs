@@ -1,5 +1,6 @@
 use crate::dep_types::{Constraint, DepNode, Lock, LockPackage, Req, ReqType, Version};
 use crate::util::abort;
+use crossterm::{Color, Colored};
 use regex::Regex;
 use serde::Deserialize;
 use std::{
@@ -9,10 +10,12 @@ use std::{
     fmt, fs,
     io::{self, BufRead, BufReader},
     path::PathBuf,
+    process::Command,
+    thread,
+    time,
     str::FromStr,
 };
 use structopt::StructOpt;
-use termion::{color, style};
 
 mod build;
 mod commands;
@@ -119,6 +122,7 @@ pub struct Config {
     author: Option<String>,
     author_email: Option<String>,
     license: Option<String>,
+    features: Option<HashMap<String, Vec<String>>>, // todo
     description: Option<String>,
     classifiers: Vec<String>, // https://pypi.org/classifiers/
     keywords: Vec<String>,
@@ -126,7 +130,6 @@ pub struct Config {
     repo_url: Option<String>,
     package_url: Option<String>,
     readme_filename: Option<String>,
-
 }
 
 fn key_re(key: &str) -> Regex {
@@ -145,6 +148,7 @@ impl Config {
 
         let mut in_sect = false;
         let mut in_dep = false;
+        let mut in_features = false;
 
         let sect_re = Regex::new(r"\[.*\]").unwrap();
 
@@ -159,14 +163,22 @@ impl Config {
                 if &l == "[tool.pypackage]" {
                     in_sect = true;
                     in_dep = false;
+                    in_features = false;
                     continue;
                 } else if &l == "[tool.pypackage.dependencies]" {
                     in_sect = false;
                     in_dep = true;
+                    in_features = false;
+                    continue;
+                } else if &l == "[tool.pypackage.features]" {
+                    in_sect = false;
+                    in_dep = false;
+                    in_features = false;
                     continue;
                 } else if sect_re.is_match(&l) {
                     in_sect = false;
                     in_dep = false;
+                    in_features = false;
                     continue;
                 }
 
@@ -438,6 +450,7 @@ fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyErro
     ))
 }
 
+/// Create a new virtual environment, and install Wheel.
 fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version {
     // We only use the alias for creating the virtual environment. After that,
     // we call our venv's executable directly.
@@ -452,10 +465,13 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version 
         }
     };
 
-    let lib_path = pyypackage_dir.join(format!(
-        "{}.{}/lib",
+    let vers_path = pyypackage_dir.join(format!(
+        "{}.{}",
         py_ver_from_alias.major, py_ver_from_alias.minor
     ));
+
+    let lib_path = vers_path.join("lib");
+
     if !lib_path.exists() {
         fs::create_dir_all(&lib_path).expect("Problem creating __pypackages__ directory");
     }
@@ -476,12 +492,38 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version 
         util::abort("Problem creating virtual environment");
     }
 
-    // Wait until the venv's created before continuing, or we'll get errors
-    // when attempting to use it
-    // todo: These won't work with Scripts ! - pass venv_path et cinstead
-    let py_venv = lib_path.join("../.venv/bin/python");
-    let pip_venv = lib_path.join("../.venv/bin/pip");
-    util::wait_for_dirs(&[py_venv, pip_venv]).unwrap();
+
+//    let bin_path = vers_path.join(".venv/bin"); // todo
+//
+//    // Wait until the venv's created before continuing, or we'll get errors
+//    // when attempting to use it
+//    let py_venv = bin_path.join("python");
+//    let pip_venv = bin_path.join("pip");
+//    util::wait_for_dirs(&[py_venv, pip_venv]).unwrap();
+//
+//    // todo: Not sure why we need this extra sleep. Wheel won't install if
+//    // todo we don't have it.
+//    thread::sleep(time::Duration::from_millis(200));
+
+    // todo: Chicken-egg scenario where we need to wait for the venv to complete before
+    // todo installing `wheel` and returning, but don't know what folder
+    // todo to look for in wait_for_dirs. Blanket sleep for now.
+    thread::sleep(time::Duration::from_millis(2000));
+    let bin_path = util::find_bin_path(&vers_path).0;
+
+    // We need `wheel` installed to build wheels from source.
+    // Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
+    Command::new("./python")
+        .current_dir(bin_path)
+        .args(&[
+            "-m",
+            "pip",
+            "install",
+            "--quiet",
+            "wheel",
+        ])
+        .spawn()
+        .expect("Problem installing Wheel");
 
     py_ver_from_alias
 }
@@ -768,7 +810,8 @@ fn main() {
             // is setup.  // todo: Confirm using --version on the python bin, instead of relying on folder name.
 
             // Don't include version patch in the directory name, per PEP 582.
-            vers_path = pypackage_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor.unwrap_or(0)));
+            vers_path =
+                pypackage_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor.unwrap_or(0)));
 
             // todo: Take into account type of version! Currently ignores, and just takes the major/minor,
             // todo, but we're dealing with a constraint.
@@ -964,12 +1007,7 @@ py_version = \"3.7\"",
                 &installed,
                 &py_vers,
             );
-            println!(
-                "{}{}{}",
-                color::Fg(color::Green),
-                "Installation complete",
-                style::Reset
-            );
+            println!("{}{}", Colored::Fg(Color::Green), "Installation complete",);
         }
         SubCommand::Uninstall { packages } => {
             let removed_reqs: Vec<String> = packages
@@ -994,12 +1032,7 @@ py_version = \"3.7\"",
                 &installed,
                 &py_vers,
             );
-            println!(
-                "{}{}{}",
-                color::Fg(color::Green),
-                "Uninstall complete",
-                style::Reset
-            );
+            println!("{}{}", Colored::Fg(Color::Green), "Uninstall complete",);
         }
 
         SubCommand::Python { args } => {

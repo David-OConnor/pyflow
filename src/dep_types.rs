@@ -517,6 +517,8 @@ pub struct Req {
     pub name: String,
     pub constraints: Vec<Constraint>,
     pub suffix: Option<String>,
+    // todo: Perhaps replace suffix with this?
+    pub extra: Option<String>  // todo: Implement
 }
 
 impl Req {
@@ -525,6 +527,7 @@ impl Req {
             name,
             constraints,
             suffix: None,
+            extra: None,
         }
     }
 
@@ -551,6 +554,7 @@ impl Req {
                 name,
                 constraints,
                 suffix,
+                extra: None,
             });
         };
 
@@ -571,6 +575,7 @@ impl Req {
                 name: caps.get(1).unwrap().as_str().to_string(),
                 constraints: vec![],
                 suffix,
+                extra: None,
             });
         }
 

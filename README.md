@@ -10,7 +10,7 @@ are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib
 A virtual environment is created in the same diretory as `lib`, and is used
 transparently.
 
-Python ≥ 3.3 is required.
+Python ≥ 3.4 is required.
 
 
 ## Installation

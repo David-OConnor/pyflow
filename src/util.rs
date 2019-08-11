@@ -1,12 +1,12 @@
 use crate::dep_types::Version;
+use crossterm::{Color, Colored};
 use std::str::FromStr;
 use std::{env, path::PathBuf, process, thread, time};
-use termion::{color, style};
 
 /// A convenience function
 pub fn abort(message: &str) {
     {
-        println!("{}{}{}", color::Fg(color::Red), message, style::Reset);
+        println!("{}{}", Colored::Fg(Color::Red), message);
         process::exit(1)
     }
 }
@@ -37,13 +37,12 @@ pub fn find_bin_path(vers_path: &PathBuf) -> (PathBuf, PathBuf) {
     if vers_path.join(".venv/bin").exists() {
         (vers_path.join(".venv/bin"), vers_path.join("lib/bin"))
     } else if vers_path.join(".venv/Scripts").exists() {
-        // todo: Perhasp the lib path may not be the same.
+        // todo: Perhaps the lib path may not be the same.
         (
             vers_path.join(".venv/Scripts"),
             vers_path.join("lib/Scripts"),
         )
     } else {
-        println!("{:?}", vers_path);
         // todo: YOu sould probably propogate this as an Error instead of handlign here.
         abort("Can't find the new binary directory. (ie `bin` or `Scripts` in the virtual environment's folder)");
         (vers_path.clone(), vers_path.clone()) // Never executed; used to prevent compile errors.

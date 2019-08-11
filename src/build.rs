@@ -59,7 +59,6 @@ pub(crate) fn build(bin_path: &PathBuf, lib_path: &PathBuf, cfg: &crate::Config)
     // todo: Check if they exist; only install if they don't.
     let dummy_setup_fname = "setup_temp_pypackage.py";
 
-    println!("Installing build tools...");
     Command::new("./python")
         .current_dir(bin_path)
         .args(&[
@@ -67,12 +66,11 @@ pub(crate) fn build(bin_path: &PathBuf, lib_path: &PathBuf, cfg: &crate::Config)
             "pip",
             "install",
             //            "--upgrade",
-            "setuptools",
             "twine",
             "wheel",
         ])
         .status()
-        .expect("Problem installing build tools");
+        .expect("Problem installing Twine");
 
     create_dummy_setup(cfg, dummy_setup_fname);
 
@@ -102,7 +100,7 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
             //            "twine upload",
             "upload",
             // todo - test repo / setting repos not working.
-//            &format!("--repository-url {}/", repo_url),
+            //            &format!("--repository-url {}/", repo_url),
             "dist/*",
         ])
         .status()

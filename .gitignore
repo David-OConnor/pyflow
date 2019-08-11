@@ -1,7 +1,9 @@
 /target
 **/*.rs.bk
 
-
+#PyCharm
+*.iws
+workspace.xml
 
 # Prevent generated and test files from being committed
 setup.py

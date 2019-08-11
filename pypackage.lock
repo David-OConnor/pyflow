@@ -1,24 +1,54 @@
 [[package]]
-name = "gunicorn"
-version = "19.9.0"
-source = "pypi+https://pypi.org/pypi/gunicorn/19.9.0/json"
+name = "fplot"
+version = "0.2.3"
+source = "pypi+https://pypi.org/pypi/fplot/0.2.3/json"
 
 [[package]]
-name = "scinot"
-version = "0.0.11"
-source = "pypi+https://pypi.org/pypi/scinot/0.0.11/json"
+name = "numpy"
+version = "1.17.0"
+source = "pypi+https://pypi.org/pypi/numpy/1.17.0/json"
 
 [[package]]
-name = "colorama"
-version = "0.4.1"
-source = "pypi+https://pypi.org/pypi/colorama/0.4.1/json"
+name = "matplotlib"
+version = "3.1.1"
+source = "pypi+https://pypi.org/pypi/matplotlib/3.1.1/json"
 
 [[package]]
-name = "siunits"
-version = "0.0.4"
-source = "pypi+https://pypi.org/pypi/siunits/0.0.4/json"
+name = "numpy"
+version = "1.17.0"
+source = "pypi+https://pypi.org/pypi/numpy/1.17.0/json"
 
 [[package]]
-name = "djangorestframework"
-version = "3.10.2"
-source = "pypi+https://pypi.org/pypi/djangorestframework/3.10.2/json"
+name = "python-dateutil"
+version = "2.8.0"
+source = "pypi+https://pypi.org/pypi/python-dateutil/2.8.0/json"
+
+[[package]]
+name = "six"
+version = "1.12.0"
+source = "pypi+https://pypi.org/pypi/six/1.12.0/json"
+
+[[package]]
+name = "pyparsing"
+version = "2.4.2"
+source = "pypi+https://pypi.org/pypi/pyparsing/2.4.2/json"
+
+[[package]]
+name = "kiwisolver"
+version = "1.1.0"
+source = "pypi+https://pypi.org/pypi/kiwisolver/1.1.0/json"
+
+[[package]]
+name = "setuptools"
+version = "41.0.1"
+source = "pypi+https://pypi.org/pypi/setuptools/41.0.1/json"
+
+[[package]]
+name = "cycler"
+version = "0.10.0"
+source = "pypi+https://pypi.org/pypi/cycler/0.10.0/json"
+
+[[package]]
+name = "six"
+version = "1.12.0"
+source = "pypi+https://pypi.org/pypi/six/1.12.0/json"

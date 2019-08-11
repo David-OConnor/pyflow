@@ -1,11 +1,11 @@
 use crate::util;
 use crate::{dep_types::Version, PackageType};
+use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
 use std::{fs, io, path::PathBuf, process::Command};
 use tar::Archive;
-use termion::{color, style};
 
 /// Extract the wheel. (It's like a zip)
 fn install_wheel(file: &fs::File, lib_path: &PathBuf) {
@@ -46,8 +46,23 @@ fn sha256_digest<R: io::Read>(mut reader: R) -> Result<digest::Digest, std::io::
     Ok(context.finish())
 }
 
+/// If the setup.py file uses `distutils.core`, replace with `setuptools`. This is required to build
+/// a wheel. Eg, replace `from distutils.core import setup` with `from setuptools import setup`.
+fn replace_distutils(setup_path: &PathBuf) {
+    let mut setup_text =
+        fs::read_to_string(setup_path).expect("Can't find setup.py on a source distribution.");
+
+    let re = Regex::new(r"distutils.core").unwrap();
+    let new_text = re.replace_all(&setup_text, "setuptools");
+
+    if new_text != setup_text {
+        fs::write(setup_path, new_text.to_string())
+            .expect("Problem replacing `distutils.core` with `setuptools` in `setup.py`");
+    }
+}
+
 /// Download and install a package. For wheels, we can just extract the contents into
-/// the lib folder.
+/// the lib folder.  For source dists, make a wheel first.
 pub fn download_and_install_package(
     url: &str,
     filename: &str,
@@ -65,7 +80,6 @@ pub fn download_and_install_package(
     io::copy(&mut resp, &mut out).expect("failed to copy content");
     let file = fs::File::open(&archive_path).unwrap();
 
-    // todo: Md5 isn't secure! sha256 instead?
     // https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
     let reader = io::BufReader::new(&file);
     let file_digest =
@@ -76,16 +90,18 @@ pub fn download_and_install_package(
         util::abort(&format!("Hash failed for {}", filename))
     }
 
-    // todo: Setup 'binary'scripts.
+    // We must re-open the file after computing the hash.
+    let archive_file = fs::File::open(&archive_path).unwrap();
+
+    // todo: Setup executable scripts.
 
     match package_type {
         PackageType::Wheel => {
-            install_wheel(&file, lib_path);
+            install_wheel(&archive_file, lib_path);
         }
         PackageType::Source => {
             // Extract the tar.gz source code.
-            // todo: May need to install
-            let tar = GzDecoder::new(file);
+            let tar = GzDecoder::new(archive_file);
             let mut archive = Archive::new(tar);
             archive
                 .unpack(lib_path)
@@ -98,7 +114,10 @@ pub fn download_and_install_package(
                 .captures(&filename)
                 .expect("Problem matching extracted folder name")
                 .get(1)
-                .unwrap()
+                .expect(&format!(
+                    "Unable to find extracted folder name: {}",
+                    filename
+                ))
                 .as_str();
 
             // todo: This fs_extras move does a full copy. Normal fs lib doesn't include
@@ -107,22 +126,24 @@ pub fn download_and_install_package(
 
             let extracted_parent = lib_path.join(folder_name);
 
-            // todo: wheel must be installed (Probably as binary) prior to this step.
+            replace_distutils(&extracted_parent.join("setup.py"));
+
             // Build a wheel from source.
             Command::new(format!("{}/python", bin_path.to_str().unwrap()))
                 .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])
-                //                .spawn()
                 .output()
-                .unwrap();
+                .expect("Problem running setup.py bdist_wheel");
 
             let mut built_wheel_filename = String::new();
-            for entry in fs::read_dir(extracted_parent.join("dist")).unwrap() {
+            for entry in
+                fs::read_dir(extracted_parent.join("dist")).expect("Problem reading dist directory")
+            {
                 let entry = entry.unwrap();
                 built_wheel_filename = entry
                     .path()
                     .file_name()
-                    .unwrap()
+                    .expect("Unable to find built wheel filename")
                     .to_str()
                     .unwrap()
                     .to_owned();
@@ -181,11 +202,10 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
     // package folders appear to be lowercase, while metadata keeps the package title's casing.
     if fs::remove_dir_all(lib_path.join(name_ins.to_lowercase())).is_err() {
         println!(
-            "{}Problem uninstalling {} {}{}",
-            color::Fg(color::LightRed),
+            "{}Problem uninstalling {} {}",
+            Colored::Fg(Color::DarkRed),
             name_ins,
             vers_ins.to_string(),
-            style::Reset
         )
     }
 
@@ -203,11 +223,10 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
     }
     if !meta_folder_removed {
         println!(
-            "{}Problem uninstalling metadata for {}: {}{}",
-            color::Fg(color::LightRed),
+            "{}Problem uninstalling metadata for {}: {}",
+            Colored::Fg(Color::DarkRed),
             name_ins,
             vers_ins.to_string(),
-            style::Reset,
         )
     }
 

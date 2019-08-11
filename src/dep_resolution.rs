@@ -167,7 +167,11 @@ fn get_req_cache(name: &str) -> Result<(Vec<ReqCache>), reqwest::Error> {
 /// or equal to a specific version. Used to mitigate caching on the server.
 fn get_req_cache_gte(name: &str, version: Version) -> Result<(Vec<ReqCache>), reqwest::Error> {
     // todo return Result with custom fetch error type
-    let url = format!("https://pydeps.herokuapp.com/gte/{}/{}", name, version.to_string());
+    let url = format!(
+        "https://pydeps.herokuapp.com/gte/{}/{}",
+        name,
+        version.to_string()
+    );
     Ok(reqwest::get(&url)?.json()?)
 }
 
@@ -197,11 +201,11 @@ fn guess_graph(
     // reqs_searched is a cache of nodes we've already searched, so we know to skip over in the future
     // deps_searched is a cache of specific package/version combo's we've searched; similar idea.
 
-//    println!(
-//        "DEBUG: IN guess graph for {:#?} {:?}",
-//        node.name,
-//        node.version.to_string()
-//    );
+    //    println!(
+    //        "DEBUG: IN guess graph for {:#?} {:?}",
+    //        node.name,
+    //        node.version.to_string()
+    //    );
 
     deps_searched.push((node.name.clone(), node.version));
 
@@ -229,7 +233,7 @@ fn guess_graph(
             Some(r) => r.clone(),
             None => {
                 // http call and cache
-//                let subreq = get_req_cache(&req.name)?; // todo
+                //                let subreq = get_req_cache(&req.name)?; // todo
 
                 // todo: For now, we're only pulling info for versions gte our min req.
                 // todo: Not robust / may break.
@@ -242,14 +246,15 @@ fn guess_graph(
                         ReqType::Lt => min_versions.push(constr.version()),
                         ReqType::Lte => min_versions.push(constr.version()),
                         ReqType::Gt => min_versions.push(constr.version()),
-                        ReqType::Gte=> min_versions.push(constr.version()),
+                        ReqType::Gte => min_versions.push(constr.version()),
                         ReqType::Ne => min_versions.push(constr.version()),
-                        ReqType::Caret=> min_versions.push(constr.version()),
+                        ReqType::Caret => min_versions.push(constr.version()),
                         ReqType::Tilde => min_versions.push(constr.version()),
                     }
                 }
                 if req.constraints.is_empty() {
-                    min_versions.push(get_latest_version(&req.name).expect("Problem finding latest v"));
+                    min_versions
+                        .push(get_latest_version(&req.name).expect("Problem finding latest v"));
                 }
 
                 let subreq = get_req_cache_gte(&req.name, *min_versions.iter().min().unwrap())?;
