@@ -396,7 +396,7 @@ fn find_py_alias() -> Result<(String, Version), AliasError> {
         }
     }
 
-    match possible_aliases.len() {
+    match found_aliases.len() {
         0 => Err(AliasError {
             details: "Can't find Python on the path.".into(),
         }),
@@ -523,7 +523,7 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version 
             "wheel",
         ])
         .spawn()
-        .expect("Problem installing Wheel");
+        .expect("Problem installing `wheel`");
 
     py_ver_from_alias
 }
@@ -893,6 +893,18 @@ py_version = \"3.7\"",
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
+    Command::new("python.exe")
+        .current_dir(&bin_path)
+        .args(&[
+            "-m",
+            "pip",
+            "install",
+            // "--quiet",
+            "wheel",
+        ])
+        .spawn()
+        .expect("Problem installing `wheel`");
+
             let mut added_reqs = vec![];
             for p in packages.into_iter() {
                 match Req::from_str(&p, false) {
@@ -1007,7 +1019,8 @@ py_version = \"3.7\"",
                 &installed,
                 &py_vers,
             );
-            println!("{}{}", Colored::Fg(Color::Green), "Installation complete",);
+            // todo: Utility fn to simplify colored-output code
+            println!("{}{}{}", Colored::Fg(Color::Green), "Installation complete", Colored::Fg(Color::Reset));
         }
         SubCommand::Uninstall { packages } => {
             let removed_reqs: Vec<String> = packages

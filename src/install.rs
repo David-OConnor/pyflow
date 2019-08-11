@@ -49,7 +49,7 @@ fn sha256_digest<R: io::Read>(mut reader: R) -> Result<digest::Digest, std::io::
 /// If the setup.py file uses `distutils.core`, replace with `setuptools`. This is required to build
 /// a wheel. Eg, replace `from distutils.core import setup` with `from setuptools import setup`.
 fn replace_distutils(setup_path: &PathBuf) {
-    let mut setup_text =
+    let setup_text =
         fs::read_to_string(setup_path).expect("Can't find setup.py on a source distribution.");
 
     let re = Regex::new(r"distutils.core").unwrap();

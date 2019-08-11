@@ -1,4 +1,14 @@
 [[package]]
+name = "siunits"
+version = "0.0.4"
+source = "pypi+https://pypi.org/pypi/siunits/0.0.4/json"
+
+[[package]]
+name = "backcall"
+version = "0.1.0"
+source = "pypi+https://pypi.org/pypi/backcall/0.1.0/json"
+
+[[package]]
 name = "fplot"
 version = "0.2.3"
 source = "pypi+https://pypi.org/pypi/fplot/0.2.3/json"
