@@ -1,7 +1,4 @@
-use crate::{
-    dep_types::{Req, ReqType},
-    util, Config,
-};
+use crate::{dep_types::Req, util, Config};
 use regex::Regex;
 use serde::Deserialize;
 use std::fs;
@@ -67,7 +64,7 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
     let sect_re = Regex::new(r"^\[.*\]$").unwrap();
 
     for line in data.lines() {
-        if line.starts_with("#") || line.is_empty() {
+        if line.starts_with('#') || line.is_empty() {
             // todo handle mid-line comements
             result.push_str(line);
             result.push_str("\n");
@@ -100,8 +97,7 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
             if reqs
                 .iter()
                 .map(|r| r.to_lowercase())
-                .collect::<Vec<String>>()
-                .contains(&req_line.name.to_lowercase())
+                .any(|x| x == req_line.name.to_lowercase())
             {
                 continue; // ie don't append this line to result.
             }
@@ -243,6 +239,3 @@ pub fn parse_pipfile(cfg: &mut Config) {
 }
 
 pub fn parse_poetry(cfg: &mut Config) {}
-
-/// Create or update a `pyproject.toml` file.
-pub fn update_pyproject(cfg: &Config) {}

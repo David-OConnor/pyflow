@@ -1,3 +1,4 @@
+use crate::dep_types::DependencyError;
 use crate::{
     dep_types::{self, Constraint, DepNode, Req, ReqType, Version},
     util,
@@ -44,22 +45,34 @@ struct WarehouseData {
 /// Fetch data about a package from the Pypi Warehouse.
 /// https://warehouse.pypa.io/api-reference/json/
 fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
-    println!("Getting warehouse data for {}", name);
     let url = format!("https://pypi.org/pypi/{}/json", name);
     let resp = reqwest::get(&url)?.json()?;
     Ok(resp)
 }
 
 /// Find the latest version of a package by querying the warehouse.
-pub fn get_latest_version(name: &str) -> Result<Version, reqwest::Error> {
+pub fn get_latest_version(name: &str) -> Result<Version, DependencyError> {
+    println!("Getting latest version for {}", name);
     let data = get_warehouse_data(name)?;
-    Ok(Version::from_str(&data.info.version).expect(&format!(
-        "Problem parsing version from the warehouse: {} {}",
-        name, data.info.version
-    )))
+
+    match Version::from_str(&data.info.version) {
+        Ok(v) => Ok(v),
+        // Unable to parse the version listed in info; iterate through releases.
+        Err(_) => {
+            Ok(data
+                .releases
+                .keys()
+                .filter(|v| Version::from_str(v).is_ok())
+                // todo: way to do this in one step, like filter_map?
+                .map(|v| Version::from_str(v).unwrap())
+                .max()
+                .unwrap())
+        }
+    }
 }
 
 pub fn get_warehouse_versions(name: &str) -> Result<Vec<Version>, reqwest::Error> {
+    println!("Getting version data for {}", name);
     // todo return Result with custom fetch error type
     let data = get_warehouse_data(name)?;
 
@@ -74,7 +87,7 @@ pub fn get_warehouse_versions(name: &str) -> Result<Vec<Version>, reqwest::Error
     Ok(result)
 }
 
-fn get_warehouse_data_w_version(
+fn _get_warehouse_data_w_version(
     name: &str,
     version: &Version,
 ) -> Result<WarehouseData, reqwest::Error> {
@@ -108,11 +121,7 @@ pub fn get_warehouse_release(
         }
     }
 
-    let release_data = release_data.expect(&format!(
-        "Unable to find release for {} = \"{}\"",
-        name,
-        version.to_string()
-    ));
+    let release_data = release_data.unwrap_or_else(|| panic!("Unable to find release for {} = \"{}\"", name, version.to_string()));
 
     // todo: We need to find the right release! Notably for binary crates on diff oses.
     // todo: For now, go with the first while prototyping.
@@ -121,13 +130,14 @@ pub fn get_warehouse_release(
 }
 
 /// Find dependencies for a specific version of a package.
-fn get_warehouse_dep_data(name: &str, version: &Version) -> Result<DepNode, reqwest::Error> {
-    let data = get_warehouse_data_w_version(name, version)?;
+fn _get_warehouse_dep_data(name: &str, version: &Version) -> Result<DepNode, reqwest::Error> {
+    let data = _get_warehouse_data_w_version(name, version)?;
     let mut result = DepNode {
         name: name.to_owned(),
         version: *version,
         reqs: vec![],
         dependencies: vec![],
+        extras: vec![],
 
         constraints_for_this: vec![],
     };
@@ -157,15 +167,48 @@ struct ReqCache {
 }
 
 /// Fetch dependency data from our database, where it's cached.
-fn get_req_cache(name: &str) -> Result<(Vec<ReqCache>), reqwest::Error> {
+fn _get_req_cache(name: &str) -> Result<(Vec<ReqCache>), reqwest::Error> {
     // todo return Result with custom fetch error type
     let url = format!("https://pydeps.herokuapp.com/{}", name,);
     Ok(reqwest::get(&url)?.json()?)
 }
 
+/// Fetch dependency data from our database, where it's cached.
+fn get_req_cache_single(name: &str, version: &Version) -> Result<Vec<ReqCache>, reqwest::Error> {
+    // todo return Result with custom fetch error type
+    let url = format!(
+        "https://pydeps.herokuapp.com/{}/{}",
+        name,
+        version.to_string()
+    );
+    Ok(reqwest::get(&url)?.json()?)
+}
+
+/// Fetch dependency data from our database, where it's cached.
+fn get_req_cache_range(
+    name: &str,
+    min_vers: &Version,
+    max_vers: &Version,
+) -> Result<Vec<ReqCache>, reqwest::Error> {
+    // todo return Result with custom fetch error type
+    println!(
+        "Getting pydeps data for {}: {}-{}",
+        name,
+        min_vers.to_string(),
+        max_vers.to_string()
+    );
+    let url = format!(
+        "https://pydeps.herokuapp.com/range/{}/{}/{}",
+        name,
+        min_vers.to_string(),
+        max_vers.to_string()
+    );
+    Ok(reqwest::get(&url)?.json()?)
+}
+
 /// Fetch dependency data from our database, where it's cached. Only ask for reqs greater than
 /// or equal to a specific version. Used to mitigate caching on the server.
-fn get_req_cache_gte(name: &str, version: Version) -> Result<(Vec<ReqCache>), reqwest::Error> {
+fn _get_req_cache_gte(name: &str, version: &Version) -> Result<(Vec<ReqCache>), reqwest::Error> {
     // todo return Result with custom fetch error type
     let url = format!(
         "https://pydeps.herokuapp.com/gte/{}/{}",
@@ -193,19 +236,13 @@ fn guess_graph(
     reqs_searched: &mut Vec<Req>,
     deps_searched: &mut Vec<(String, Version)>, // name, version
     deconfliction_reqs: &[Req],
-    cache: &mut HashMap<String, Vec<ReqCache>>,
-) -> Result<(), reqwest::Error> {
+    cache: &mut HashMap<(String, Version), ReqCache>,
+) -> Result<(), DependencyError> {
     // deconfliction_reqs: We gradually add constraits in subsequent iterations of this function, to resolve
     // conflicts as required.
 
     // reqs_searched is a cache of nodes we've already searched, so we know to skip over in the future
     // deps_searched is a cache of specific package/version combo's we've searched; similar idea.
-
-    //    println!(
-    //        "DEBUG: IN guess graph for {:#?} {:?}",
-    //        node.name,
-    //        node.version.to_string()
-    //    );
 
     deps_searched.push((node.name.clone(), node.version));
 
@@ -223,47 +260,79 @@ fn guess_graph(
     };
 
     for req in node.reqs.iter() {
-        // todo: Perhaps use the suffix later.
-        if req.suffix.is_some() || reqs_searched.contains(&req) {
+        // todo: Use the extras later.
+        if let Some(ex) = &req.extra {
+            continue;
+            // todo
+        }
+
+        if reqs_searched.contains(&req) {
             continue;
         }
+
         reqs_searched.push(req.clone());
         // Get subdependency info on all versions of this requirement.
-        let info = match cache.get(&req.name) {
-            Some(r) => r.clone(),
-            None => {
-                // http call and cache
-                //                let subreq = get_req_cache(&req.name)?; // todo
+        //        let info = match cache.get(&req.name) {
+        let info = {
+            let latest_version = get_latest_version(&req.name)?;
 
-                // todo: For now, we're only pulling info for versions gte our min req.
-                // todo: Not robust / may break.
+            // For no constraints, default to only getting the latest
+            let mut min_v_to_query = latest_version;
+            let mut max_v_to_query = latest_version;
 
-                let mut min_versions = vec![];
-                for constr in req.constraints.iter() {
-                    match constr.type_ {
-                        // todo not good logic!
-                        ReqType::Exact => min_versions.push(constr.version()),
-                        ReqType::Lt => min_versions.push(constr.version()),
-                        ReqType::Lte => min_versions.push(constr.version()),
-                        ReqType::Gt => min_versions.push(constr.version()),
-                        ReqType::Gte => min_versions.push(constr.version()),
-                        ReqType::Ne => min_versions.push(constr.version()),
-                        ReqType::Caret => min_versions.push(constr.version()),
-                        ReqType::Tilde => min_versions.push(constr.version()),
+            // Narrow-down our list of versions to query.
+            // todo: For now, assume none of these constraints overlap or conflict.
+            for constr in req.constraints.iter() {
+                match constr.type_ {
+                    ReqType::Exact => {
+                        // todo: impl add/subtr for version?
+                        min_v_to_query = constr.version();
+                        max_v_to_query = constr.version();
+                        break;
                     }
+                    ReqType::Lt => {
+                        let v = constr.version();
+                        if v.minor == 0 && v.patch == 0 {
+                            max_v_to_query = Version::new(v.major - 1, 0, 0);
+                        } else if v.patch == 0 {
+                            max_v_to_query = Version::new(v.major, v.minor - 1, 0);
+                        } else {
+                            max_v_to_query = Version::new(v.major, v.minor, v.patch - 1);
+                        }
+                    }
+                    ReqType::Lte => max_v_to_query = constr.version(),
+                    ReqType::Gt => {
+                        let v = constr.version();
+                        max_v_to_query = Version::new(v.major, v.minor, v.patch + 1);
+                    }
+                    ReqType::Gte => min_v_to_query = constr.version(),
+                    ReqType::Ne => (), // todo
+                    ReqType::Caret => min_v_to_query = constr.version(),
+                    ReqType::Tilde => min_v_to_query = constr.version(),
                 }
-                if req.constraints.is_empty() {
-                    min_versions
-                        .push(get_latest_version(&req.name).expect("Problem finding latest v"));
-                }
-
-                let subreq = get_req_cache_gte(&req.name, *min_versions.iter().min().unwrap())?;
-                cache.insert(req.name.to_owned(), subreq.clone());
-                subreq
             }
+            println!(
+                "{}, {}, {}",
+                &req.name,
+                &min_v_to_query.to_string(),
+                &max_v_to_query.to_string()
+            );
+            //                        let query_result = get_req_cache_range(
+            //                            &req.name,
+            //                            &min_v_to_query,
+            //                            &max_v_to_query,
+            //                        )?;
+            let query_result = get_req_cache_single(&req.name, &max_v_to_query)?;
+
+            for item in query_result.iter() {
+                cache.insert((req.name.to_owned(), max_v_to_query), item.clone());
+            }
+            query_result
         };
 
-        let info1 = info.into_iter().filter(|r| {
+        // We should have already only selected a single compatible result, but
+        // Keep this here for now as a check.
+        let compatible = info.into_iter().filter(|r| {
             // We only care about examining subdependencies that meet our criteria.
             let mut compat = filter_compat(&req.constraints, r);
             if compat {
@@ -277,7 +346,7 @@ fn guess_graph(
         });
 
         let mut sub_reqs = vec![];
-        for r in info1 {
+        for r in compatible {
             // We may not be able to parse the version if it's something like "2004a".
             if let Ok(v) = Version::from_str(&r.version) {
                 sub_reqs.push(DepNode {
@@ -291,6 +360,7 @@ fn guess_graph(
 
                     constraints_for_this: req.constraints.clone(),
                     dependencies: vec![],
+                    extras: vec![],
                 });
             }
         }
@@ -328,14 +398,17 @@ fn guess_graph(
             if deps_searched.contains(&(dep.name.clone(), dep.version)) {
                 continue;
             }
-            guess_graph(
+
+            if let Err(e) = guess_graph(
                 &mut dep,
                 reqs_searched,
                 deps_searched,
                 deconfliction_reqs,
                 cache,
-            )
-            .expect("Unable to resolve dependencies (recursion)");
+            ) {
+                println!("Problem pulling dependency info for {}", &dep.name);
+                util::abort(&e.details)
+            }
         }
     }
     Ok(())
@@ -352,7 +425,7 @@ pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
         tree,
         &mut reqs_searched,
         &mut deps_searched,
-        &vec![],
+        &[],
         &mut cache,
     )
     .expect("Unable to resolve dependencies");
@@ -412,47 +485,47 @@ pub mod tests {
         );
     }
 
-    #[test]
-    fn warehouse_deps() {
-        // Makes API call
-        let req_part = |name: &str, reqs| {
-            // To reduce repetition
-            Req::new(name.to_owned(), version_reqs)
-        };
-        let vrnew = |t, ma, mi, p| Constraint::new(t, ma, mi, p);
-        let vrnew_short = |t, ma, mi| Constraint {
-            type_: t,
-            major: ma,
-            minor: Some(mi),
-            patch: None,
-        };
-        use crate::dep_types::ReqType::{Gte, Lt, Ne};
+//    #[test]
+//    fn warehouse_deps() {
+//        // Makes API call
+//        let req_part = |name: &str, reqs| {
+//            // To reduce repetition
+//            Req::new(name.to_owned(), version_reqs)
+//        };
+//        let vrnew = |t, ma, mi, p| Constraint::new(t, ma, mi, p);
+//        let vrnew_short = |t, ma, mi| Constraint {
+//            type_: t,
+//            major: ma,
+//            minor: Some(mi),
+//            patch: None,
+//        };
+//        use crate::dep_types::ReqType::{Gte, Lt, Ne};
 
-        assert_eq!(
-            get_warehouse_dep_data("requests", &Version::new(2, 22, 0)).unwrap(),
-            vec![
-                req_part("chardet", vec![vrnew(Lt, 3, 1, 0), vrnew(Gte, 3, 0, 2)]),
-                req_part("idna", vec![vrnew_short(Lt, 2, 9), vrnew_short(Gte, 2, 5)]),
-                req_part(
-                    "urllib3",
-                    vec![
-                        vrnew(Ne, 1, 25, 0),
-                        vrnew(Ne, 1, 25, 1),
-                        vrnew_short(Lt, 1, 26),
-                        vrnew(Gte, 1, 21, 1)
-                    ]
-                ),
-                req_part("certifi", vec![vrnew(Gte, 2017, 4, 17)]),
-                req_part("pyOpenSSL", vec![vrnew_short(Gte, 0, 14)]),
-                req_part("cryptography", vec![vrnew(Gte, 1, 3, 4)]),
-                req_part("idna", vec![vrnew(Gte, 2, 0, 0)]),
-                req_part("PySocks", vec![vrnew(Ne, 1, 5, 7), vrnew(Gte, 1, 5, 6)]),
-                req_part("win-inet-pton", vec![]),
-            ]
-        )
+//        assert_eq!(
+//            _get_warehouse_dep_data("requests", &Version::new(2, 22, 0)).unwrap(),
+//            vec![
+//                req_part("chardet", vec![vrnew(Lt, 3, 1, 0), vrnew(Gte, 3, 0, 2)]),
+//                req_part("idna", vec![vrnew_short(Lt, 2, 9), vrnew_short(Gte, 2, 5)]),
+//                req_part(
+//                    "urllib3",
+//                    vec![
+//                        vrnew(Ne, 1, 25, 0),
+//                        vrnew(Ne, 1, 25, 1),
+//                        vrnew_short(Lt, 1, 26),
+//                        vrnew(Gte, 1, 21, 1)
+//                    ]
+//                ),
+//                req_part("certifi", vec![vrnew(Gte, 2017, 4, 17)]),
+//                req_part("pyOpenSSL", vec![vrnew_short(Gte, 0, 14)]),
+//                req_part("cryptography", vec![vrnew(Gte, 1, 3, 4)]),
+//                req_part("idna", vec![vrnew(Gte, 2, 0, 0)]),
+//                req_part("PySocks", vec![vrnew(Ne, 1, 5, 7), vrnew(Gte, 1, 5, 6)]),
+//                req_part("win-inet-pton", vec![]),
+//            ]
+//        )
 
         // todo Add more of these, for variety.
-    }
+//    }
 
     // todo: Make dep-resolver tests, including both simple, conflicting/resolvable, and confliction/unresolvable.
 }

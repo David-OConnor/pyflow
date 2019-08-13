@@ -3,12 +3,25 @@ use crossterm::{Color, Colored};
 use std::str::FromStr;
 use std::{env, path::PathBuf, process, thread, time};
 
+/// Print in a color, then reset formatting.
+pub fn print_color(message: &str, color: Color) {
+    println!(
+        "{}{}{}",
+        Colored::Fg(color),
+        message,
+        Colored::Fg(Color::Reset)
+    );
+}
+
 /// A convenience function
 pub fn abort(message: &str) {
-    {
-        println!("{}{}{}", Colored::Fg(Color::Red), message, Colored::Fg(Color::Reset));
-        process::exit(1)
-    }
+    println!(
+        "{}{}{}",
+        Colored::Fg(Color::Red),
+        message,
+        Colored::Fg(Color::Reset)
+    );
+    process::exit(1)
 }
 
 pub fn possible_py_versions() -> Vec<Version> {
@@ -23,7 +36,8 @@ pub fn possible_py_versions() -> Vec<Version> {
 
 pub fn venv_exists(venv_path: &PathBuf) -> bool {
     (venv_path.join("bin/python").exists() && venv_path.join("bin/pip").exists())
-        || (venv_path.join("Scripts/python.exe").exists() && venv_path.join("Scripts/pip.exe").exists())
+        || (venv_path.join("Scripts/python.exe").exists()
+            && venv_path.join("Scripts/pip.exe").exists())
 }
 
 /// Checks whether the path is under `/bin` (Linux generally) or `/Scripts` (Windows generally)

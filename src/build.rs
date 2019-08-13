@@ -62,12 +62,8 @@ pub(crate) fn build(bin_path: &PathBuf, lib_path: &PathBuf, cfg: &crate::Config)
     Command::new("./python")
         .current_dir(bin_path)
         .args(&[
-            "-m",
-            "pip",
-            "install",
-            //            "--upgrade",
-            "twine",
-            "wheel",
+            "-m", "pip", "install", //            "--upgrade",
+            "twine", "wheel",
         ])
         .status()
         .expect("Problem installing Twine");
@@ -91,7 +87,7 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
     let repo_url = cfg
         .package_url
         .clone()
-        .unwrap_or("https://test.pypi.org/legacy".to_string());
+        .unwrap_or_else(|| "https://test.pypi.org/legacy".to_string());
 
     println!("Uploading to {}", repo_url);
     Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "twine"))

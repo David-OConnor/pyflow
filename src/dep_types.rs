@@ -33,12 +33,22 @@ impl fmt::Display for DependencyError {
 
 impl From<num::ParseIntError> for DependencyError {
     fn from(_: num::ParseIntError) -> Self {
-        Self { details: "".into() }
+        Self {
+            details: "Pare int error".into(),
+        }
+    }
+}
+
+impl From<reqwest::Error> for DependencyError {
+    fn from(_: reqwest::Error) -> Self {
+        Self {
+            details: "Reqwest error".into(),
+        }
     }
 }
 
 /// An exact, 3-number Semver version.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
@@ -458,13 +468,6 @@ pub fn intersection_convert_one(
 /// Interface an arbitrary number of constraint sets into the intersection fn(s), which
 /// handle 2 at a time.
 pub fn intersection_many(sets: &[Vec<Constraint>]) -> Vec<(Version, Version)> {
-    // Keep adding constraints to (limiting) a cumulative set, and comparing it to individual sets.
-    //    let mut cum_set = vec![];
-    //    for constraint_set in sets {
-    //        cum_set = intersection_convert_one(constraint_set, &cum_set)
-    //    }
-    //    cum_set  // todo delete this procedural logic if functional works.
-
     sets.iter().fold(vec![], |acc, constraint_set| {
         intersection_convert_one(constraint_set, &acc)
     })
@@ -503,7 +506,7 @@ pub fn intersection(
     for rng1 in ranges1 {
         for rng2 in ranges2 {
             // 0 is min, 1 is max.
-            if rng2.1 >= rng1.0 && rng1.1 >= rng2.0 || rng1.1 >= rng2.0 && rng2.1 >= rng1.0 {
+            if rng2.1 >= rng1.0 && rng1.1 >= rng2.0 {
                 result.push((cmp::max(rng2.0, rng1.0), cmp::min(rng1.1, rng2.1)));
             }
         }
@@ -516,9 +519,8 @@ pub fn intersection(
 pub struct Req {
     pub name: String,
     pub constraints: Vec<Constraint>,
-    pub suffix: Option<String>,
-    // todo: Perhaps replace suffix with this?
-    pub extra: Option<String>  // todo: Implement
+    pub extra: Option<String>, // todo: Implement
+                               //    pub sys_platform: Option<String>,  // todo
 }
 
 impl Req {
@@ -526,18 +528,38 @@ impl Req {
         Self {
             name,
             constraints,
-            suffix: None,
             extra: None,
         }
     }
 
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
+        // eg some-crate = { version = "1.0", registry = "my-registry" }
+        // todo
+        let re_detailed = Regex::new(r#"^(.*?)\s*=\s*\{(.*)\}"#).unwrap();
+        if let Some(caps) = re_detailed.captures(s) {
+            let name = caps.get(1).unwrap().as_str().to_owned();
+
+            let re_dets = Regex::new(r#"\s*(.*?)/s*=\s*?(.*)?}"#).unwrap();
+            let dets = caps.get(2).unwrap().as_str();
+            //            let features: Vec<(String, String)> = re_dets
+            let features: Vec<String> = re_dets
+                .find_iter(dets)
+                .map(|caps| {
+                    //                    (
+                    caps.as_str().to_owned()
+                    //                        caps.get(2).unwrap().as_str().to_owned(),
+                    //                    )
+                })
+                .collect();
+            println!("FETS: {:?}", features);
+        }
+
         let re = if pypi_fmt {
-            // ie saturn (>=0.3.4)
-            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s*;(.*))?$").unwrap()
+            // eg saturn (>=0.3.4) or argon2-cffi (>=16.1.0) ; extra == 'argon2'
+            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s*;\s*extra == '(.*)')?$").unwrap()
         } else {
-            // ie saturn = ">=0.3.4", as in pyproject.toml
-            // todo extras in this format
+            // eg saturn = ">=0.3.4", as in pyproject.toml
+            // todo extras in this format?
             Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
         };
         if let Some(caps) = re.captures(s) {
@@ -545,7 +567,7 @@ impl Req {
             let reqs_m = caps.get(2).unwrap();
             let constraints = Constraint::from_str_multiple(reqs_m.as_str())?;
 
-            let suffix = match caps.get(3) {
+            let extra = match caps.get(3) {
                 Some(s) => Some(s.as_str().to_owned()),
                 None => None,
             };
@@ -553,8 +575,7 @@ impl Req {
             return Ok(Self {
                 name,
                 constraints,
-                suffix,
-                extra: None,
+                extra,
             });
         };
 
@@ -567,14 +588,9 @@ impl Req {
         };
 
         if let Some(caps) = novers_re.captures(s) {
-            let suffix = match caps.get(2) {
-                Some(s) => Some(s.as_str().to_owned()),
-                None => None,
-            };
             return Ok(Self {
                 name: caps.get(1).unwrap().as_str().to_string(),
                 constraints: vec![],
-                suffix,
                 extra: None,
             });
         }
@@ -628,7 +644,7 @@ impl Req {
                 self.name,
                 self.constraints
                     .iter()
-                    .map(|r| format!("{}", r.to_string(true, false)))
+                    .map(|r| r.to_string(true, false))
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
@@ -651,6 +667,7 @@ pub struct DepNode {
     pub constraints_for_this: Vec<Constraint>, // Ie what constraints drove this node's version?
 
     pub dependencies: Vec<DepNode>,
+    pub extras: Vec<String>,
 }
 
 /// [Ref](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
@@ -761,7 +778,7 @@ pub struct Lock {
 
 #[cfg(test)]
 pub mod tests {
-    use ReqType::{Caret, Exact, Gt, Gte, Lte, Ne, Tilde};
+    use ReqType::{Caret, Exact, Gt, Gte, Lte, Lt, Ne, Tilde};
 
     use super::*;
 
@@ -912,19 +929,20 @@ pub mod tests {
     }
 
     #[test]
-    fn parse_req_pypi_semicolon() {
+    fn parse_req_pypi_w_extra() {
         // tod: Make this handle extras.
         let actual = Req::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", true).unwrap();
-        let expected = Req::new(
-            "pyOpenSSL".into(),
-            vec![Constraint {
+        let expected = Req {
+            name: "pyOpenSSL".into(),
+            constraints:             vec![Constraint {
                 type_: Gte,
                 major: 0,
                 minor: Some(14),
                 patch: None,
-                suffix: None,
             }],
-        );
+            extra: Some("security".into()),
+        };
+
         assert_eq!(actual, expected);
     }
 
@@ -1090,8 +1108,8 @@ pub mod tests {
         let reqs3 = vec![Constraint::new(Lte, 4, 9, 6)];
         let reqs4 = vec![Constraint::new(Gte, 4, 9, 7)];
 
-        assert!(intersection_convert_both(&reqs1, &reqs2).is_empty());
-        assert!(intersection_convert_both(&reqs3, &reqs4).is_empty());
+        assert!(intersection_many(&[reqs1, reqs2]).is_empty());
+        assert!(intersection_many(&[reqs3, reqs4]).is_empty());
     }
 
     #[test]
@@ -1103,26 +1121,26 @@ pub mod tests {
         let reqs4 = vec![Constraint::new(Exact, 3, 3, 6)];
 
         assert_eq!(
-            intersection_convert_both(&reqs1, &reqs2),
+            intersection_many(&[reqs1, reqs2]),
             vec![(Version::new(4, 9, 4), Version::new(MAX_VER, 0, 0))]
         );
         assert_eq!(
-            intersection_convert_both(&reqs3, &reqs4),
+            intersection_many(&[reqs3, reqs4]),
             vec![(Version::new(3, 3, 6), Version::new(3, 3, 6))]
         );
     }
 
-    //    #[test]
-    //    fn intersection_contained() {
-    //        let reqs1 = vec![VersionReq::new(Gte, 4, 9, 2)];
-    //        let reqs2 = vec![
-    //            VersionReq::new(Gte, 4, 9, 4),
-    //            VersionReq::new(Lt, 5, 5, 5),
-    //        ];
-    //
-    //        assert_eq!(
-    //            intersection_convert_both(&reqs1, &reqs2),
-    //            vec![(Version::new(4, 9, 4), Version::new(5, 5, 5))]
-    //        );
-    //    }
+        #[test]
+        fn intersection_contained() {
+            let reqs1 = vec![Constraint::new(Gte, 4, 9, 2)];
+            let reqs2 = vec![
+                Constraint::new(Gte, 4, 9, 4),
+                Constraint::new(Lt, 5, 5, 5),
+            ];
+
+            assert_eq!(
+                intersection_many(&[reqs1, reqs2]),
+                vec![(Version::new(4, 9, 4), Version::new(5, 5, 5))]
+            );
+        }
 }

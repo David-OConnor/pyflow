@@ -15,8 +15,9 @@ Python ≥ 3.4 is required.
 
 ## Installation
 There are 2 main ways to install:
-- Download a binary from the `releases` page. On Debian or Ubuntu, download and run
-[This deb](https:). 
+- Download a binary from the [releases](https://github.com/David-OConnor/pypackage/releases)
+ page. On Debian or Ubuntu, download and run
+[This deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.1/pypackage_0.0.1_amd64.deb). 
 
 On other Operating systems, download the appropriate binary, and place it somewhere
 accessible by the system path. For example, place it under `/usr/bin` in linux, 
@@ -44,7 +45,7 @@ numpy = "^1.16.4"
 diffeqpy = "1.1.0"
 ```
 The `[tool.pypackage]` section is used for metadata, and isn't required unless
-building and distributing a package. The `[tool.pypyackage.dependencies'`] section
+building and distributing a package. The `[tool.pypyackage.dependencies]` section
 contains all dependencies, and is an analog to `requirements.txt`. For details on 
 how to specify dependencies in this `Cargo.toml`-inspired 
 [semvar](https://semver.org) format,
@@ -69,9 +70,9 @@ and will be added to `pyproject.toml`.
 
 ### Building and publishing:
 - `pypackage package` - Package for distribution (uses setuptools internally, and 
-builds both source and binary if applicable.)
+builds both source and wheel if applicable.)
 - `pypackage publish` - Upload to PyPi (Repo specified in `pyproject.toml`. Uses `Twine` internally.)
-``
+
 ### Misc:
 - `pypackage new projname` - Create a directory containing the basics for
 - `pypackage init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
@@ -79,6 +80,39 @@ builds both source and binary if applicable.)
 a project: a readme, pyproject.toml, and directory for source code
 - `pypackage -V` - Get the current version of this tool
 - `pypackage help` Get help, including a list of available commands
+
+## Why add another Python dependency manager?
+`Pipenv` and `Poetry` both address this problem. Some reasons why this tool is different:
+
+- It keeps dependencies in the project directory, in `__pypackages__`, and
+doesn't modify files outside the project directory.
+
+- It doesn't use Pip.
+
+- Its dependency resolution and locking is faster due to using a cached
+database of dependencies, vice downloading and checking each package, or relying
+on the incomplete data available on the `pypi warehouse`.
+
+- By not requiring Python to install or run, it remains intallation-agnostic and 
+environment-agnostic.
+This is especially important on Linux, where there may be several versions
+of Python installed, with different versions and access levels. This avoids
+complications, especially for new users. It's common for Python-based CLI tools
+to not run properly when installed from `pip` due to the `PATH` 
+not being configured in the expected way.
+
+- If multiple Python installations are found, it allows the user to select the desired 
+one to set up the environment with. This is a notable problem with `Poetry`; it
+may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
+Where existing tools, including Poetry expect you to manage environments, this tools abstracts
+it away.
+
+- Multiple versions of a dependency can be installed, allowing resolution
+of conflicting sub-dependencies.
+
+`Conda` addresses this as well, but focuses on maintining a separate repository
+of binaries from `PyPi`.
+
 
 ## How dependencies are resolved
 Running `pypackage install` loads the project's requirements from `pyproject.toml`. Adding a
@@ -140,36 +174,6 @@ the one you want may be difficult.
 
 When building and deploying packages, a set of other, redudant files are 
 traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`
-
-
-## Why add another Python dependency manager?
-`Pipenv` and `Poetry` both address this problem. Some reasons why this tool is different:
-
-- It keeps dependencies in the project directory, in `__pypackages__`, and
-doesn't modify files outside the project directory.
-
-- It doesn't use Pip.
-
-- Its dependency resolution and locking is faster due to using a cached
-database of dependencies, vice downloading and checking each package, or relying
-on the incomplete data available on the `pypi warehouse`.
-
-- Multiple versions of a dependency can be installed, allowing resolution
-of conflicting sub-dependencies.
-
-- By not requiring Python to install or run, it remains intallation-agnostic.
-This is especially important on Linux, where there may be several versions
-of Python installed, with different versions and access levels. This avoids
-complications, especially for new users. It's common for Python-based CLI tools
-to not run properly when installed from `pip` due to the `PATH` 
-not being configured in the expected way. Rust is both a natural choice for making
-a standalone CLI app, and an example of well-designed dependency management.
-
-- If multiple Python installations are found, it allows the user to select the desired 
-one to set up the environment with.
-
-`Conda` addresses this as well, but focuses on maintining a separate repository
-of binaries from `PyPi`.
 
 
 ## Not-yet-implemented

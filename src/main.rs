@@ -1,6 +1,6 @@
 use crate::dep_types::{Constraint, DepNode, Lock, LockPackage, Req, ReqType, Version};
 use crate::util::abort;
-use crossterm::{Color, Colored};
+use crossterm::Color;
 use regex::Regex;
 use serde::Deserialize;
 use std::{
@@ -11,10 +11,12 @@ use std::{
     io::{self, BufRead, BufReader},
     path::PathBuf,
     process::Command,
-    thread,
-    time,
     str::FromStr,
+    thread, time,
 };
+
+// todo:
+
 use structopt::StructOpt;
 
 mod build;
@@ -38,7 +40,7 @@ enum Os {
     Linux,
     Windows32,
     Windows,
-    Mac32,
+    //    Mac32,
     Mac,
     Any,
 }
@@ -74,8 +76,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-        name = "install",
-        help = "
+    name = "install",
+    help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -100,7 +102,7 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
         #[structopt(name = "args")]
         args: Vec<String>,
     },
-    /// Build the package, wrapping `setuptools`
+    /// Build the package - source and wheel
     #[structopt(name = "package")]
     Package,
     /// Publish to `pypi`
@@ -109,6 +111,9 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     /// Create a `pyproject.toml` from requirements.txt, pipfile etc, setup.py etc
     #[structopt(name = "init")]
     Init,
+    /// Remove the environment, and uninstall all packages
+    #[structopt(name = "reset")]
+    Reset,
 }
 
 /// A config, parsed from pyproject.toml
@@ -173,7 +178,7 @@ impl Config {
                 } else if &l == "[tool.pypackage.features]" {
                     in_sect = false;
                     in_dep = false;
-                    in_features = false;
+                    in_features = true;
                     continue;
                 } else if sect_re.is_match(&l) {
                     in_sect = false;
@@ -210,10 +215,8 @@ impl Config {
                             }
                         }
                     }
-                } else if in_dep {
-                    if !l.is_empty() {
-                        result.reqs.push(Req::from_str(&l, false).unwrap());
-                    }
+                } else if in_dep && !l.is_empty() {
+                    result.reqs.push(Req::from_str(&l, false).unwrap());
                 }
             }
         }
@@ -451,7 +454,7 @@ fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyErro
 }
 
 /// Create a new virtual environment, and install Wheel.
-fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version {
+fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version {
     // We only use the alias for creating the virtual environment. After that,
     // we call our venv's executable directly.
 
@@ -465,7 +468,7 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version 
         }
     };
 
-    let vers_path = pyypackage_dir.join(format!(
+    let vers_path = pyypackages_dir.join(format!(
         "{}.{}",
         py_ver_from_alias.major, py_ver_from_alias.minor
     ));
@@ -492,18 +495,17 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version 
         util::abort("Problem creating virtual environment");
     }
 
-
-//    let bin_path = vers_path.join(".venv/bin"); // todo
-//
-//    // Wait until the venv's created before continuing, or we'll get errors
-//    // when attempting to use it
-//    let py_venv = bin_path.join("python");
-//    let pip_venv = bin_path.join("pip");
-//    util::wait_for_dirs(&[py_venv, pip_venv]).unwrap();
-//
-//    // todo: Not sure why we need this extra sleep. Wheel won't install if
-//    // todo we don't have it.
-//    thread::sleep(time::Duration::from_millis(200));
+    //    let bin_path = vers_path.join(".venv/bin"); // todo
+    //
+    //    // Wait until the venv's created before continuing, or we'll get errors
+    //    // when attempting to use it
+    //    let py_venv = bin_path.join("python");
+    //    let pip_venv = bin_path.join("pip");
+    //    util::wait_for_dirs(&[py_venv, pip_venv]).unwrap();
+    //
+    //    // todo: Not sure why we need this extra sleep. Wheel won't install if
+    //    // todo we don't have it.
+    //    thread::sleep(time::Duration::from_millis(200));
 
     // todo: Chicken-egg scenario where we need to wait for the venv to complete before
     // todo installing `wheel` and returning, but don't know what folder
@@ -515,13 +517,7 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackage_dir: &PathBuf) -> Version 
     // Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
     Command::new("./python")
         .current_dir(bin_path)
-        .args(&[
-            "-m",
-            "pip",
-            "install",
-            "--quiet",
-            "wheel",
-        ])
+        .args(&["-m", "pip", "install", "--quiet", "wheel"])
         .spawn()
         .expect("Problem installing `wheel`");
 
@@ -552,7 +548,7 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
             result.push((name.to_owned(), vers));
 
-        // todo dry
+            // todo dry
         } else if let Some(caps) = re_egg.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
@@ -567,16 +563,16 @@ fn sync_deps(
     lock_filename: &str,
     bin_path: &PathBuf,
     lib_path: &PathBuf,
-    reqs: &Vec<Req>,
-    installed: &Vec<(String, Version)>,
+    reqs: &[Req],
+    installed: &[(String, Version)],
     python_vers: &Version,
 ) {
     #[cfg(target_os = "windows")]
-    let os = Os::Windows;
+        let os = Os::Windows;
     #[cfg(target_os = "linux")]
-    let os = Os::Linux;
+        let os = Os::Linux;
     #[cfg(target_os = "macos")]
-    let os = Os::Mac;
+        let os = Os::Mac;
 
     println!("Resolving dependencies...");
 
@@ -585,8 +581,9 @@ fn sync_deps(
         // dummy parent
         name: String::from("root"),
         version: Version::new(0, 0, 0),
-        reqs: reqs.clone(), // todo clone?
+        reqs: reqs.to_vec(), // todo clone?
         dependencies: vec![],
+        extras: vec![],
         constraints_for_this: vec![],
     };
 
@@ -707,7 +704,7 @@ fn sync_deps(
             false,
             package_type,
         )
-        .is_err()
+            .is_err()
         {
             abort("Problem downloading packages");
         }
@@ -785,14 +782,13 @@ fn main() {
             edit_files::parse_req_dot_text(&mut cfg);
             edit_files::parse_pipfile(&mut cfg);
             edit_files::parse_poetry(&mut cfg);
-            edit_files::update_pyproject(&cfg);
 
             cfg.write_file(cfg_filename);
         }
         _ => (),
     }
 
-    let pypackage_dir = env::current_dir()
+    let pypackages_dir = env::current_dir()
         .expect("Can't find current path")
         .join("__pypackages__");
 
@@ -811,15 +807,11 @@ fn main() {
 
             // Don't include version patch in the directory name, per PEP 582.
             vers_path =
-                pypackage_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor.unwrap_or(0)));
+                pypackages_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor.unwrap_or(0)));
 
             // todo: Take into account type of version! Currently ignores, and just takes the major/minor,
             // todo, but we're dealing with a constraint.
             py_vers = cfg_v.version();
-
-            if !util::venv_exists(&vers_path.join(".venv")) {
-                let created_vers = create_venv(Some(&cfg_v), &pypackage_dir);
-            }
         }
         // The version's not specified in the config; Search for existing environments, and create
         // one if we can't find any.
@@ -830,20 +822,20 @@ fn main() {
                 .into_iter()
                 .filter(|v| {
                     util::venv_exists(
-                        &pypackage_dir.join(&format!("{}.{}/.venv", v.major, v.minor)),
+                        &pypackages_dir.join(&format!("{}.{}/.venv", v.major, v.minor)),
                     )
                 })
                 .collect();
 
             match venv_versions_found.len() {
                 0 => {
-                    let created_vers = create_venv(None, &pypackage_dir);
-                    vers_path = pypackage_dir
+                    let created_vers = create_venv(None, &pypackages_dir);
+                    vers_path = pypackages_dir
                         .join(&format!("{}.{}", created_vers.major, created_vers.minor));
                     py_vers = Version::new_short(created_vers.major, created_vers.minor);
                 }
                 1 => {
-                    vers_path = pypackage_dir.join(&format!(
+                    vers_path = pypackages_dir.join(&format!(
                         "{}.{}",
                         venv_versions_found[0].major, venv_versions_found[0].minor
                     ));
@@ -893,18 +885,6 @@ py_version = \"3.7\"",
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         SubCommand::Install { packages, bin } => {
-    Command::new("python.exe")
-        .current_dir(&bin_path)
-        .args(&[
-            "-m",
-            "pip",
-            "install",
-            // "--quiet",
-            "wheel",
-        ])
-        .spawn()
-        .expect("Problem installing `wheel`");
-
             let mut added_reqs = vec![];
             for p in packages.into_iter() {
                 match Req::from_str(&p, false) {
@@ -925,7 +905,7 @@ py_version = \"3.7\"",
                     for cr in cfg.reqs.iter() {
                         if cr == ar
                             || (cr.name.to_lowercase() == ar.name.to_lowercase()
-                                && ar.constraints.is_empty())
+                            && ar.constraints.is_empty())
                         {
                             // Same req/version exists
                             add = false;
@@ -1019,9 +999,9 @@ py_version = \"3.7\"",
                 &installed,
                 &py_vers,
             );
-            // todo: Utility fn to simplify colored-output code
-            println!("{}{}{}", Colored::Fg(Color::Green), "Installation complete", Colored::Fg(Color::Reset));
+            util::print_color("Installation complete", Color::Green);
         }
+
         SubCommand::Uninstall { packages } => {
             let removed_reqs: Vec<String> = packages
                 .into_iter()
@@ -1030,7 +1010,7 @@ py_version = \"3.7\"",
 
             edit_files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
 
-            let updated_reqs = cfg
+            let updated_reqs: Vec<Req> = cfg
                 .reqs
                 .into_iter()
                 .filter(|req| !removed_reqs.contains(&req.name))
@@ -1045,7 +1025,7 @@ py_version = \"3.7\"",
                 &installed,
                 &py_vers,
             );
-            println!("{}{}", Colored::Fg(Color::Green), "Uninstall complete",);
+            util::print_color("Uninstall complete", Color::Green);
         }
 
         SubCommand::Python { args } => {
@@ -1055,15 +1035,19 @@ py_version = \"3.7\"",
         }
         SubCommand::Package {} => build::build(&bin_path, &lib_path, &cfg),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
+        SubCommand::Reset {} => {
+            if fs::remove_dir_all(&pypackages_dir).is_err() {
+                abort("Problem removing `__pypackages__` directory")
+            }
+            util::print_color("Reset complete", Color::Green);
+        }
 
-        // We already handled init
+        // We already handled init and new
         SubCommand::Init {} => (),
-        SubCommand::New { name } => (),
+        SubCommand::New { name: _ } => (),
     }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-
 }

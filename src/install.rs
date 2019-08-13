@@ -83,7 +83,7 @@ pub fn download_and_install_package(
     // https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
     let reader = io::BufReader::new(&file);
     let file_digest =
-        sha256_digest(reader).expect(&format!("Problem reading hash for {}", filename));
+        sha256_digest(reader).unwrap_or_else(|_| panic!("Problem reading hash for {}", filename));
 
     let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
     if file_digest_str.to_lowercase() != expected_digest.to_lowercase() {
@@ -114,10 +114,7 @@ pub fn download_and_install_package(
                 .captures(&filename)
                 .expect("Problem matching extracted folder name")
                 .get(1)
-                .expect(&format!(
-                    "Unable to find extracted folder name: {}",
-                    filename
-                ))
+                .unwrap_or_else(|| panic!("Unable to find extracted folder name: {}", filename))
                 .as_str();
 
             // todo: This fs_extras move does a full copy. Normal fs lib doesn't include
@@ -135,6 +132,16 @@ pub fn download_and_install_package(
                 .output()
                 .expect("Problem running setup.py bdist_wheel");
 
+            // todo: Clippy flags this for not iterating, but I can't get a better way working, ie
+            //              let built_wheel_filename = &dist_files.get(0)
+            //                .expect("Dist file directory is empty")
+            //                .unwrap()
+            //                .path()
+            //                .file_name()
+            //                .expect("Unable to find built wheel filename")
+            //                .to_str()
+            //                .unwrap()
+            //                .to_owned();
             let mut built_wheel_filename = String::new();
             for entry in
                 fs::read_dir(extracted_parent.join("dist")).expect("Problem reading dist directory")
