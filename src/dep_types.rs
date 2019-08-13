@@ -42,7 +42,7 @@ impl From<num::ParseIntError> for DependencyError {
 impl From<reqwest::Error> for DependencyError {
     fn from(_: reqwest::Error) -> Self {
         Self {
-            details: "Reqwest error".into(),
+            details: "Network error".into(),
         }
     }
 }
@@ -251,7 +251,7 @@ impl FromStr for Constraint {
 
         let caps = match re.captures(s) {
             Some(c) => c,
-            None => return Err(DependencyError::new("Problem parsing version requirement")),
+            None => return Err(DependencyError::new("Problem parsing constraint")),
         };
 
         // Only major is required.
@@ -421,6 +421,7 @@ impl Constraint {
                 } else {
                     max = Version::new(0, 0, self_version.patch + 2);
                 }
+                println!("MIN: {}, vers: {} Max: {}", &min.to_string(), &version.to_string(), &max.to_string());
                 min <= *version && *version < max
             }
             // For tilde, if minor's specified, can only increment patch.
@@ -551,12 +552,17 @@ impl Req {
                     //                    )
                 })
                 .collect();
-            println!("FETS: {:?}", features);
         }
 
         let re = if pypi_fmt {
             // eg saturn (>=0.3.4) or argon2-cffi (>=16.1.0) ; extra == 'argon2'
-            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s*;\s*extra == '(.*)')?$").unwrap()
+            //            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s*;\s*extra == '(.*)')?$").unwrap()
+            // todo deal with extra etc
+            // Note: We specify what chars are acceptable in a name instead of using
+            // wildcard, so we don't accidentally match a semicolon here if a
+            // set of parens appears later. The non-greedy ? in the version-matching
+            // expression's important as well, in some cases of extras.
+            Regex::new(r"^([a-zA-Z\-0-9._]+)\s+\((.*?)\)(?:\s*;\s*(.*))?$").unwrap()
         } else {
             // eg saturn = ">=0.3.4", as in pyproject.toml
             // todo extras in this format?
@@ -581,10 +587,10 @@ impl Req {
 
         // Check if no version is specified.
         let novers_re = if pypi_fmt {
-            Regex::new(r"^([a-zA-Z\-0-9]+)(?:\s*;(.*))?").unwrap()
+            Regex::new(r"^([a-zA-Z\-0-9._]+)(?:\s*;\s*(.*))?").unwrap()
         } else {
             // todo extras
-            Regex::new(r"^([a-zA-Z\-0-9]+)$").unwrap()
+            Regex::new(r"^([a-zA-Z\-0-9._]+)$").unwrap()
         };
 
         if let Some(caps) = novers_re.captures(s) {
@@ -594,7 +600,6 @@ impl Req {
                 extra: None,
             });
         }
-
         Err(DependencyError::new(&format!(
             "Problem parsing version requirement: {}",
             s
@@ -650,12 +655,16 @@ impl Req {
             ),
         }
     }
+
+    //    /// Return true if other is a subset of self.
+    //    fn _fully_contains(&self, other: &Self) -> bool {
+    //
+    //    }
 }
 
-/// Includes information for describing a `Python` dependency. Can be used in a dependency
-/// graph. Uses a set of requirements, compared to `Package`, which is tied to an exact version.
+/// Includes information for describing a `Python` dependency.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct DepNode {
+pub struct Dependency {
     pub name: String,
     pub version: Version,
 
@@ -666,7 +675,7 @@ pub struct DepNode {
 
     pub constraints_for_this: Vec<Constraint>, // Ie what constraints drove this node's version?
 
-    pub dependencies: Vec<DepNode>,
+//    pub dependencies: Vec<DepNode>,
     pub extras: Vec<String>,
 }
 
@@ -778,7 +787,7 @@ pub struct Lock {
 
 #[cfg(test)]
 pub mod tests {
-    use ReqType::{Caret, Exact, Gt, Gte, Lte, Lt, Ne, Tilde};
+    use ReqType::{Caret, Exact, Gt, Gte, Lt, Lte, Ne, Tilde};
 
     use super::*;
 
@@ -787,6 +796,7 @@ pub mod tests {
         let req1 = Constraint::new(Caret, 1, 2, 3);
         let req2 = Constraint::new(Caret, 0, 2, 3);
         let req3 = Constraint::new(Caret, 0, 0, 3);
+        let req4 = Constraint::new(Caret, 0, 0, 3);
 
         assert!(req1.is_compatible(&Version::new(1, 9, 9)));
         assert!(!req1.is_compatible(&Version::new(2, 0, 0)));
@@ -794,6 +804,10 @@ pub mod tests {
         assert!(!req2.is_compatible(&Version::new(0, 3, 0)));
         assert!(req3.is_compatible(&Version::new(0, 0, 3)));
         assert!(!req3.is_compatible(&Version::new(0, 0, 5)));
+        // Caret requirements below major and minor v 0 must be exact.
+        assert!(req4.is_compatible(&Version::new(0, 0, 3)));
+//        assert!(!req4.is_compatible(&Version::new(0, 0, 4)));
+        assert!(!req4.is_compatible(&Version::new(0, 0, 5)));
     }
 
     #[test]
@@ -934,7 +948,7 @@ pub mod tests {
         let actual = Req::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", true).unwrap();
         let expected = Req {
             name: "pyOpenSSL".into(),
-            constraints:             vec![Constraint {
+            constraints: vec![Constraint {
                 type_: Gte,
                 major: 0,
                 minor: Some(14),
@@ -943,7 +957,20 @@ pub mod tests {
             extra: Some("security".into()),
         };
 
+        let actual2 = Req::from_str(
+            "pathlib2; extra == \"test\" and ( python_version == \"2.7\")",
+            true,
+        )
+        .unwrap();
+        let expected2 = Req {
+            name: "pathlib2".into(),
+            constraints: vec![],
+            extra: Some("test".into()),
+            // todo: python == part ?
+        };
+
         assert_eq!(actual, expected);
+        assert_eq!(actual2, expected2);
     }
 
     #[test]
@@ -1029,6 +1056,26 @@ pub mod tests {
                 }]
             )
         )
+    }
+
+    #[test]
+    fn parse_req_pypi_dot() {
+        let a = Req::from_str("zc.lockfile (>=0.2.3)", true).unwrap();
+        let b = Req::from_str("zc.lockfile", true).unwrap();
+
+        assert_eq!(
+            a,
+            Req::new(
+                "zc.lockfile".into(),
+                vec![Constraint {
+                    type_: Gte,
+                    major: 0,
+                    minor: Some(2),
+                    patch: Some(3),
+                }]
+            )
+        );
+        assert_eq!(b, Req::new("zc.lockfile".into(), vec![]));
     }
 
     #[test]
@@ -1130,17 +1177,14 @@ pub mod tests {
         );
     }
 
-        #[test]
-        fn intersection_contained() {
-            let reqs1 = vec![Constraint::new(Gte, 4, 9, 2)];
-            let reqs2 = vec![
-                Constraint::new(Gte, 4, 9, 4),
-                Constraint::new(Lt, 5, 5, 5),
-            ];
+    #[test]
+    fn intersection_contained() {
+        let reqs1 = vec![Constraint::new(Gte, 4, 9, 2)];
+        let reqs2 = vec![Constraint::new(Gte, 4, 9, 4), Constraint::new(Lt, 5, 5, 5)];
 
-            assert_eq!(
-                intersection_many(&[reqs1, reqs2]),
-                vec![(Version::new(4, 9, 4), Version::new(5, 5, 5))]
-            );
-        }
+        assert_eq!(
+            intersection_many(&[reqs1, reqs2]),
+            vec![(Version::new(4, 9, 4), Version::new(5, 5, 5))]
+        );
+    }
 }

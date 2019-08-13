@@ -1,4 +1,4 @@
-use crate::dep_types::{Constraint, DepNode, Lock, LockPackage, Req, ReqType, Version};
+use crate::dep_types::{Constraint, Lock, LockPackage, Req, ReqType, Version};
 use crate::util::abort;
 use crossterm::Color;
 use regex::Regex;
@@ -76,8 +76,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-    name = "install",
-    help = "
+        name = "install",
+        help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -548,7 +548,7 @@ fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
             result.push((name.to_owned(), vers));
 
-            // todo dry
+        // todo dry
         } else if let Some(caps) = re_egg.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
@@ -568,26 +568,27 @@ fn sync_deps(
     python_vers: &Version,
 ) {
     #[cfg(target_os = "windows")]
-        let os = Os::Windows;
+    let os = Os::Windows;
     #[cfg(target_os = "linux")]
-        let os = Os::Linux;
+    let os = Os::Linux;
     #[cfg(target_os = "macos")]
-        let os = Os::Mac;
+    let os = Os::Mac;
 
     println!("Resolving dependencies...");
 
-    // Recursively add sub-dependencies.
-    let mut tree = DepNode {
-        // dummy parent
-        name: String::from("root"),
-        version: Version::new(0, 0, 0),
-        reqs: reqs.to_vec(), // todo clone?
-        dependencies: vec![],
-        extras: vec![],
-        constraints_for_this: vec![],
-    };
+    //    // Recursively add sub-dependencies.
+    //    let mut tree = DepNode {
+    //        // dummy parent
+    //        name: String::from("root"),
+    //        version: Version::new(0, 0, 0),
+    //        reqs: reqs.to_vec(), // todo clone?
+    //        dependencies: vec![],
+    //        extras: vec![],
+    //        constraints_for_this: vec![],
+    //    };
 
-    let resolved = match dep_resolution::resolve(&mut tree) {
+    let resolved = match dep_resolution::resolve(reqs) {
+        //    let resolved = match dep_resolution::resolve(&mut tree) {
         Ok(r) => r,
         Err(_) => {
             abort("Problem resolving dependencies");
@@ -704,7 +705,7 @@ fn sync_deps(
             false,
             package_type,
         )
-            .is_err()
+        .is_err()
         {
             abort("Problem downloading packages");
         }
@@ -905,7 +906,7 @@ py_version = \"3.7\"",
                     for cr in cfg.reqs.iter() {
                         if cr == ar
                             || (cr.name.to_lowercase() == ar.name.to_lowercase()
-                            && ar.constraints.is_empty())
+                                && ar.constraints.is_empty())
                         {
                             // Same req/version exists
                             add = false;
@@ -1049,5 +1050,4 @@ py_version = \"3.7\"",
 }
 
 #[cfg(test)]
-pub mod tests {
-}
+pub mod tests {}
