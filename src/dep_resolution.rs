@@ -3,7 +3,7 @@ use crate::{
     dep_types::{self, Constraint, Dependency, Req, ReqType, Version},
     util,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -37,7 +37,6 @@ pub struct WarehouseRelease {
 #[derive(Debug, Deserialize)]
 struct WarehouseData {
     info: WarehouseInfo,
-    //    releases: Vec<WarehouseRelease>,
     releases: HashMap<String, Vec<WarehouseRelease>>,
     urls: Vec<WarehouseRelease>,
 }
@@ -163,8 +162,9 @@ fn _get_warehouse_dep_data(name: &str, version: &Version) -> Result<Dependency, 
 
 #[derive(Clone, Debug, Deserialize)]
 struct ReqCache {
-    //    #[serde(default)] // We'll populate it after the fetch.
-    //    name: String,
+    // Name is present from pydeps if getting deps for multiple package names. Otherwise, we ommit
+    // it since we already know the name when making the request.
+    name: Option<String>,
     version: String,
     requires_python: Option<String>,
     requires_dist: Vec<String>,
@@ -183,14 +183,12 @@ impl ReqCache {
 
 /// Fetch dependency data from our database, where it's cached.
 fn _get_req_cache(name: &str) -> Result<(Vec<ReqCache>), reqwest::Error> {
-    // todo return Result with custom fetch error type
     let url = format!("https://pydeps.herokuapp.com/{}", name,);
     Ok(reqwest::get(&url)?.json()?)
 }
 
 /// Fetch dependency data from our database, where it's cached.
 fn get_req_cache_single(name: &str, version: &Version) -> Result<Vec<ReqCache>, reqwest::Error> {
-    // todo return Result with custom fetch error type
     let url = format!(
         "https://pydeps.herokuapp.com/{}/{}",
         name,
@@ -205,7 +203,6 @@ fn get_req_cache_range(
     min_vers: &Version,
     max_vers: &Version,
 ) -> Result<Vec<ReqCache>, reqwest::Error> {
-    // todo return Result with custom fetch error type
     println!(
         "Getting pydeps data for {}: {}-{}",
         name,
@@ -219,6 +216,36 @@ fn get_req_cache_range(
         max_vers.to_string()
     );
     Ok(reqwest::get(&url)?.json()?)
+}
+
+#[derive(Debug, Serialize)]
+struct MultipleBody {
+    // name, (version, version). Having trouble implementing Serialize for Version.
+    packages: HashMap<String, (String, String)>,
+}
+
+/// Fetch items from multiple packages; cuts down on API calls.
+fn get_req_cache_multiple(
+    packages: &HashMap<String, (Version, Version)>,
+) -> Result<Vec<ReqCache>, reqwest::Error> {
+    // input tuple is name, min version, max version.
+    println!("Getting pydeps data for {:#?}", packages);
+    // parse strings here.
+    let mut packages2 = HashMap::new();
+    for (name, rng) in packages.into_iter() {
+        packages2.insert(name.to_owned(), (rng.0.to_string(), rng.1.to_string()));
+    }
+
+//    let url = "https://pydeps.herokuapp.com/multiple/";
+    let url = "http://localhost:8000/multiple/"; // todo
+
+    Ok(
+        reqwest::Client::new()
+            .post(url)
+            .json(&MultipleBody { packages: packages2 })
+            .send()?
+            .json()?
+    )
 }
 
 /// Fetch dependency data from our database, where it's cached. Only ask for reqs greater than
@@ -260,61 +287,54 @@ fn filter_compat(constraints: &[Constraint], r: &ReqCache) -> bool {
 
 /// Pull data on pydeps for a req. Only pull what we need.
 /// todo: Group all reqs and pull with a single call to pydeps to improve speed?
-fn fetch_req_data(req: &Req) -> Result<Vec<ReqCache>, DependencyError> {
-    let latest_version = get_latest_version(&req.name)?;
-
-    // For no constraints, default to only getting the latest
-    let mut min_v_to_query = latest_version;
-    let mut max_v_to_query = latest_version;
-
+fn fetch_req_data(reqs: &[Req]) -> Result<Vec<ReqCache>, DependencyError> {
     // Narrow-down our list of versions to query.
     // todo: For now, assume none of these constraints overlap or conflict.
-    for constr in req.constraints.iter() {
-        match constr.type_ {
-            ReqType::Exact => {
-                // todo: impl add/subtr for version?
-                min_v_to_query = constr.version();
-                max_v_to_query = constr.version();
-                break;
+    let mut query_data = HashMap::new();
+    for req in reqs {
+        // todo: We make a call here, and so does pydeps. Consolidate?
+        let latest_version = get_latest_version(&req.name)?;
+
+        // For no constraints, default to only getting the latest
+        let mut min_v_to_query = latest_version;
+        let mut max_v_to_query = latest_version;
+
+        for constr in req.constraints.iter() {
+            match constr.type_ {
+                ReqType::Exact => {
+                    // todo: impl add/subtr for version?
+                    min_v_to_query = constr.version();
+                    max_v_to_query = constr.version();
+                    break;
+                }
+                ReqType::Lt => {
+                    max_v_to_query = get_warehouse_versions(&req.name)
+                        .expect("Problem getting versions")
+                        .into_iter()
+                        .filter(|v| *v < constr.version())
+                        .max()
+                        .unwrap();
+                }
+                ReqType::Lte => max_v_to_query = constr.version(),
+                ReqType::Gt => {
+                    min_v_to_query = get_warehouse_versions(&req.name)
+                        .expect("Problem getting versions")
+                        .into_iter()
+                        .filter(|v| *v > constr.version())
+                        .max()
+                        .unwrap();
+                }
+                ReqType::Gte => min_v_to_query = constr.version(),
+                ReqType::Ne => (), // todo
+                ReqType::Caret => min_v_to_query = constr.version(),
+                ReqType::Tilde => min_v_to_query = constr.version(),
             }
-            ReqType::Lt => {
-                max_v_to_query = get_warehouse_versions(&req.name)
-                    .expect("Problem getting versions")
-                    .into_iter()
-                    .filter(|v| *v < constr.version())
-                    .max()
-                    .unwrap();
-            }
-            ReqType::Lte => max_v_to_query = constr.version(),
-            ReqType::Gt => {
-                min_v_to_query = get_warehouse_versions(&req.name)
-                    .expect("Problem getting versions")
-                    .into_iter()
-                    .filter(|v| *v > constr.version())
-                    .max()
-                    .unwrap();
-            }
-            ReqType::Gte => min_v_to_query = constr.version(),
-            ReqType::Ne => (), // todo
-            ReqType::Caret => min_v_to_query = constr.version(),
-            ReqType::Tilde => min_v_to_query = constr.version(),
         }
+        query_data.insert(req.name.to_owned(), (min_v_to_query, max_v_to_query));
     }
 
-
-    println!(
-        "GETTING PYDEPS DATA: {} {} {}",
-        &req.name,
-        &min_v_to_query.to_string(),
-        &max_v_to_query.to_string()
-    );
-
-                                Ok(get_req_cache_range(
-                                &req.name,
-                                &min_v_to_query,
-                                &max_v_to_query,
-                            )?)
-//    Ok(get_req_cache_single(&req.name, &max_v_to_query)?)
+    Ok(get_req_cache_multiple(&query_data)?)
+    //    Ok(get_req_cache_single(&req.name, &max_v_to_query)?)
 }
 
 // Build a graph: Start by assuming we can pick the newest compatible dependency at each step.
@@ -325,6 +345,11 @@ fn guess_graph(
     cache: &mut HashMap<(String, Version), Vec<Dependency>>,
     reqs_searched: &mut Vec<Req>,
 ) -> Result<(), DependencyError> {
+    // Single http call here for all this package's reqs.
+    let query_data = fetch_req_data(reqs).expect("Problem getting query data");
+
+    println!("QUERY: {:#?}", &query_data);
+
     for req in reqs {
         // todo: Use the extras later.
         if let Some(ex) = &req.extra {
@@ -340,13 +365,18 @@ fn guess_graph(
         reqs_searched.push(req.clone());
 
         // Find matching packages for this requirement.
-        let query_result: Vec<ReqCache> = fetch_req_data(&req)
-            .expect("UHOH")
+        let query_result: Vec<&ReqCache> = query_data
+            .iter()
+            .filter(|d| d.name == Some(req.name.clone()))
             .into_iter()
             .filter(|r| filter_compat(&req.constraints, r))
             .collect();
 
-        println!("QR: {:#?}", &query_result);
+        //        let query_result: Vec<ReqCache> = fetch_req_data(&req)
+        //            .expect("UHOH")
+        //            .into_iter()
+        //            .filter(|r| filter_compat(&req.constraints, r))
+        //            .collect();
 
         let deps: Vec<Dependency> = query_result
             .into_iter()
@@ -355,8 +385,8 @@ fn guess_graph(
                     name: req.name.to_owned(),
                     version: Version::from_str(&r.version).expect("Problem parsing vers"),
                     reqs: r.reqs(),
-                    constraints_for_this: vec![], // todo
-                    extras: vec![],               // todo
+                    constraints_for_this: req.constraints.clone(),
+                    extras: vec![], // todo
                 }
             })
             .collect();
@@ -395,7 +425,7 @@ fn guess_graph(
 /// Determine which dependencies we need to install, using the newest ones which meet
 /// all constraints. Gets data from a cached repo, and Pypi.
 //pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
-pub fn resolve(reqs: &[Req]) -> Result<Vec<Dependency>, reqwest::Error> {
+pub fn resolve(reqs: &[Req]) -> Result<Vec<(String, Version)>, reqwest::Error> {
     let mut result = Vec::new();
     let mut cache = HashMap::new();
     let mut reqs_searched = Vec::new();
@@ -409,7 +439,8 @@ pub fn resolve(reqs: &[Req]) -> Result<Vec<Dependency>, reqwest::Error> {
     //    )
     //    .expect("Unable to resolve dependencies");
 
-    guess_graph(reqs, &mut result, &mut cache, &mut reqs_searched).expect("Unable to resolve dependencies");
+    guess_graph(reqs, &mut result, &mut cache, &mut reqs_searched)
+        .expect("Unable to resolve dependencies");
 
     //    let mut flattened = vec![];
     //    flatten(&mut flattened, &tree);
@@ -427,16 +458,60 @@ pub fn resolve(reqs: &[Req]) -> Result<Vec<Dependency>, reqwest::Error> {
         }
     }
 
-    for (name, deps) in by_name.iter() {
-        let constraints: Vec<Vec<Constraint>> = deps
-            .iter()
-            .map(|d| d.constraints_for_this.clone())
-            .collect();
-        let inter = dep_types::intersection_many(&constraints);
+    println!("by name: {:#?}", &by_name);
+
+    // Deal with duplicates, conflicts etc. The code above assumed no conflicts, and that
+    // we can pick the newest compatible version for each req.
+    let mut result_cleaned = vec![];
+    for (name, deps) in by_name.into_iter() {
+        if deps.len() == 1 {
+            // This dep is only specified once; no need to resolve conflicts.
+            let dep = &deps[0];
+            result_cleaned.push((dep.name.to_owned(), dep.version));
+        } else {
+            let constraints: Vec<Vec<Constraint>> = deps
+                .iter()
+                .map(|d| d.constraints_for_this.clone())
+                .collect();
+
+            let inter = dep_types::intersection_many(&constraints);
+            println!("name: {}, inter: {:#?}", name, &inter);
+
+            let newest = deps
+                .iter()
+                .max_by(|a, b| a.version.cmp(&b.version))
+                .unwrap();
+            if inter
+                .iter()
+                .all(|(min, max)| *min <= newest.version && newest.version <= *max)
+            {
+                result_cleaned.push((newest.name.to_owned(), newest.version));
+                continue;
+            }
+
+            for range in inter.iter() {
+                let updated_vers = range.1;
+            }
+
+            //            let updated_data = get_req_cache_single(&updated_name, &updated_ver);
+
+            //        result_cleaned.push(Dependency {
+            //                name: name.to_owned(),
+            //                version: updated_vers,
+            //                reqs: vec![],  // No longer required.
+            //                constraints_for_this: vec![], // todo still required?
+            //                extras: vec![],               // todo
+            //        });
+            //            result_cleaned.push((name.to_owned(), updated_vers));
+        }
     }
 
-    println!("RESOLVED RESULT: {:#?}", &result);
-    Ok(result)
+    //    println!("RESOLVED RESULT: {:#?}", &result);
+    //    Ok(result
+    //        .into_iter()
+    //        .map(|dep| (dep.name, dep.version))
+    //        .collect())
+    Ok(result_cleaned)
 }
 
 #[cfg(test)]

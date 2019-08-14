@@ -597,11 +597,11 @@ fn sync_deps(
     };
 
     // Resolve is made from non-nested deps, with their subdeps stripped: It's flattened.
-    for dep in resolved.iter() {
+    for (name, version) in resolved.iter() {
         // Move on if we've already installed this specific package/version
         let mut already_installed = false;
         for (inst_name, inst_ver) in installed.iter() {
-            if *inst_name.to_lowercase() == dep.name.to_lowercase() && *inst_ver == dep.version {
+            if inst_name.to_lowercase() == name.to_lowercase() && inst_ver == version {
                 already_installed = true;
             }
         }
@@ -609,7 +609,7 @@ fn sync_deps(
             continue;
         }
 
-        let data = dep_resolution::get_warehouse_release(&dep.name, &dep.version)
+        let data = dep_resolution::get_warehouse_release(&name, &version)
             .expect("Problem getting warehouse data");
 
         let mut compatible_releases = vec![];
@@ -676,8 +676,8 @@ fn sync_deps(
             if source_releases.is_empty() {
                 abort(&format!(
                     "Unable to find a compatible release for {}: {}",
-                    dep.name,
-                    dep.version.to_string()
+                    name,
+                    version.to_string()
                 ));
                 best_release = &compatible_releases[0]; // todo temp
                 package_type = PackageType::Wheel // todo temp to satisfy match
@@ -692,8 +692,8 @@ fn sync_deps(
 
         println!(
             "Downloading and installing {} = \"{}\"",
-            &dep.name,
-            &dep.version.to_string()
+            &name,
+            &version.to_string()
         );
 
         if install::download_and_install_package(
@@ -713,8 +713,8 @@ fn sync_deps(
 
     for (inst_name, inst_vers) in installed.iter() {
         let mut required = false;
-        for dep in resolved.iter() {
-            if dep.name.to_lowercase() == *inst_name.to_lowercase() && dep.version == *inst_vers {
+        for (name, version) in resolved.iter() {
+            if name.to_lowercase() == inst_name.to_lowercase() && version == inst_vers {
                 required = true;
             }
         }
@@ -731,13 +731,13 @@ fn sync_deps(
 
     let lock_packs = resolved
         .into_iter()
-        .map(|dep| LockPackage {
-            name: dep.name.clone(),
-            version: dep.version.to_string(),
+        .map(|(name, version)| LockPackage {
+            name: name.clone(),
+            version: version.to_string(),
             source: Some(format!(
                 "pypi+https://pypi.org/pypi/{}/{}/json",
-                dep.name,
-                dep.version.to_string()
+                name,
+                version.to_string()
             )), // todo
             dependencies: None, // todo!
         })
