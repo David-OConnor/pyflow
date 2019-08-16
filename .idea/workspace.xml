@@ -6,8 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="8e8ec656-42c1-4de6-aedd-231786fe5c7c" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/dep_resolution.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_resolution.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/dep_types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_types.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/install.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/install.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -31,6 +33,7 @@
   </component>
   <component name="ProjectId" id="1OUrphb6ydC26rQ1caGNQstLcXm" />
   <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="last.edited.regexp" value="argon2-cffi (&gt;=16.1.0)" />
@@ -136,6 +139,11 @@
       <workItem from="1565705880161" duration="4869000" />
       <workItem from="1565714965365" duration="39000" />
       <workItem from="1565778589978" duration="11311000" />
+      <workItem from="1565834971034" duration="10509000" />
+      <workItem from="1565854163908" duration="5679000" />
+      <workItem from="1565886002802" duration="1170000" />
+      <workItem from="1565933406658" duration="2902000" />
+      <workItem from="1565945606011" duration="1662000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed bugs in python-version checking and package installation">
       <created>1563704289313</created>

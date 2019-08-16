@@ -425,8 +425,11 @@ fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
 /// Find the operating system from a wheel filename. This doesn't appear to be available
 /// anywhere else on the Pypi Warehouse.
 fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyError> {
-    // Format is "name-version-pythonversion-?-os"
-    let re = Regex::new(r"^.*-.*-.*-.*-(.*).whl$").unwrap();
+    // Format is "name-version-pythonversion-mobileversion?-os.whl"
+    // Also works with formats like this:
+    // `PyQt5-5.13.0-5.13.0-cp35.cp36.cp37.cp38-none-win32.whl` too.
+    // The point is, pull the last part before ".whl".
+    let re = Regex::new(r"^(?:.*?-)+(.*).whl$").unwrap();
     if let Some(caps) = re.captures(filename) {
         let parsed = caps.get(1).unwrap().as_str();
 
@@ -921,7 +924,7 @@ py_version = \"3.7\"",
             // version.
             for added_req in added_reqs_unique.iter_mut() {
                 if added_req.constraints.is_empty() {
-                    let vers = dep_resolution::get_latest_version(&added_req.name)
+                    let (vers, _) = dep_resolution::get_latest_version(&added_req.name)
                         .expect("Problem getting latest version of the package you added.");
                     added_req.constraints.push(Constraint::new(
                         ReqType::Caret,

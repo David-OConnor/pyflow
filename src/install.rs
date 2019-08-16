@@ -4,7 +4,7 @@ use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
-use std::{fs, io, path::PathBuf, process::Command};
+use std::{fs, io, io::BufRead, path::PathBuf, process::Command};
 use tar::Archive;
 
 /// Extract the wheel. (It's like a zip)
@@ -145,17 +145,17 @@ pub fn download_and_install_package(
             let mut built_wheel_filename = String::new();
             for entry in
                 fs::read_dir(extracted_parent.join("dist")).expect("Problem reading dist directory")
-            {
-                let entry = entry.unwrap();
-                built_wheel_filename = entry
-                    .path()
-                    .file_name()
-                    .expect("Unable to find built wheel filename")
-                    .to_str()
-                    .unwrap()
-                    .to_owned();
-                break;
-            }
+                {
+                    let entry = entry.unwrap();
+                    built_wheel_filename = entry
+                        .path()
+                        .file_name()
+                        .expect("Unable to find built wheel filename")
+                        .to_str()
+                        .unwrap()
+                        .to_owned();
+                    break;
+                }
             let built_wheel_filename = &built_wheel_filename;
             if built_wheel_filename.is_empty() {
                 util::abort("Problem finding built wheel")
@@ -169,7 +169,7 @@ pub fn download_and_install_package(
                 lib_path.join(built_wheel_filename),
                 &options,
             )
-            .expect("Problem copying wheel built from source");
+                .expect("Problem copying wheel built from source");
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");
@@ -207,23 +207,44 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
     println!("Uninstalling {}: {}", name_ins, vers_ins.to_string());
     // Uninstall the package
     // package folders appear to be lowercase, while metadata keeps the package title's casing.
-    if fs::remove_dir_all(lib_path.join(name_ins.to_lowercase())).is_err() {
-        println!(
-            "{}Problem uninstalling {} {}",
-            Colored::Fg(Color::DarkRed),
-            name_ins,
-            vers_ins.to_string(),
-        )
+
+    let dist_info_path = lib_path.join(format!("{}-{}.dist-info", name_ins, vers_ins.to_string()));
+    let egg_info_path = lib_path.join(format!("{}-{}.egg-info", name_ins, vers_ins.to_string()));
+
+    // todo: could top_level.txt be in egg-info too?
+    // Sometimes the folder unpacked to isn't the same name as on pypi. Check for `top_level.txt`.
+    let folder_names = match fs::File::open(dist_info_path.join("top_level.txt")) {
+        Ok(f) => {
+            let mut names = vec![];
+            for line in io::BufReader::new(f).lines() {
+                if let Ok(l) = line {
+                    names.push(l);
+                }
+            }
+            names
+        }
+        Err(_) => vec![name_ins.to_lowercase()]
+    };
+
+    for folder_name in folder_names {
+        if fs::remove_dir_all(lib_path.join(folder_name)).is_err() {
+            println!(
+                "{}Problem uninstalling {} {}",
+                Colored::Fg(Color::DarkRed),
+                name_ins,
+                vers_ins.to_string(),
+            )
+        }
     }
 
     // Only report error if both dist-info and egg-info removal fail.
     let mut meta_folder_removed = false;
-    if fs::remove_dir_all(lib_path.join(format!("{}-{}.dist-info", name_ins, vers_ins.to_string())))
+    if fs::remove_dir_all(dist_info_path)
         .is_ok()
     {
         meta_folder_removed = true;
     }
-    if fs::remove_dir_all(lib_path.join(format!("{}-{}.egg-info", name_ins, vers_ins.to_string())))
+    if fs::remove_dir_all(egg_info_path)
         .is_ok()
     {
         meta_folder_removed = true;

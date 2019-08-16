@@ -48,7 +48,7 @@ impl From<reqwest::Error> for DependencyError {
 }
 
 /// An exact, 3-number Semver version.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Default, Deserialize, Eq, Hash, PartialEq)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
@@ -71,6 +71,10 @@ impl Version {
             minor,
             patch: 0,
         }
+    }
+
+    pub fn _max() -> Self {
+        Self::new(MAX_VER, 0, 0)
     }
 
     pub fn to_string_med(&self) -> String {
@@ -168,6 +172,12 @@ impl PartialOrd for Version {
 impl ToString for Version {
     fn to_string(&self) -> String {
         format!("{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+impl fmt::Debug for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", &self.to_string())
     }
 }
 
@@ -358,6 +368,7 @@ impl Constraint {
                 highest,
             )],
             ReqType::Lt => vec![(
+                // todo: what if patch is 0?
                 lowest,
                 Version::new(self.major, self_version.minor, self_version.patch - 1),
             )],
@@ -421,12 +432,12 @@ impl Constraint {
                 } else {
                     max = Version::new(0, 0, self_version.patch + 2);
                 }
-                println!(
-                    "MIN: {}, vers: {} Max: {}",
-                    &min.to_string(),
-                    &version.to_string(),
-                    &max.to_string()
-                );
+                //                println!(
+                //                    "MIN: {}, vers: {} Max: {}",
+                //                    &min.to_string(),
+                //                    &version.to_string(),
+                //                    &max.to_string()
+                //                );
                 min <= *version && *version < max
             }
             // For tilde, if minor's specified, can only increment patch.
@@ -455,7 +466,6 @@ impl Constraint {
 //    }
 //}
 
-
 //fn intersection_convert_one(
 //    constrs1: &[Constraint],
 //    ranges2: &[(Version, Version)],
@@ -471,53 +481,32 @@ impl Constraint {
 //    intersection(&ranges1, ranges2)
 //}
 
+pub fn intersection_many(reqs: &[Vec<Constraint>]) -> Vec<(Version, Version)> {
+    // todo: Broken for notequals, which involves joining two ranges with OR logic.
+    let mut flattened = vec![];
+    for req in reqs {
+        for constr in req.iter() {
+            flattened.push(constr);
+        }
+    }
+
+    let mut tuples = vec![];
+    for r in flattened.into_iter() {
+        tuples.append(&mut r.compatible_range());
+    }
+
+    //    let tuples: Vec<(Version, Version)> = flattened.iter().map(|r| r.compatible_range()).collect();
+    intersection_many2(&tuples)
+}
+
 /// Interface an arbitrary number of constraint sets into the intersection fn(s), which
 /// handle 2 at a time.
-pub fn intersection_many(sets: &[Vec<Constraint>]) -> Vec<(Version, Version)> {
-    // Initialize with all the ranges combined; each iteration will narrow the accumulator.
-//        let mut init = vec![];
-//
-//        for set in sets {
-//            let mut ranges = vec![];
-//            // todo dry
-//            for constr in set {
-//                for range in constr.compatible_range() {
-//                    ranges1.push(range);
-//                }
-//                init.push(ranges);
-//            }
-//        }
-
-
-    // Each set contains a group of constraints bound by `or` logic. Use `and` logic between sets.
-
-
-    // Initialize to all possible ranges, and close in on our result.
+fn intersection_many2(reqs: &[(Version, Version)]) -> Vec<(Version, Version)> {
+    // todo: Broken for notequals, which involves joining two ranges with OR logic.
     let init = vec![(Version::new(0, 0, 0), Version::new(MAX_VER, 0, 0))];
-    // Keep adding constraints to (limiting) a cumulative set, and comparing it to individual sets.
-    let mut cum_set = init;
-    // todo: Make more functional?
-    for constraint_set in sets {
-        println!("SET: {:?}", &constraint_set);
-        let mut working_rng = vec![];
-        for constr in constraint_set {
-            for rng in constr.compatible_range() {
-                working_rng.push(rng);
-            }
-        }
-        println!("CUM_SET: {:?}", &cum_set);
-        println!("working: {:?}", &working_rng);
-        cum_set = intersection(&cum_set, &working_rng);
-
-    }
-    cum_set
-// todo delete this procedural logic if functional works.
-
-
-
-//        sets.iter().fold(init, |acc, constraint_set| {
-//            intersection_convert_one(constraint_set, &acc)
-//        })
+    reqs.iter().fold(init, |acc, constraint_set| {
+        intersection(&[*constraint_set], &acc)
+    })
 }
 
 ///// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
@@ -548,7 +537,6 @@ pub fn intersection(
     ranges2: &[(Version, Version)],
 ) -> Vec<(Version, Version)> {
     // todo: Should we use and all the way, and pass a net iterator?
-    // Note that within each set of ranges, we use OR constraints. Between the two, we use AND.
     let mut result = vec![];
     // Each range imposes an additonal constraint.
     for rng1 in ranges1 {
@@ -1194,6 +1182,20 @@ pub mod tests {
     }
 
     #[test]
+    fn compat_rng() {
+        let actual1 = Constraint::new(Gte, 5, 1, 0).compatible_range();
+        let expected1 = vec![(Version::new(5, 1, 0), Version::_max())];
+
+        let actual2 = Constraint::new(Ne, 5, 1, 3).compatible_range();
+        let expected2 = vec![
+            (Version::new(0, 0, 0), Version::new(5, 1, 2)),
+            (Version::new(5, 1, 4), Version::_max()),
+        ];
+        assert_eq!(expected1, actual1);
+        assert_eq!(expected2, actual2);
+    }
+
+    #[test]
     fn intersections_empty() {
         let reqs1 = vec![Constraint::new(Exact, 4, 9, 4)];
         let reqs2 = vec![Constraint::new(Gte, 4, 9, 7)];
@@ -1215,7 +1217,7 @@ pub mod tests {
 
         assert_eq!(
             intersection(&[reqs1], &[reqs2]),
-            vec![(Version::new(4, 9, 4), Version::new(MAX_VER, 0, 0))]
+            vec![(Version::new(4, 9, 4), Version::_max())]
         );
         assert_eq!(
             intersection(&[reqs3], &[reqs4]),
@@ -1234,7 +1236,7 @@ pub mod tests {
 
         assert_eq!(
             intersection_many(&[reqs1, reqs2]),
-            vec![(Version::new(4, 9, 4), Version::new(MAX_VER, 0, 0))]
+            vec![(Version::new(4, 9, 4), Version::_max())]
         );
         assert_eq!(
             intersection_many(&[reqs3, reqs4]),
@@ -1244,12 +1246,12 @@ pub mod tests {
 
     #[test]
     fn intersection_contained() {
-        let rng1 = (Version::new(4, 9, 2), Version::new(MAX_VER, 0, 0));
+        let rng1 = (Version::new(4, 9, 2), Version::_max());
         let rng2 = (Version::new(4, 9, 4), Version::new(5, 5, 4));
 
         assert_eq!(
             intersection(&[rng1], &[rng2]),
-            vec![(Version::new(4, 9, 4), Version::new(5, 5, 5))]
+            vec![(Version::new(4, 9, 4), Version::new(5, 5, 4))]
         );
     }
 
@@ -1260,7 +1262,18 @@ pub mod tests {
 
         assert_eq!(
             intersection_many(&[reqs1, reqs2]),
-            vec![(Version::new(4, 9, 4), Version::new(5, 5, 5))]
+            vec![(Version::new(4, 9, 4), Version::new(5, 5, 4))]
         );
     }
+    //    #[test]
+    //    fn intersection_contained_many_more() {
+    //        let reqs1 = vec![Constraint::new(Gte, 4, 9, 2)];
+    //        let reqs2 = vec![Constraint::new(Gte, 4, 9, 4), Constraint::new(Lt, 5, 5, 5)];
+    //        let reqs3 = vec![Constraint::new(Gte, 4, 9, 4), Constraint::new(Lt, 5, 5, 5)];
+    //
+    //        assert_eq!(
+    //            intersection_many(&[reqs1, reqs2, reqs3]),
+    //            vec![(Version::new(4, 9, 4), Version::new(5, 5, 4))]
+    //        );
+    //    }
 }
