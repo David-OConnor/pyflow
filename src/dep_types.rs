@@ -359,6 +359,29 @@ impl Constraint {
         let lowest = Version::new(0, 0, 0);
         let max;
 
+        let safely_subtract = || {
+            // Don't try to make a negative version component.
+            let mut major = self_version.major;
+            let mut minor = self_version.minor;
+            let mut patch = self_version.patch;
+            // ie 0.0.0. Return max of 0.0.0
+            if self_version.major == 0 && self_version.minor == 0 && self_version.patch == 0 {}
+            // ie 3.0.0. Return max of 2.999999.999999
+            if self_version.minor == 0 && self_version.patch == 0 {
+                major -= 1;
+                minor = MAX_VER;
+                patch = MAX_VER;
+            // ie 2.9.0. Return max of 2.8.999999
+            } else if self_version.patch == 0 {
+                minor -= 1;
+                patch = MAX_VER
+            } else {
+                patch -= 1;
+            }
+            (major, minor, patch)
+        };
+
+        // Note that other than for not-equals, the the resulting Vec has len 1.
         match self.type_ {
             ReqType::Exact => vec![(self_version, self_version)],
             ReqType::Gte => vec![(self_version, highest)],
@@ -367,21 +390,20 @@ impl Constraint {
                 Version::new(self.major, self_version.minor, self_version.patch + 1),
                 highest,
             )],
-            ReqType::Lt => vec![(
-                // todo: what if patch is 0?
-                lowest,
-                Version::new(self.major, self_version.minor, self_version.patch - 1),
-            )],
-            ReqType::Ne => vec![
-                (
-                    lowest,
-                    Version::new(self.major, self_version.minor, self_version.patch - 1),
-                ),
-                (
-                    Version::new(self.major, self_version.minor, self_version.patch + 1),
-                    highest,
-                ),
-            ],
+            ReqType::Lt => {
+                let (major, minor, patch) = safely_subtract();
+                vec![(lowest, Version::new(major, minor, patch))]
+            }
+            ReqType::Ne => {
+                let (major, minor, patch) = safely_subtract();
+                vec![
+                    (lowest, Version::new(major, minor, patch)),
+                    (
+                        Version::new(self.major, self_version.minor, self_version.patch + 1),
+                        highest,
+                    ),
+                ]
+            }
             // This section DRY from `compatible`.
             ReqType::Caret => {
                 if self.major > 0 {
@@ -554,8 +576,9 @@ pub fn intersection(
 pub struct Req {
     pub name: String,
     pub constraints: Vec<Constraint>,
-    pub extra: Option<String>, // todo: Implement
-                               //    pub sys_platform: Option<String>,  // todo
+    pub extra: Option<String>,          // todo: Implement
+    pub sys_platform: Option<String>,   // todo
+    pub python_version: Option<String>, // todo
 }
 
 impl Req {
@@ -564,6 +587,8 @@ impl Req {
             name,
             constraints,
             extra: None,
+            sys_platform: None,
+            python_version: None,
         }
     }
 
@@ -616,6 +641,8 @@ impl Req {
                 name,
                 constraints,
                 extra,
+                sys_platform: None,
+                python_version: None,
             });
         };
 
@@ -628,10 +655,17 @@ impl Req {
         };
 
         if let Some(caps) = novers_re.captures(s) {
+            let extra = match caps.get(2) {
+                Some(s) => Some(s.as_str().to_owned()),
+                None => None,
+            };
+
             return Ok(Self {
                 name: caps.get(1).unwrap().as_str().to_string(),
                 constraints: vec![],
-                extra: None,
+                extra,
+                sys_platform: None,
+                python_version: None,
             });
         }
         Err(DependencyError::new(&format!(
@@ -989,6 +1023,8 @@ pub mod tests {
                 patch: None,
             }],
             extra: Some("security".into()),
+            sys_platform: None,
+            python_version: None,
         };
 
         let actual2 = Req::from_str(
@@ -1000,6 +1036,8 @@ pub mod tests {
             name: "pathlib2".into(),
             constraints: vec![],
             extra: Some("test".into()),
+            sys_platform: None,
+            python_version: None,
             // todo: python == part ?
         };
 

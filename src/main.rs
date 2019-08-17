@@ -50,9 +50,8 @@ enum Os {
 struct Opt {
     #[structopt(subcommand)]
     subcmds: Option<SubCommand>,
-    #[structopt(name = "custom_bin")]
-    //    custom_bin: Vec<String>,
-    custom_bin: Vec<String>,
+    #[structopt(name = "script")]
+    script: Vec<String>,
 }
 
 ///// eg `ipython`, `black` etc.
@@ -87,8 +86,8 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     Install {
         #[structopt(name = "packages")]
         packages: Vec<String>,
-        #[structopt(short = "b", long = "binary")]
-        bin: bool,
+        //        #[structopt(short = "b", long = "binary")]
+        //        bin: bool,
     },
     /// Uninstall all packages, or ones specified
     #[structopt(name = "uninstall")]
@@ -114,6 +113,8 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     /// Remove the environment, and uninstall all packages
     #[structopt(name = "reset")]
     Reset,
+    #[structopt(name = "script")] // todo: Do we want this?
+    Script,
 }
 
 /// A config, parsed from pyproject.toml
@@ -130,12 +131,12 @@ pub struct Config {
     features: Option<HashMap<String, Vec<String>>>, // todo
     description: Option<String>,
     classifiers: Vec<String>, // https://pypi.org/classifiers/
-    keywords: Vec<String>,  // todo: Options for classifiers and keywords?
+    keywords: Vec<String>,    // todo: Options for classifiers and keywords?
     homepage: Option<String>,
     repo_url: Option<String>,
     package_url: Option<String>,
     readme_filename: Option<String>,
-    entry_points: HashMap<String, Vec<String>>,  // todo option?
+    entry_points: HashMap<String, Vec<String>>, // todo option?
 }
 
 fn key_re(key: &str) -> Regex {
@@ -515,7 +516,7 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
     // todo installing `wheel` and returning, but don't know what folder
     // todo to look for in wait_for_dirs. Blanket sleep for now.
     thread::sleep(time::Duration::from_millis(2000));
-    let bin_path = util::find_bin_path(&vers_path).0;
+    let bin_path = util::find_bin_path(&vers_path);
 
     // We need `wheel` installed to build wheels from source.
     // Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
@@ -595,7 +596,7 @@ fn sync_deps(
     //        constraints_for_this: vec![],
     //    };
 
-    let resolved = match dep_resolution::resolve(reqs) {
+    let resolved = match dep_resolution::resolve(reqs, installed) {
         //    let resolved = match dep_resolution::resolve(&mut tree) {
         Ok(r) => r,
         Err(_) => {
@@ -705,12 +706,13 @@ fn sync_deps(
         );
 
         if install::download_and_install_package(
+            &name,
+            &version,
             &best_release.url,
             &best_release.filename,
             &best_release.digests.sha256,
             lib_path,
             bin_path,
-            false,
             package_type,
         )
         .is_err()
@@ -772,10 +774,7 @@ fn main() {
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
-        None => {
-            abort("No command entered. For a list of what you can do, run `pypackage --help`.");
-            SubCommand::Init {} // Dummy to satisfy the compiler.
-        }
+        None => SubCommand::Script,
     };
 
     // New doesn't execute any other logic. Init must execute befor the rest of the logic,
@@ -872,7 +871,7 @@ py_version = \"3.7\"",
     };
 
     let lib_path = vers_path.join("lib");
-    let (bin_path, lib_bin_path) = util::find_bin_path(&vers_path);
+    let bin_path = util::find_bin_path(&vers_path);
 
     let lock = match read_lock(lock_filename) {
         Ok(l) => {
@@ -882,26 +881,10 @@ py_version = \"3.7\"",
         Err(_) => Lock::default(),
     };
 
-    let args = opt.custom_bin;
-    if !args.is_empty() {
-        // todo better handling, eg abort
-        let name = args.get(0).expect("Missing first arg").clone();
-        let args: Vec<String> = args.into_iter().skip(1).collect();
-        if commands::run_bin(&bin_path, &lib_path, &name, &args).is_err() {
-            abort(&format!(
-                "Problem running the binary script {}. Is it installed? \
-                 Try running `pypackage install {} -b`",
-                name, name
-            ));
-        }
-
-        return;
-    }
-
     match subcmd {
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
-        SubCommand::Install { packages, bin } => {
+        SubCommand::Install { packages } => {
             let mut added_reqs = vec![];
             for p in packages.into_iter() {
                 match Req::from_str(&p, false) {
@@ -1057,6 +1040,32 @@ py_version = \"3.7\"",
                 abort("Problem removing `__pypackages__` directory")
             }
             util::print_color("Reset complete", Color::Green);
+        }
+
+        SubCommand::Script {} => {
+            let args = opt.script;
+            if !args.is_empty() {
+                // todo better handling, eg abort
+                let name = args.get(0).expect("Missing first arg").clone();
+                let mut args: Vec<String> = args.into_iter().skip(1).collect();
+
+                let scripts = vec![];
+                let mut args2 = vec!["-m".to_owned()];
+                for script in scripts {
+                    args2.push(script);
+                }
+                //                args2.append(&mut args);
+
+                if commands::run_python(&bin_path, &lib_path, &args2).is_err() {
+                    abort(&format!(
+                        "Problem running the script {}. Is it installed? \
+                         Try running `pypackage install {}`",
+                        name, name
+                    ));
+                }
+
+                return;
+            }
         }
 
         // We already handled init and new

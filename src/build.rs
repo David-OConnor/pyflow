@@ -1,6 +1,6 @@
 use crate::util;
-use std::{env, fs, path::PathBuf, process::Command};
 use std::collections::HashMap;
+use std::{env, fs, path::PathBuf, process::Command};
 
 // https://packaging.python.org/tutorials/packaging-projects/
 
@@ -68,7 +68,7 @@ setuptools.setup(
         cfg.license.unwrap_or_else(|| "".into()),
         cfg.description.unwrap_or_else(|| "".into()),
         cfg.repo_url.unwrap_or_else(|| "".into()),
-        entry_points,
+        classifiers,
         entry_points,
     );
 

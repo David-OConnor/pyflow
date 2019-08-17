@@ -41,9 +41,8 @@ pub fn venv_exists(venv_path: &PathBuf) -> bool {
 }
 
 /// Checks whether the path is under `/bin` (Linux generally) or `/Scripts` (Windows generally)
-/// Returns the primary bin path (ie under the venv), and the custom one (under `Lib`) as a Tuple.
-//pub fn find_bin_path(vers_path: &PathBuf) -> (PathBuf, PathBuf) {
-pub fn find_bin_path(vers_path: &PathBuf) -> (PathBuf, PathBuf) {
+/// Returns the bin path (ie under the venv)
+pub fn find_bin_path(vers_path: &PathBuf) -> PathBuf {
     // The bin name should be `bin` on Linux, and `Scripts` on Windows. Check both.
     // Locate bin name after ensuring we have a virtual environment.
     // It appears that 'binary' scripts are installed in the `lib` directory's bin folder when
@@ -71,14 +70,11 @@ pub fn find_bin_path(vers_path: &PathBuf) -> (PathBuf, PathBuf) {
     //    }
 
     #[cfg(target_os = "windows")]
-    return (
-        vers_path.join(".venv/Scripts"),
-        vers_path.join("lib/Scripts"),
-    );
+    return vers_path.join(".venv/Scripts");
     #[cfg(target_os = "linux")]
-    return (vers_path.join(".venv/bin"), vers_path.join("lib/bin"));
+    return vers_path.join(".venv/bin");
     #[cfg(target_os = "macos")]
-    return (vers_path.join(".venv/bin"), vers_path.join("lib/bin"));
+    return vers_path.join(".venv/bin");
 }
 
 /// Wait for directories to be created; required between modifying the filesystem,

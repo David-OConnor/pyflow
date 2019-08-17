@@ -107,7 +107,7 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
     }
 
     fs::write(filename, result)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+        .expect("Unable to write to pyproject.toml while attempting to add a dependency");
 }
 
 pub fn parse_req_dot_text(cfg: &mut Config) {

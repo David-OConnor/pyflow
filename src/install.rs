@@ -61,15 +61,78 @@ fn replace_distutils(setup_path: &PathBuf) {
     }
 }
 
+// todo: Implement.
+fn remove_scripts(scripts: Vec<String>, scripts_path: &PathBuf) {
+    let mut result = String::new();
+
+    if let Ok(scripts_file) = fs::File::open(scripts_path) {
+        for line in io::BufReader::new(scripts_file).lines() {
+            if let Ok(l) = line {}
+        }
+    }
+
+    for to_remove in scripts {}
+
+    fs::write(scripts_path, result).expect("Unable to write to the console_scripts file");
+}
+
+/// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
+/// Alternatively, we could just parse all `dist-info` folders every run; this should
+/// be faster.
+fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
+    let mut scripts = vec![];
+    // todo: Sep fn for dist_info path, to avoid repetition between here and uninstall?
+    let dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
+
+    if let Ok(ep_file) = fs::File::open(&dist_info_path.join("entry_points.txt")) {
+        let mut in_scripts_section = false;
+        for line in io::BufReader::new(ep_file).lines() {
+            if let Ok(l) = line {
+                if &l == "[console_scripts]" {
+                    in_scripts_section = true;
+                    continue;
+                }
+                if l.starts_with('[') {
+                    // no longer in scripts section.
+                    break;
+                }
+                if in_scripts_section && !l.is_empty() {
+                    scripts.push(l.clone());
+                }
+            }
+        }
+    } // else: Probably no scripts.
+
+    // Now that we've found scripts, add them to our unified file.
+    // Note that normally, python uses a bin directory.
+    let scripts_file = &lib_path.join("../console_scripts.txt");
+    if !scripts_file.exists() {
+        fs::File::create(scripts_file).expect("Problem creating console_scripts.txt");
+    }
+
+    let mut existing_scripts =
+        fs::read_to_string(scripts_file).expect("Can't find console_scripts.txt");
+
+    for new_script in scripts {
+        if !existing_scripts.contains(&new_script) {
+            existing_scripts.push_str(&new_script);
+            existing_scripts.push_str("\n");
+        }
+    }
+
+    fs::write(scripts_file, existing_scripts).expect("Unable to write to the console_scripts file");
+}
+
 /// Download and install a package. For wheels, we can just extract the contents into
 /// the lib folder.  For source dists, make a wheel first.
 pub fn download_and_install_package(
+    name: &str,
+    version: &Version,
     url: &str,
     filename: &str,
     expected_digest: &str,
     lib_path: &PathBuf,
     bin_path: &PathBuf,
-    bin: bool, // todo what is this for?
     package_type: crate::PackageType,
 ) -> Result<(), reqwest::Error> {
     let mut resp = reqwest::get(url)?; // Download the file
@@ -191,6 +254,8 @@ pub fn download_and_install_package(
             }
         }
     }
+
+    setup_scripts(name, version, lib_path);
 
     // Remove the archive
     if fs::remove_file(&archive_path).is_err() {

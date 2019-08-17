@@ -66,6 +66,7 @@ and will be added to `pyproject.toml`.
 ### Running REPL and Python files in the environment:
 - `pypackage python` - Run a Python REPL
 - `pypackage python main.py` - Run a python file
+- `pypackage ipython`, `pypackage black` etc - Run a CLI script like `ipython`. 
 
 
 ### Building and publishing:
@@ -179,7 +180,6 @@ traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`
 
 ## Not-yet-implemented
 
-- Executable script installations (Important feature!)
 - Installing extra dependencies for features
 - Installing from sources other than `pypi` (eg repos)
 - The lock file is missing some info like dependencies and hashes.

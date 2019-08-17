@@ -119,23 +119,3 @@ pub(crate) fn run_python(
 
     Ok(())
 }
-
-// todo: Ideally we'd use lib/bin, but unable to get that workign currently.
-// todo instead, we install into the venv directly.
-/// Run a binary installed in the virtual environment, such as `ipython` or `black`.
-pub(crate) fn run_bin(
-    bin_path: &PathBuf,
-    lib_path: &PathBuf,
-    name: &str,
-    args: &[String],
-) -> Result<(), Box<Error>> {
-    util::set_pythonpath(lib_path);
-
-    println!("bp{:?}", bin_path);
-
-    Command::new(format!("{}/{}", bin_path.to_str().unwrap(), name))
-        .args(args)
-        .status()?;
-
-    Ok(())
-}
