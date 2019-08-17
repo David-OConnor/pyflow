@@ -76,6 +76,22 @@ fn remove_scripts(scripts: Vec<String>, scripts_path: &PathBuf) {
     fs::write(scripts_path, result).expect("Unable to write to the console_scripts file");
 }
 
+fn make_script(path: &PathBuf, name: &str, module: &str, func: &str) {
+    let contents = format!(
+        r"import re
+import sys
+
+from {} import {}
+
+if __name__ == '__main__':
+    sys.argv[0] = re.sub(r'(-script\.pyw?|\.exe)?$', '', sys.argv[0])
+    sys.exit({}())",
+        module, func, func
+    );
+
+    fs::write(path, contents).expect(&format!("Problem creating script file for {}", name));
+}
+
 /// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
 /// Alternatively, we could just parse all `dist-info` folders every run; this should
 /// be faster.
@@ -105,6 +121,7 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
 
     // Now that we've found scripts, add them to our unified file.
     // Note that normally, python uses a bin directory.
+    // todo: Currently we're setting up the unified file, and the bin/script file.
     let scripts_file = &lib_path.join("../console_scripts.txt");
     if !scripts_file.exists() {
         fs::File::create(scripts_file).expect("Problem creating console_scripts.txt");
@@ -113,10 +130,27 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
     let mut existing_scripts =
         fs::read_to_string(scripts_file).expect("Can't find console_scripts.txt");
 
+    let script_path = lib_path.join("../bin");
+    if !script_path.exists() {
+        fs::create_dir(&script_path);
+    }
+
     for new_script in scripts {
         if !existing_scripts.contains(&new_script) {
             existing_scripts.push_str(&new_script);
             existing_scripts.push_str("\n");
+        }
+        let re = Regex::new(r"^(.*?)\s*=\s*(.*?):(.*)$").unwrap();
+        if let Some(caps) = re.captures(&new_script) {
+            let name = caps.get(1).unwrap().as_str();
+            let module = caps.get(2).unwrap().as_str();
+            let func = caps.get(3).unwrap().as_str();
+            let path = script_path.join(name);
+            make_script(&path, name, module, func);
+            util::print_color(
+                &format!("Added a command-line script: {}", name),
+                Color::Green,
+            );
         }
     }
 
@@ -254,7 +288,6 @@ pub fn download_and_install_package(
             }
         }
     }
-
     setup_scripts(name, version, lib_path);
 
     // Remove the archive

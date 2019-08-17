@@ -10,6 +10,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 struct WarehouseInfo {
+    name: String,  // Pulling this ensure proper capitalization
     requires_dist: Option<Vec<String>>,
     requires_python: Option<String>,
     version: String,
@@ -52,7 +53,8 @@ fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
 
 /// Find the latest version of a package by querying the warehouse.  Also return
 /// a vec of the versions found, so we can reuse this later without fetching a second time.
-pub fn get_latest_version(name: &str) -> Result<(Version, Vec<Version>), DependencyError> {
+/// Return name to, so we get correct capitalization.
+pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), DependencyError> {
     println!("(dbg) Getting available versions for {}...", name);
     let data = get_warehouse_data(name)?;
 
@@ -65,9 +67,10 @@ pub fn get_latest_version(name: &str) -> Result<(Version, Vec<Version>), Depende
         .collect();
 
     match Version::from_str(&data.info.version) {
-        Ok(v) => Ok((v, all_versions)),
+        Ok(v) => Ok((data.info.name, v, all_versions)),
         // Unable to parse the version listed in info; iterate through releases.
         Err(_) => Ok((
+            data.info.name,
             *all_versions
                 .iter()
                 .max()
@@ -77,21 +80,6 @@ pub fn get_latest_version(name: &str) -> Result<(Version, Vec<Version>), Depende
     }
 }
 
-//fn get_warehouse_versions(name: &str) -> Result<Vec<Version>, reqwest::Error> {
-//    println!("Getting version data for {}", name);
-//    // todo return Result with custom fetch error type
-//    let data = get_warehouse_data(name)?;
-//
-//    let mut result = vec![];
-//    for ver in data.releases.keys() {
-//        if let Ok(v) = Version::from_str(ver) {
-//            // If not Ok, probably due to having letters etc in the name - we choose to ignore
-//            // those. Possibly to indicate pre-releases/alpha/beta/release-candidate etc.
-//            result.push(v);
-//        }
-//    }
-//    Ok(result)
-//}
 
 /// Get release data from the warehouse, ie the file url, name, and hash.
 pub fn get_warehouse_release(
@@ -161,8 +149,8 @@ fn get_req_cache_multiple(
         packages2.insert(name.to_owned(), versions);
     }
 
-    //            let url = "https://pydeps.herokuapp.com/multiple/";
-    let url = "http://localhost:8000/multiple/";
+                let url = "https://pydeps.herokuapp.com/multiple/";
+//    let url = "http://localhost:8000/multiple/";
 
     Ok(reqwest::Client::new()
         .post(url)
@@ -202,16 +190,16 @@ fn filter_compat(constraints: &[Constraint], r: &ReqCache) -> bool {
 /// todo: Group all reqs and pull with a single call to pydeps to improve speed?
 fn fetch_req_data(
     reqs: &[&Req],
-    vers_cache: &mut HashMap<String, (Version, Vec<Version>)>,
+    vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
 ) -> Result<Vec<ReqCache>, DependencyError> {
     // Narrow-down our list of versions to query.
     let mut query_data = HashMap::new();
     for req in reqs {
         // todo: cache version info; currently may get this multiple times.
-        let (latest_version, all_versions) = match vers_cache.get(&req.name) {
+        let (name, latest_version, all_versions) = match vers_cache.get(&req.name) {
             Some(c) => c.clone(),
             None => {
-                let data = get_latest_version(&req.name)?;
+                let data = get_version_info(&req.name)?;
                 vers_cache.insert(req.name.clone(), data.clone());
                 data
             }
@@ -297,7 +285,7 @@ fn guess_graph(
     installed: &[(String, Version)],
     result: &mut Vec<Dependency>,
     cache: &mut HashMap<(String, Version), Vec<&ReqCache>>,
-    vers_cache: &mut HashMap<String, (Version, Vec<Version>)>,
+    vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
     reqs_searched: &mut Vec<Req>,
     names_searched: &mut Vec<String>,
 ) -> Result<(), DependencyError> {
@@ -431,12 +419,14 @@ pub fn resolve(
     //    )
     //    .expect("Unable to resolve dependencies");
 
+    let mut version_cache = HashMap::new();
+
     guess_graph(
         reqs,
         installed,
         &mut result,
         &mut cache,
-        &mut HashMap::new(),
+        &mut version_cache,
         &mut reqs_searched,
         &mut names_searched,
     )
@@ -448,7 +438,8 @@ pub fn resolve(
     let mut by_name: HashMap<String, Vec<Dependency>> = HashMap::new();
 
     for dep in result.iter() {
-        println!("Resolving {}, {}", dep.name, dep.version.to_string());
+        let formatted_name = &version_cache.get(&dep.name).unwrap().0;
+        println!("Resolving {}, {}", formatted_name, dep.version.to_string());
 
         match by_name.get_mut(&dep.name) {
             Some(k) => k.push(dep.clone()),
@@ -462,10 +453,11 @@ pub fn resolve(
     // we can pick the newest compatible version for each req.
     let mut result_cleaned = vec![];
     for (name, deps) in by_name.into_iter() {
+        let formatted_name = &version_cache.get(&name).unwrap().0;
         if deps.len() == 1 {
             // This dep is only specified once; no need to resolve conflicts.
             let dep = &deps[0];
-            result_cleaned.push((dep.name.to_owned(), dep.version));
+            result_cleaned.push((formatted_name.to_owned(), dep.version));
         } else {
             let constraints: Vec<Vec<Constraint>> = deps
                 .iter()
@@ -473,7 +465,7 @@ pub fn resolve(
                 .collect();
 
             let inter = dep_types::intersection_many(&constraints);
-            println!("name: {}, inter: {:#?}", name, &inter);
+            println!("name: {}, inter: {:#?}", formatted_name, &inter);
 
             let newest = deps
                 .iter()
@@ -483,7 +475,7 @@ pub fn resolve(
                 .iter()
                 .all(|(min, max)| *min <= newest.version && newest.version <= *max)
             {
-                result_cleaned.push((newest.name.to_owned(), newest.version));
+                result_cleaned.push((formatted_name.to_string(), newest.version));
                 continue;
             }
 
@@ -522,7 +514,7 @@ pub mod tests {
         // Makes API call
         // Assume no new releases since writing this test.
         assert_eq!(
-            get_latest_version("scinot").unwrap().1.sort(),
+            get_version_info("scinot").unwrap().1.sort(),
             vec![
                 Version::new(0, 0, 1),
                 Version::new(0, 0, 2),

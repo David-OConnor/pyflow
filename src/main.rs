@@ -51,6 +51,7 @@ struct Opt {
     #[structopt(subcommand)]
     subcmds: Option<SubCommand>,
     #[structopt(name = "script")]
+    //    #[structopt(raw(setting = "structopt::clap::AppSettings::TrailingVarArg"))]
     script: Vec<String>,
 }
 
@@ -86,8 +87,6 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     Install {
         #[structopt(name = "packages")]
         packages: Vec<String>,
-        //        #[structopt(short = "b", long = "binary")]
-        //        bin: bool,
     },
     /// Uninstall all packages, or ones specified
     #[structopt(name = "uninstall")]
@@ -113,6 +112,7 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     /// Remove the environment, and uninstall all packages
     #[structopt(name = "reset")]
     Reset,
+    /// (Placeholder)
     #[structopt(name = "script")] // todo: Do we want this?
     Script,
 }
@@ -596,6 +596,8 @@ fn sync_deps(
     //        constraints_for_this: vec![],
     //    };
 
+    println!("REQS: {:?}", &reqs);
+
     let resolved = match dep_resolution::resolve(reqs, installed) {
         //    let resolved = match dep_resolution::resolve(&mut tree) {
         Ok(r) => r,
@@ -920,7 +922,7 @@ py_version = \"3.7\"",
             // version.
             for added_req in added_reqs_unique.iter_mut() {
                 if added_req.constraints.is_empty() {
-                    let (vers, _) = dep_resolution::get_latest_version(&added_req.name)
+                    let (formatted_name, vers, _) = dep_resolution::get_version_info(&added_req.name)
                         .expect("Problem getting latest version of the package you added.");
                     added_req.constraints.push(Constraint::new(
                         ReqType::Caret,
@@ -1049,19 +1051,28 @@ py_version = \"3.7\"",
                 let name = args.get(0).expect("Missing first arg").clone();
                 let mut args: Vec<String> = args.into_iter().skip(1).collect();
 
-                let scripts = vec![];
-                let mut args2 = vec!["-m".to_owned()];
-                for script in scripts {
-                    args2.push(script);
+                //                let scripts = vec![];
+                let script_path = vers_path.join(format!("bin/{}", name));
+
+                let abort_msg = &format!(
+                    "Problem running the script {}. Is it installed? \
+                     Try running `pypackage install {}`",
+                    name, name
+                );
+                // Handle the error here, instead of letting Python handle it, so we can
+                // display a more nicer message.
+                if !script_path.exists() {
+                    abort(abort_msg);
                 }
-                //                args2.append(&mut args);
+
+                let mut args2 = vec![script_path.to_str().unwrap().to_owned()];
+                //                for script in scripts {
+                //                    args2.push(script);
+                //                }
+                args2.append(&mut args);
 
                 if commands::run_python(&bin_path, &lib_path, &args2).is_err() {
-                    abort(&format!(
-                        "Problem running the script {}. Is it installed? \
-                         Try running `pypackage install {}`",
-                        name, name
-                    ));
+                    abort(abort_msg);
                 }
 
                 return;
