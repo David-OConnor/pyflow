@@ -145,17 +145,17 @@ pub fn download_and_install_package(
             let mut built_wheel_filename = String::new();
             for entry in
                 fs::read_dir(extracted_parent.join("dist")).expect("Problem reading dist directory")
-                {
-                    let entry = entry.unwrap();
-                    built_wheel_filename = entry
-                        .path()
-                        .file_name()
-                        .expect("Unable to find built wheel filename")
-                        .to_str()
-                        .unwrap()
-                        .to_owned();
-                    break;
-                }
+            {
+                let entry = entry.unwrap();
+                built_wheel_filename = entry
+                    .path()
+                    .file_name()
+                    .expect("Unable to find built wheel filename")
+                    .to_str()
+                    .unwrap()
+                    .to_owned();
+                break;
+            }
             let built_wheel_filename = &built_wheel_filename;
             if built_wheel_filename.is_empty() {
                 util::abort("Problem finding built wheel")
@@ -169,7 +169,7 @@ pub fn download_and_install_package(
                 lib_path.join(built_wheel_filename),
                 &options,
             )
-                .expect("Problem copying wheel built from source");
+            .expect("Problem copying wheel built from source");
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");
@@ -223,7 +223,7 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
             }
             names
         }
-        Err(_) => vec![name_ins.to_lowercase()]
+        Err(_) => vec![name_ins.to_lowercase()],
     };
 
     for folder_name in folder_names {
@@ -239,14 +239,10 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
 
     // Only report error if both dist-info and egg-info removal fail.
     let mut meta_folder_removed = false;
-    if fs::remove_dir_all(dist_info_path)
-        .is_ok()
-    {
+    if fs::remove_dir_all(dist_info_path).is_ok() {
         meta_folder_removed = true;
     }
-    if fs::remove_dir_all(egg_info_path)
-        .is_ok()
-    {
+    if fs::remove_dir_all(egg_info_path).is_ok() {
         meta_folder_removed = true;
     }
     if !meta_folder_removed {

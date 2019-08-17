@@ -1,18 +1,43 @@
 use crate::util;
 use std::{env, fs, path::PathBuf, process::Command};
+use std::collections::HashMap;
 
 // https://packaging.python.org/tutorials/packaging-projects/
 
+// todo: Test this and entry_points fns.
+fn classifiers_to_string(classifiers: &Vec<String>) -> String {
+    let mut result = "[\n".to_string();
+    for classifier in classifiers.iter() {
+        result.push_str(&format!("\"{}\",\n", classifier));
+    }
+    result.push(']');
+    result
+}
+
+fn entry_pts_to_string(entry_pts: &HashMap<String, Vec<String>>) -> String {
+    let mut result = "{\n".to_string();
+    for (category, val) in entry_pts.iter() {
+        result.push_str(&format!("\"{}\": [\n", category));
+        for v in val.iter() {
+            result.push_str(&format!("\"{}\",", v));
+        }
+        result.push_str("],\n");
+    }
+    result.push('}');
+    result
+}
+
 /// Creates a temporary file which imitates setup.py
 fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
-    let classifiers = ""; // todo temp
-                          // todo add to this
     let version = match cfg.version {
         Some(v) => v.to_string(),
         None => "".into(),
     };
 
     let cfg = cfg.clone();
+
+    let classifiers = classifiers_to_string(&cfg.classifiers);
+    let entry_points = entry_pts_to_string(&cfg.entry_points);
 
     let data = format!(
         r#"import setuptools
@@ -31,7 +56,8 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="{}",
     packages=setuptools.find_packages(),
-    classifiers=[{}],
+    classifiers={},
+    entry_points={},
 )
 "#,
         cfg.readme_filename.unwrap_or_else(|| "README.md".into()),
@@ -42,7 +68,8 @@ setuptools.setup(
         cfg.license.unwrap_or_else(|| "".into()),
         cfg.description.unwrap_or_else(|| "".into()),
         cfg.repo_url.unwrap_or_else(|| "".into()),
-        classifiers,
+        entry_points,
+        entry_points,
     );
 
     fs::write(filename, data).expect("Problem writing dummy setup.py");

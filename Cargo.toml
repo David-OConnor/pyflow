@@ -1,6 +1,6 @@
 [package]
 name = "pypackage"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 description = "A modern Python dependency manager"
 license = "MIT"
@@ -26,3 +26,16 @@ serde = {version = "^1.0.92", features = ["derive"]}
 tar = "^0.4.26"
 toml = "^0.5.1"
 zip = "^0.5.2"
+
+
+[package.metadata.deb]
+section = "Python"
+# Non-MD subsection of readme.
+extended-description = """This tool implements
+PEP 582 -- Python local packages directory.
+It manages dependencies, keeping them isolated in the project directory, and runs
+python in an environment which uses this directory. Per PEP 582, dependencies
+are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
+A virtual environment is created in the same diretory as `lib`, and is used
+transparently."""
+

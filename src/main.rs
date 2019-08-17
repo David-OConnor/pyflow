@@ -130,11 +130,12 @@ pub struct Config {
     features: Option<HashMap<String, Vec<String>>>, // todo
     description: Option<String>,
     classifiers: Vec<String>, // https://pypi.org/classifiers/
-    keywords: Vec<String>,
+    keywords: Vec<String>,  // todo: Options for classifiers and keywords?
     homepage: Option<String>,
     repo_url: Option<String>,
     package_url: Option<String>,
     readme_filename: Option<String>,
+    entry_points: HashMap<String, Vec<String>>,  // todo option?
 }
 
 fn key_re(key: &str) -> Regex {
@@ -527,10 +528,14 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
     py_ver_from_alias
 }
 
-/// Find teh packages installed, by browsing the lib folder.
+/// Find the packages installed, by browsing the lib folder.
 fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
     // todo: More functional?
     let mut package_folders = vec![];
+
+    if !lib_path.exists() {
+        return vec![];
+    }
     for entry in lib_path.read_dir().unwrap() {
         if let Ok(entry) = entry {
             if entry.file_type().unwrap().is_dir() {
@@ -808,6 +813,14 @@ fn main() {
         Some(cfg_v) => {
             // The version's specified in the config. Ensure a virtualenv for this
             // is setup.  // todo: Confirm using --version on the python bin, instead of relying on folder name.
+
+            if !util::venv_exists(&pypackages_dir.join(&format!(
+                "{}.{}/.venv",
+                cfg_v.major,
+                cfg_v.minor.unwrap_or(0)
+            ))) {
+                create_venv(None, &pypackages_dir);
+            }
 
             // Don't include version patch in the directory name, per PEP 582.
             vers_path =

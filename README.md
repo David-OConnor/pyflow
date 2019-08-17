@@ -82,7 +82,8 @@ a project: a readme, pyproject.toml, and directory for source code
 - `pypackage help` Get help, including a list of available commands
 
 ## Why add another Python dependency manager?
-`Pipenv` and `Poetry` both address this problem. Some reasons why this tool is different:
+`Pipenv` and `Poetry` both address this problem. Goal: Fquitaster and less finicky.
+ Some reasons why this tool is different:
 
 - It keeps dependencies in the project directory, in `__pypackages__`, and
 doesn't modify files outside the project directory.
