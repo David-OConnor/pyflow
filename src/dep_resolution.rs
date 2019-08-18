@@ -10,7 +10,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 struct WarehouseInfo {
-    name: String,  // Pulling this ensure proper capitalization
+    name: String, // Pulling this ensure proper capitalization
     requires_dist: Option<Vec<String>>,
     requires_python: Option<String>,
     version: String,
@@ -80,7 +80,6 @@ pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), D
     }
 }
 
-
 /// Get release data from the warehouse, ie the file url, name, and hash.
 pub fn get_warehouse_release(
     name: &str,
@@ -149,8 +148,8 @@ fn get_req_cache_multiple(
         packages2.insert(name.to_owned(), versions);
     }
 
-                let url = "https://pydeps.herokuapp.com/multiple/";
-//    let url = "http://localhost:8000/multiple/";
+    let url = "https://pydeps.herokuapp.com/multiple/";
+    //    let url = "http://localhost:8000/multiple/";
 
     Ok(reqwest::Client::new()
         .post(url)
@@ -283,6 +282,7 @@ fn fetch_req_data(
 fn guess_graph(
     reqs: &[Req],
     installed: &[(String, Version)],
+    os: &crate::Os,
     result: &mut Vec<Dependency>,
     cache: &mut HashMap<(String, Version), Vec<&ReqCache>>,
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
@@ -308,13 +308,22 @@ fn guess_graph(
         .into_iter()
         //        .filter(|r| !reqs_searched.contains(*r))
         .filter(|r| !names_searched.contains(&r.name.to_lowercase()))
-        // todo: Handle extras etc.
+        // todo: Handle extras, py version
         .filter(|r| r.extra == None)
-        //        .filter(|r| r.sys_platform == None)
+        .filter(|r| {
+            match r.sys_platform {
+                Some((rt, os_)) => match rt {
+                    ReqType::Exact => os_ == *os,
+                    ReqType::Ne => os != os,
+                    _ => {
+                        util::abort("Reqtypes for Os must be == or !=");
+                        false // todo satisfy compiler
+                    }
+                },
+                None => true,
+            }
+        })
         //        .filter(|r| r.python_version == None)
-        //        .filter(|r| {
-        //
-        //        })
         .collect();
 
     // todo: Name checks wont' catch imcompat vresion reqs.
@@ -385,6 +394,7 @@ fn guess_graph(
         if let Err(e) = guess_graph(
             &newest_compat.reqs,
             installed,
+            os,
             result,
             cache,
             vers_cache,
@@ -404,6 +414,7 @@ fn guess_graph(
 pub fn resolve(
     reqs: &[Req],
     installed: &[(String, Version)],
+    os: &crate::Os,
 ) -> Result<Vec<(String, Version)>, reqwest::Error> {
     let mut result = Vec::new();
     let mut cache = HashMap::new();
@@ -424,6 +435,7 @@ pub fn resolve(
     guess_graph(
         reqs,
         installed,
+        os,
         &mut result,
         &mut cache,
         &mut version_cache,
@@ -507,14 +519,13 @@ pub fn resolve(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::dep_types::Constraint;
 
     #[test]
     fn warehouse_versions() {
         // Makes API call
         // Assume no new releases since writing this test.
         assert_eq!(
-            get_version_info("scinot").unwrap().1.sort(),
+            get_version_info("scinot").unwrap().2.sort(),
             vec![
                 Version::new(0, 0, 1),
                 Version::new(0, 0, 2),

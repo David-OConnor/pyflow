@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
 
-use regex::Regex;
+use regex::{Captures, Match, Regex};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
@@ -572,13 +572,70 @@ pub fn intersection(
     result
 }
 
+/// For parsing Req from string.
+fn parse_extras(
+    m: Option<Match>,
+) -> (
+    Option<String>,
+    Option<(ReqType, crate::Os)>,
+    Option<Constraint>,
+) {
+    let mut extra = None;
+    let mut sys_platform = None;
+    let mut python_version = None;
+
+    match m {
+        Some(s) => {
+            let extras = s.as_str();
+            // Now that we've extracted extras etc, parse them with a new re.
+            let ex_re = Regex::new(
+                r#"(extra|sys_platform|python_version)\s*(\^|~|==|<=|>=|<|>|!=)\s*['"](.*?)['"]"#,
+            )
+            .unwrap();
+
+            for caps in ex_re.captures_iter(extras) {
+                let type_ = caps.get(1).unwrap().as_str();
+                let req_type = caps.get(2).unwrap().as_str();
+                let val = caps.get(3).unwrap().as_str();
+
+                match type_ {
+                    "extra" => extra = Some(val.to_owned()),
+                    "sys_platform" => {
+                        sys_platform = Some((
+                            ReqType::from_str(req_type)
+                                .expect(&format!("Problem parsing reqtype: {}", req_type)),
+                            crate::Os::from_str(val)
+                                .expect(&format!("Problem parsing Os: {}", val)),
+                        ))
+                    }
+                    "python_version" => {
+                        // If we parse reqtype and version separately, version will be forced
+                        // to take 3 digits, even if not all 3 are specified.
+                        python_version =
+                            Some(Constraint::from_str(&(req_type.to_owned() + val)).expect(
+                                &format!("Problem parsing constraint: {} {}", req_type, val),
+                            ));
+                    }
+                    _ => println!("Found unexpected extra: {}", type_),
+                }
+            }
+        }
+        None => {
+            extra = None;
+            sys_platform = None;
+            python_version = None;
+        }
+    };
+    (extra, sys_platform, python_version)
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Req {
     pub name: String,
     pub constraints: Vec<Constraint>,
-    pub extra: Option<String>,          // todo: Implement
-    pub sys_platform: Option<String>,   // todo
-    pub python_version: Option<String>, // todo
+    pub extra: Option<String>, // todo:
+    pub sys_platform: Option<(ReqType, crate::Os)>,
+    pub python_version: Option<Constraint>,
 }
 
 impl Req {
@@ -621,51 +678,49 @@ impl Req {
             // wildcard, so we don't accidentally match a semicolon here if a
             // set of parens appears later. The non-greedy ? in the version-matching
             // expression's important as well, in some cases of extras.
-            Regex::new(r"^([a-zA-Z\-0-9._]+)\s+\((.*?)\)(?:\s*;\s*(.*))?$").unwrap()
+            //            Regex::new(r"^([a-zA-Z\-0-9._]+)\s+\((.*?)\)(?:\s*;\s*(.*))?$").unwrap();
+            // Whoah!
+            Regex::new(r#"^([a-zA-Z\-0-9._]+)\s+\((.*?)\)(?:(?:\s*;\s*)(.*))?$"#).unwrap()
         } else {
             // eg saturn = ">=0.3.4", as in pyproject.toml
             // todo extras in this format?
             Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
         };
+
+        // todo: Excessive nesting
         if let Some(caps) = re.captures(s) {
             let name = caps.get(1).unwrap().as_str().to_owned();
             let reqs_m = caps.get(2).unwrap();
             let constraints = Constraint::from_str_multiple(reqs_m.as_str())?;
 
-            let extra = match caps.get(3) {
-                Some(s) => Some(s.as_str().to_owned()),
-                None => None,
-            };
+            let (extra, sys_platform, python_version) = parse_extras(caps.get(3));
 
             return Ok(Self {
                 name,
                 constraints,
                 extra,
-                sys_platform: None,
-                python_version: None,
+                sys_platform,
+                python_version,
             });
         };
 
         // Check if no version is specified.
         let novers_re = if pypi_fmt {
-            Regex::new(r"^([a-zA-Z\-0-9._]+)(?:\s*;\s*(.*))?").unwrap()
+            Regex::new(r"^([a-zA-Z\-0-9._]+)(?:(?:\s*;\s*)(.*))?$").unwrap()
         } else {
             // todo extras
             Regex::new(r"^([a-zA-Z\-0-9._]+)$").unwrap()
         };
 
         if let Some(caps) = novers_re.captures(s) {
-            let extra = match caps.get(2) {
-                Some(s) => Some(s.as_str().to_owned()),
-                None => None,
-            };
+            let (extra, sys_platform, python_version) = parse_extras(caps.get(2));
 
             return Ok(Self {
                 name: caps.get(1).unwrap().as_str().to_string(),
                 constraints: vec![],
                 extra,
-                sys_platform: None,
-                python_version: None,
+                sys_platform,
+                python_version,
             });
         }
         Err(DependencyError::new(&format!(
@@ -746,67 +801,6 @@ pub struct Dependency {
     //    pub dependencies: Vec<DepNode>,
     pub extras: Vec<String>,
 }
-
-/// [Ref](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
-//impl DepNode {
-/// eg `saturn>=0.3.1`, or `'stevedore>=1.3.0,<1.4.0'` (Note single quotes
-/// when there are multiple requirements specified.
-//    pub fn _to_pip_string(&self) -> String {
-//        // Note that ^= may not be valid in Pip, but ~= is.
-//        match self.version_reqs.len() {
-//            0 => self.name.to_string(),
-//            1 => format!(
-//                "{}{}",
-//                self.name,
-//                self.version_reqs[0].to_string(false, true),
-//            ),
-//            _ => {
-//                let req_str = self
-//                    .version_reqs
-//                    .iter()
-//                    .map(|r| format!("{} = \"{}\"", r.0, r.1.to_string(false, true)))
-//                    .collect::<Vec<String>>()
-//                    .join(",");
-//
-//                // Note the single quotes here, as required by pip when specifying
-//                // multiple requirements
-//                format!("'{}{}'", self.name, req_str)
-//            }
-//        }
-//    }
-//}
-//
-///// An exact package to install. Meant to be stored in a list vice as a tree node. A bit of a Typed analog of LockPack.
-//#[derive(Clone, Debug)]
-//pub struct Package {
-//    pub name: String,
-//    pub version: Version,
-//    pub deps: Vec<Req>,
-//    pub source: Option<String>,
-//}
-//
-//impl Package {
-//    pub fn to_pip_string(&self) -> String {
-//        format!("{}=={}", self.name, self.version.to_string())
-//    }
-//
-//    pub fn from_lock_pack(lock_pack: &LockPackage) -> Self {
-//        // todo: Return result /propogate parse errors.
-//        Self {
-//            name: lock_pack.name.to_owned(),
-//            version: Version::from_str(&lock_pack.version)
-//                .expect("Problem converting from lock pack version"),
-//            deps: match &lock_pack.dependencies {
-//                Some(deps) => deps
-//                    .iter()
-//                    .map(|d| Req::from_str(d, false).expect("Problem converting Dep from string"))
-//                    .collect(),
-//                None => vec![],
-//            },
-//            source: lock_pack.source.to_owned(),
-//        }
-//    }
-//}
 
 /// Similar to that used by Cargo.lock. Represents an exact package to download. // todo(Although
 /// todo the dependencies field isn't part of that/?)
@@ -1003,15 +997,13 @@ pub mod tests {
     fn parse_req_novers() {
         let actual1 = Req::from_str("saturn", false).unwrap();
         let actual2 = Req::from_str("saturn", true).unwrap();
-        let actual3 = Req::from_str("saturn; extra == 'bcrypt", true).unwrap();
         let expected = Req::new("saturn".into(), vec![]);
         assert_eq!(actual1, expected);
         assert_eq!(actual2, expected);
-        assert_eq!(actual3, expected);
     }
 
     #[test]
-    fn parse_req_pypi_w_extra() {
+    fn parse_req_pypi_w_extras() {
         // tod: Make this handle extras.
         let actual = Req::from_str("pyOpenSSL (>=0.14) ; extra == 'security'", true).unwrap();
         let expected = Req {
@@ -1032,17 +1024,47 @@ pub mod tests {
             true,
         )
         .unwrap();
+
         let expected2 = Req {
             name: "pathlib2".into(),
             constraints: vec![],
             extra: Some("test".into()),
             sys_platform: None,
-            python_version: None,
-            // todo: python == part ?
+            python_version: Some(Constraint {
+                type_: Exact,
+                major: 2,
+                minor: Some(7),
+                patch: None,
+            }),
+        };
+
+        let actual3 = Req::from_str(
+            "win-unicode-console (>=0.5) ; sys_platform == \"win32\" and python_version < \"3.6\"",
+            true,
+        )
+        .unwrap();
+
+        let expected3 = Req {
+            name: "win-unicode-console".into(),
+            constraints: vec![Constraint {
+                type_: Gte,
+                major: 0,
+                minor: Some(5),
+                patch: None,
+            }],
+            extra: None,
+            sys_platform: Some((Exact, crate::Os::Windows32)),
+            python_version: Some(Constraint {
+                type_: Lt,
+                major: 3,
+                minor: Some(6),
+                patch: None,
+            }),
         };
 
         assert_eq!(actual, expected);
         assert_eq!(actual2, expected2);
+        assert_eq!(actual3, expected3);
     }
 
     #[test]

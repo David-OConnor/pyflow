@@ -1,11 +1,17 @@
+use crate::dep_types::Version;
 use crate::util;
-use crate::{dep_types::Version, PackageType};
 use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
 use std::{fs, io, io::BufRead, path::PathBuf, process::Command};
 use tar::Archive;
+
+#[derive(Copy, Clone, Debug)]
+pub enum PackageType {
+    Wheel,
+    Source,
+}
 
 /// Extract the wheel. (It's like a zip)
 fn install_wheel(file: &fs::File, lib_path: &PathBuf) {
@@ -132,7 +138,9 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
 
     let script_path = lib_path.join("../bin");
     if !script_path.exists() {
-        fs::create_dir(&script_path);
+        if fs::create_dir(&script_path).is_err() {
+            util::abort("Problem creating script path")
+        };
     }
 
     for new_script in scripts {
@@ -167,7 +175,7 @@ pub fn download_and_install_package(
     expected_digest: &str,
     lib_path: &PathBuf,
     bin_path: &PathBuf,
-    package_type: crate::PackageType,
+    package_type: PackageType,
 ) -> Result<(), reqwest::Error> {
     let mut resp = reqwest::get(url)?; // Download the file
     let archive_path = lib_path.join(filename);

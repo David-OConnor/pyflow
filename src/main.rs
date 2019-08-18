@@ -1,6 +1,7 @@
-use crate::dep_types::{Constraint, Lock, LockPackage, Req, ReqType, Version};
+use crate::dep_types::{Constraint, DependencyError, Lock, LockPackage, Req, ReqType, Version};
 use crate::util::abort;
 use crossterm::Color;
+use install::PackageType::{Source, Wheel};
 use regex::Regex;
 use serde::Deserialize;
 use std::{
@@ -27,15 +28,9 @@ mod edit_files;
 mod install;
 mod util;
 
-#[derive(Copy, Clone, Debug)]
-pub enum PackageType {
-    Wheel,
-    Source,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
 /// Used to determine which version of a binary package to download. Assume 64-bit.
-enum Os {
+pub enum Os {
     Linux32,
     Linux,
     Windows32,
@@ -43,6 +38,27 @@ enum Os {
     //    Mac32,
     Mac,
     Any,
+}
+
+impl FromStr for Os {
+    type Err = dep_types::DependencyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "manylinux1_i686" => Os::Linux32,
+            "manylinux1_x86_64" => Os::Linux,
+            "win32" => Os::Windows32,
+            "win_amd64" => Os::Windows,
+            "any" => Os::Any,
+            _ => {
+                if s.contains("mac") {
+                    Os::Mac
+                } else {
+                    return Err(DependencyError::new("Problem parsing Os"));
+                }
+            }
+        })
+    }
 }
 
 #[derive(StructOpt, Debug)]
@@ -268,7 +284,7 @@ impl Config {
 }
 
 /// Create a template directory for a python project.
-pub(crate) fn new(name: &str) -> Result<(), Box<Error>> {
+pub(crate) fn new(name: &str) -> Result<(), Box<dyn Error>> {
     if !PathBuf::from(name).exists() {
         fs::create_dir_all(&format!("{}/{}", name, name))?;
         fs::File::create(&format!("{}/{}/main.py", name, name))?;
@@ -411,14 +427,14 @@ fn find_py_alias() -> Result<(String, Version), AliasError> {
 }
 
 /// Read dependency data from a lock file.
-fn read_lock(filename: &str) -> Result<(Lock), Box<Error>> {
+fn read_lock(filename: &str) -> Result<(Lock), Box<dyn Error>> {
     let data = fs::read_to_string(filename)?;
     //    let t: Lock = toml::from_str(&data).unwrap();
     Ok(toml::from_str(&data)?)
 }
 
 /// Write dependency data to a lock file.
-fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<Error>> {
+fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<dyn Error>> {
     let data = toml::to_string(data)?;
     fs::write(filename, data)?;
     Ok(())
@@ -434,23 +450,7 @@ fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyErro
     let re = Regex::new(r"^(?:.*?-)+(.*).whl$").unwrap();
     if let Some(caps) = re.captures(filename) {
         let parsed = caps.get(1).unwrap().as_str();
-
-        let result = match parsed {
-            "manylinux1_i686" => Os::Linux32,
-            "manylinux1_x86_64" => Os::Linux,
-            "win32" => Os::Windows32,
-            "win_amd64" => Os::Windows,
-            "any" => Os::Any,
-            _ => {
-                if parsed.contains("mac") {
-                    Os::Mac
-                } else {
-                    abort(&format!("Unknown OS type in wheel filename: {}", parsed));
-                    Os::Linux // todo dummy for match
-                }
-            }
-        };
-        return Ok(result);
+        return Ok(Os::from_str(parsed).expect("Problem parsing Os"));
     }
 
     Err(dep_types::DependencyError::new(
@@ -598,7 +598,7 @@ fn sync_deps(
 
     println!("REQS: {:?}", &reqs);
 
-    let resolved = match dep_resolution::resolve(reqs, installed) {
+    let resolved = match dep_resolution::resolve(reqs, installed, &os) {
         //    let resolved = match dep_resolution::resolve(&mut tree) {
         Ok(r) => r,
         Err(_) => {
@@ -691,14 +691,14 @@ fn sync_deps(
                     version.to_string()
                 ));
                 best_release = &compatible_releases[0]; // todo temp
-                package_type = PackageType::Wheel // todo temp to satisfy match
+                package_type = Wheel // todo temp to satisfy match
             } else {
                 best_release = &source_releases[0];
-                package_type = PackageType::Source;
+                package_type = Source;
             }
         } else {
             best_release = &compatible_releases[0];
-            package_type = PackageType::Wheel;
+            package_type = Wheel;
         }
 
         println!(
@@ -922,8 +922,9 @@ py_version = \"3.7\"",
             // version.
             for added_req in added_reqs_unique.iter_mut() {
                 if added_req.constraints.is_empty() {
-                    let (formatted_name, vers, _) = dep_resolution::get_version_info(&added_req.name)
-                        .expect("Problem getting latest version of the package you added.");
+                    let (formatted_name, vers, _) =
+                        dep_resolution::get_version_info(&added_req.name)
+                            .expect("Problem getting latest version of the package you added.");
                     added_req.constraints.push(Constraint::new(
                         ReqType::Caret,
                         vers.major,

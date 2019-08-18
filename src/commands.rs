@@ -58,7 +58,7 @@ pub(crate) fn create_venv(
     py_alias: &str,
     lib_path: &PathBuf,
     name: &str,
-) -> Result<(), Box<Error>> {
+) -> Result<(), Box<dyn Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
     Command::new(py_alias)
         .args(&["-m", "venv", name])
@@ -109,7 +109,7 @@ pub(crate) fn run_python(
     bin_path: &PathBuf,
     lib_path: &PathBuf,
     args: &[String],
-) -> Result<(), Box<Error>> {
+) -> Result<(), Box<dyn Error>> {
     util::set_pythonpath(lib_path);
 
     // Run this way instead of setting current_dir, so we can load files from the right place.
