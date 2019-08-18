@@ -35,9 +35,10 @@ pub enum Os {
     Linux,
     Windows32,
     Windows,
-    //    Mac32,
+//    Mac32,
     Mac,
     Any,
+    Darwin,
 }
 
 impl FromStr for Os {
@@ -49,6 +50,7 @@ impl FromStr for Os {
             "manylinux1_x86_64" => Os::Linux,
             "win32" => Os::Windows32,
             "win_amd64" => Os::Windows,
+            "darwin" => Os::Darwin,  // todo: Process to mac?
             "any" => Os::Any,
             _ => {
                 if s.contains("mac") {
@@ -450,7 +452,9 @@ fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyErro
     let re = Regex::new(r"^(?:.*?-)+(.*).whl$").unwrap();
     if let Some(caps) = re.captures(filename) {
         let parsed = caps.get(1).unwrap().as_str();
-        return Ok(Os::from_str(parsed).expect("Problem parsing Os"));
+        return Ok(
+            Os::from_str(parsed).expect(&format!("Problem parsing Os: {}", parsed))
+        );
     }
 
     Err(dep_types::DependencyError::new(
@@ -597,8 +601,9 @@ fn sync_deps(
     //    };
 
     println!("REQS: {:?}", &reqs);
+    let extras = vec![];
 
-    let resolved = match dep_resolution::resolve(reqs, installed, &os) {
+    let resolved = match dep_resolution::resolve(reqs, installed, &os, &extras, python_vers) {
         //    let resolved = match dep_resolution::resolve(&mut tree) {
         Ok(r) => r,
         Err(_) => {

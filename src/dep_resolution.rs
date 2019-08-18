@@ -283,6 +283,8 @@ fn guess_graph(
     reqs: &[Req],
     installed: &[(String, Version)],
     os: &crate::Os,
+    extras: &[String],
+    py_vers: &Version,
     result: &mut Vec<Dependency>,
     cache: &mut HashMap<(String, Version), Vec<&ReqCache>>,
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
@@ -308,8 +310,12 @@ fn guess_graph(
         .into_iter()
         //        .filter(|r| !reqs_searched.contains(*r))
         .filter(|r| !names_searched.contains(&r.name.to_lowercase()))
-        // todo: Handle extras, py version
-        .filter(|r| r.extra == None)
+        .filter(|r| {
+            match &r.extra {
+                Some(ex) => extras.contains(&ex),
+                None => true,
+            }
+        })
         .filter(|r| {
             match r.sys_platform {
                 Some((rt, os_)) => match rt {
@@ -323,7 +329,12 @@ fn guess_graph(
                 None => true,
             }
         })
-        //        .filter(|r| r.python_version == None)
+        .filter(|r| {
+            match &r.python_version {
+                Some(v) => v.is_compatible(py_vers),
+                None => true,
+            }
+        })
         .collect();
 
     // todo: Name checks wont' catch imcompat vresion reqs.
@@ -395,6 +406,8 @@ fn guess_graph(
             &newest_compat.reqs,
             installed,
             os,
+            extras,
+            py_vers,
             result,
             cache,
             vers_cache,
@@ -415,6 +428,8 @@ pub fn resolve(
     reqs: &[Req],
     installed: &[(String, Version)],
     os: &crate::Os,
+    extras: &[String],
+    py_vers: &Version,
 ) -> Result<Vec<(String, Version)>, reqwest::Error> {
     let mut result = Vec::new();
     let mut cache = HashMap::new();
@@ -436,6 +451,8 @@ pub fn resolve(
         reqs,
         installed,
         os,
+        extras,
+        py_vers,
         &mut result,
         &mut cache,
         &mut version_cache,
