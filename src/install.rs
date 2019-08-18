@@ -95,7 +95,7 @@ if __name__ == '__main__':
         module, func, func
     );
 
-    fs::write(path, contents).expect(&format!("Problem creating script file for {}", name));
+    fs::write(path, contents).expect(&format!("Problem creating CLI script file for {}", name));
 }
 
 /// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.

@@ -1,5 +1,6 @@
 use crate::dep_types::Version;
 use crossterm::{Color, Colored};
+use regex::Regex;
 use std::str::FromStr;
 use std::{env, path::PathBuf, process, thread, time};
 
@@ -108,4 +109,78 @@ pub fn set_pythonpath(lib_path: &PathBuf) {
             .to_str()
             .expect("Problem converting current path to string"),
     );
+}
+
+/// List all installed dependencies and console scripts, by examining the `libs` and `bin` folders.
+pub fn show_installed(lib_path: &PathBuf) {
+    let installed = find_installed(lib_path);
+    let scripts = find_console_scripts(&lib_path.join("../bin"));
+
+    print_color("The following packages are installed:", Color::DarkBlue);
+    for (name, version) in installed {
+        //        print_color(&format!("{} == \"{}\"", name, version.to_string()), Color::Magenta);
+        println!("{}{}{} == \"{}\"", Colored::Fg(Color::Cyan), name, Colored::Fg(Color::Reset), version);
+    }
+
+    print_color(
+        "\nThe following console scripts are installed:",
+        Color::DarkBlue,
+    );
+    for script in scripts {
+        print_color(&script, Color::Cyan);
+    }
+}
+
+/// Find the packages installed, by browsing the lib folder.
+pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
+    let mut package_folders = vec![];
+
+    if !lib_path.exists() {
+        return vec![];
+    }
+    for entry in lib_path.read_dir().unwrap() {
+        if let Ok(entry) = entry {
+            if entry.file_type().unwrap().is_dir() {
+                package_folders.push(entry.file_name())
+            }
+        }
+    }
+
+    let mut result = vec![];
+
+    for folder in package_folders.iter() {
+        let folder_name = folder.to_str().unwrap();
+        let re = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
+        let re_egg = Regex::new(r"^(.*?)-(.*?)\.egg-info$").unwrap();
+
+        if let Some(caps) = re.captures(&folder_name) {
+            let name = caps.get(1).unwrap().as_str();
+            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
+            result.push((name.to_owned(), vers));
+
+        // todo dry
+        } else if let Some(caps) = re_egg.captures(&folder_name) {
+            let name = caps.get(1).unwrap().as_str();
+            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
+            result.push((name.to_owned(), vers));
+        }
+    }
+    result
+}
+
+/// Find console scripts installed, by browsing the (custom) bin folder
+pub fn find_console_scripts(bin_path: &PathBuf) -> Vec<String> {
+    let mut result = vec![];
+    if !bin_path.exists() {
+        return vec![];
+    }
+
+    for entry in bin_path.read_dir().unwrap() {
+        if let Ok(entry) = entry {
+            if entry.file_type().unwrap().is_file() {
+                result.push(entry.file_name().to_str().unwrap().to_owned())
+            }
+        }
+    }
+    result
 }

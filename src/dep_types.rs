@@ -1,8 +1,8 @@
+use crossterm::{Color, Colored};
+use regex::{Match, Regex};
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
-
-use regex::{Captures, Match, Regex};
-use serde::{Deserialize, Serialize};
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 
@@ -108,6 +108,11 @@ impl Version {
             s
         )))
     }
+
+    /// unlike Display, which overwrites to_string, don't add colors.
+    pub fn to_string2(&self) -> String {
+        format!("{}.{}.{}", self.major, self.minor, self.patch)
+    }
 }
 
 impl FromStr for Version {
@@ -169,9 +174,23 @@ impl PartialOrd for Version {
     }
 }
 
-impl ToString for Version {
-    fn to_string(&self) -> String {
-        format!("{}.{}.{}", self.major, self.minor, self.patch)
+//impl ToString for Version {
+//    fn to_string(&self) -> String {
+//        format!("{}.{}.{}", self.major, self.minor, self.patch)
+//    }
+//}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let num_c = Colored::Fg(Color::Blue);
+        let dot_c = Colored::Fg(Color::DarkYellow);
+        let r = Colored::Fg(Color::Reset);
+
+        write!(
+            f,
+            "({}{}{}.{}{}{}.{}{}{})",
+            num_c, self.major, dot_c, num_c, self.minor, dot_c, num_c, self.patch, r
+        )
     }
 }
 
@@ -454,12 +473,7 @@ impl Constraint {
                 } else {
                     max = Version::new(0, 0, self_version.patch + 2);
                 }
-                //                println!(
-                //                    "MIN: {}, vers: {} Max: {}",
-                //                    &min.to_string(),
-                //                    &version.to_string(),
-                //                    &max.to_string()
-                //                );
+
                 min <= *version && *version < max
             }
             // For tilde, if minor's specified, can only increment patch.
@@ -822,30 +836,6 @@ pub struct Lock {
     pub package: Option<Vec<LockPackage>>,
     pub metadata: Option<Vec<String>>, // ie checksums
 }
-
-//impl Lock {
-//    // todo delete this?
-//    fn add_packages(&mut self, packages: &[Package]) {
-//        // todo: Write tests for this.
-//
-//        for package in packages {
-//            // Use the actual version installed, not the requirement!
-//            // todo: reconsider your package etc structs
-//            // todo: Perhaps impl to_lockpack etc from Package.
-//            let lock_package = LockPackage {
-//                name: package.name.to_owned(),
-//                version: package.version.to_string(),
-//                source: package.source.clone(),
-//                dependencies: None,
-//            };
-//
-//            match &mut self.package {
-//                Some(p) => p.push(lock_package),
-//                None => self.package = Some(vec![lock_package]),
-//            }
-//        }
-//    }
-//}
 
 #[cfg(test)]
 pub mod tests {

@@ -88,7 +88,7 @@ pub fn get_warehouse_release(
     let data = get_warehouse_data(name)?;
 
     // If there are 0s in the version, and unable to find one, try 1 and 2 digit versions on Pypi.
-    let mut release_data = data.releases.get(&version.to_string());
+    let mut release_data = data.releases.get(&version.to_string2());
     if release_data.is_none() && version.patch == 0 {
         release_data = data.releases.get(&version.to_string_med());
         if release_data.is_none() && version.minor == 0 {
@@ -144,7 +144,7 @@ fn get_req_cache_multiple(
     // parse strings here.
     let mut packages2 = HashMap::new();
     for (name, versions) in packages.into_iter() {
-        let versions = versions.iter().map(|v| v.to_string()).collect();
+        let versions = versions.iter().map(|v| v.to_string2()).collect();
         packages2.insert(name.to_owned(), versions);
     }
 
@@ -267,8 +267,8 @@ fn fetch_req_data(
             "name: {} {:?}, query rng: {}-{}",
             req.name,
             req.constraints,
-            min_v_to_query.to_string(),
-            max_v_to_query.to_string()
+            min_v_to_query.to_string2(),
+            max_v_to_query.to_string2()
         );
         query_data.insert(req.name.to_owned(), versions_in_rng);
     }
@@ -310,17 +310,15 @@ fn guess_graph(
         .into_iter()
         //        .filter(|r| !reqs_searched.contains(*r))
         .filter(|r| !names_searched.contains(&r.name.to_lowercase()))
-        .filter(|r| {
-            match &r.extra {
-                Some(ex) => extras.contains(&ex),
-                None => true,
-            }
+        .filter(|r| match &r.extra {
+            Some(ex) => extras.contains(&ex),
+            None => true,
         })
         .filter(|r| {
             match r.sys_platform {
                 Some((rt, os_)) => match rt {
                     ReqType::Exact => os_ == *os,
-                    ReqType::Ne => os != os,
+                    ReqType::Ne => os_ != *os,
                     _ => {
                         util::abort("Reqtypes for Os must be == or !=");
                         false // todo satisfy compiler
@@ -329,11 +327,9 @@ fn guess_graph(
                 None => true,
             }
         })
-        .filter(|r| {
-            match &r.python_version {
-                Some(v) => v.is_compatible(py_vers),
-                None => true,
-            }
+        .filter(|r| match &r.python_version {
+            Some(v) => v.is_compatible(py_vers),
+            None => true,
         })
         .collect();
 
@@ -342,11 +338,6 @@ fn guess_graph(
         //        reqs_searched.push(req.clone());
         names_searched.push(req.name.clone().to_lowercase());
     }
-
-    //    println!("SEARCHED: {:#?}", &reqs_searched.iter().map(|r| r.name.clone()).collect::<Vec<String>>().join(", "));
-    let mut dbg = names_searched.clone();
-    dbg.sort();
-    println!("SEARCHED: {:?}", &dbg);
 
     // Single http call here for all this package's reqs.
     let query_data = match fetch_req_data(&reqs, vers_cache) {

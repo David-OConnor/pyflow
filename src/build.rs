@@ -82,7 +82,12 @@ setuptools.setup(
     };
 }
 
-pub(crate) fn build(bin_path: &PathBuf, lib_path: &PathBuf, cfg: &crate::Config) {
+pub(crate) fn build(
+    bin_path: &PathBuf,
+    lib_path: &PathBuf,
+    cfg: &crate::Config,
+    extras: Vec<String>,
+) {
     // todo: Check if they exist; only install if they don't.
     let dummy_setup_fname = "setup_temp_pypackage.py";
 

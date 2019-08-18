@@ -46,7 +46,17 @@ diffeqpy = "1.1.0"
 ```
 The `[tool.pypackage]` section is used for metadata, and isn't required unless
 building and distributing a package. The `[tool.pypyackage.dependencies]` section
-contains all dependencies, and is an analog to `requirements.txt`. For details on 
+contains all dependencies, and is an analog to `requirements.txt`. 
+
+You can specify `extra` dependencies, which will only be installed when passing
+explicit flags to `pyproject package` like this:
+```toml
+[tool.pypackage.extras]
+test = ["pytest", "nose"]
+secure = ["crypto"]
+```
+
+For details on 
 how to specify dependencies in this `Cargo.toml`-inspired 
 [semvar](https://semver.org) format,
  reference
@@ -62,19 +72,20 @@ and will be added to `pyproject.toml`.
 - `pypackage install numpy==1.16.4 matplotlib>=3.1.` - Example with multiple dependencies, and specified versions
 - `pypackage uninstall toolz` - Remove a dependency
 
-
 ### Running REPL and Python files in the environment:
 - `pypackage python` - Run a Python REPL
 - `pypackage python main.py` - Run a python file
 - `pypackage ipython`, `pypackage black` etc - Run a CLI script like `ipython`. 
 
-
 ### Building and publishing:
 - `pypackage package` - Package for distribution (uses setuptools internally, and 
 builds both source and wheel if applicable.)
+- `pypackage package --features "test all"` - Package for distribution with features enabled, 
+as defined in `pyproject.toml`
 - `pypackage publish` - Upload to PyPi (Repo specified in `pyproject.toml`. Uses `Twine` internally.)
 
 ### Misc:
+- `pypackage list` - Display all installed packages and console scripts
 - `pypackage new projname` - Create a directory containing the basics for
 - `pypackage init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
 `requirements.text`, `Pipfile` etc as required.
@@ -82,8 +93,9 @@ a project: a readme, pyproject.toml, and directory for source code
 - `pypackage -V` - Get the current version of this tool
 - `pypackage help` Get help, including a list of available commands
 
+
 ## Why add another Python dependency manager?
-`Pipenv` and `Poetry` both address this problem. Goal: Fquitaster and less finicky.
+`Pipenv` and `Poetry` both address this problem. Goal: Faster and less finicky.
  Some reasons why this tool is different:
 
 - It keeps dependencies in the project directory, in `__pypackages__`, and
@@ -180,7 +192,6 @@ traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`
 
 ## Not-yet-implemented
 
-- Installing extra dependencies for features
 - Installing from sources other than `pypi` (eg repos)
 - The lock file is missing some info like dependencies and hashes.
 - Windows installer and Mac binaries.

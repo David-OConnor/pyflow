@@ -16,8 +16,6 @@ use std::{
     thread, time,
 };
 
-// todo:
-
 use structopt::StructOpt;
 
 mod build;
@@ -35,10 +33,9 @@ pub enum Os {
     Linux,
     Windows32,
     Windows,
-//    Mac32,
+    //    Mac32,
     Mac,
     Any,
-    Darwin,
 }
 
 impl FromStr for Os {
@@ -50,7 +47,7 @@ impl FromStr for Os {
             "manylinux1_x86_64" => Os::Linux,
             "win32" => Os::Windows32,
             "win_amd64" => Os::Windows,
-            "darwin" => Os::Darwin,  // todo: Process to mac?
+            "darwin" => Os::Mac,
             "any" => Os::Any,
             _ => {
                 if s.contains("mac") {
@@ -65,6 +62,7 @@ impl FromStr for Os {
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "Pypackage", about = "Python packaging and publishing")]
+//#[structopt(raw(setting = "structopt::clap::AppSettings:::AllowExternalSubcommands"))]
 struct Opt {
     #[structopt(subcommand)]
     subcmds: Option<SubCommand>,
@@ -118,9 +116,15 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
         #[structopt(name = "args")]
         args: Vec<String>,
     },
+    /// Display all installed packages and console scripts
+    #[structopt(name = "list")]
+    List,
     /// Build the package - source and wheel
     #[structopt(name = "package")]
-    Package,
+    Package {
+        #[structopt(name = "extras")]
+        extras: Vec<String>, // todo: rename features?
+    },
     /// Publish to `pypi`
     #[structopt(name = "publish")]
     Publish,
@@ -146,7 +150,7 @@ pub struct Config {
     author: Option<String>,
     author_email: Option<String>,
     license: Option<String>,
-    features: Option<HashMap<String, Vec<String>>>, // todo
+    extras: Option<HashMap<String, Vec<String>>>, // todo
     description: Option<String>,
     classifiers: Vec<String>, // https://pypi.org/classifiers/
     keywords: Vec<String>,    // todo: Options for classifiers and keywords?
@@ -279,7 +283,7 @@ impl Config {
         }
 
         match fs::write(file, result) {
-            Ok(_) => println!("Created `pyproject.toml`"),
+            Ok(_) => util::print_color("Created `pyproject.toml`", Color::Green),
             Err(_) => abort("Problem writing `pyproject.toml`"),
         }
     }
@@ -452,9 +456,7 @@ fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyErro
     let re = Regex::new(r"^(?:.*?-)+(.*).whl$").unwrap();
     if let Some(caps) = re.captures(filename) {
         let parsed = caps.get(1).unwrap().as_str();
-        return Ok(
-            Os::from_str(parsed).expect(&format!("Problem parsing Os: {}", parsed))
-        );
+        return Ok(Os::from_str(parsed).expect(&format!("Problem parsing Os: {}", parsed)));
     }
 
     Err(dep_types::DependencyError::new(
@@ -531,44 +533,6 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
         .expect("Problem installing `wheel`");
 
     py_ver_from_alias
-}
-
-/// Find the packages installed, by browsing the lib folder.
-fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
-    // todo: More functional?
-    let mut package_folders = vec![];
-
-    if !lib_path.exists() {
-        return vec![];
-    }
-    for entry in lib_path.read_dir().unwrap() {
-        if let Ok(entry) = entry {
-            if entry.file_type().unwrap().is_dir() {
-                package_folders.push(entry.file_name())
-            }
-        }
-    }
-
-    let mut result = vec![];
-
-    for folder in package_folders.iter() {
-        let folder_name = folder.to_str().unwrap();
-        let re = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
-        let re_egg = Regex::new(r"^(.*?)-(.*?)\.egg-info$").unwrap();
-
-        if let Some(caps) = re.captures(&folder_name) {
-            let name = caps.get(1).unwrap().as_str();
-            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
-            result.push((name.to_owned(), vers));
-
-        // todo dry
-        } else if let Some(caps) = re_egg.captures(&folder_name) {
-            let name = caps.get(1).unwrap().as_str();
-            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
-            result.push((name.to_owned(), vers));
-        }
-    }
-    result
 }
 
 /// Install/uninstall deps as required from the passed list, and re-write the lock file.
@@ -790,7 +754,10 @@ fn main() {
     match subcmd {
         SubCommand::New { name } => {
             new(&name).expect("Problem creating project");
-            println!("Created a new Python project named {}", name);
+            util::print_color(
+                &format!("Created a new Python project named {}", name),
+                Color::Green,
+            );
             return;
         }
         SubCommand::Init {} => {
@@ -963,7 +930,7 @@ py_version = \"3.7\"",
 
             merged_reqs.append(&mut added_reqs_unique);
 
-            let installed = find_installed(&lib_path);
+            let installed = util::find_installed(&lib_path);
 
             // todo excessive nesting
             // If able, tie reqs to a specific version specified in the lock.
@@ -985,7 +952,7 @@ py_version = \"3.7\"",
                                 println!(
                                     "Locking constraint: {} → {}",
                                     &req.to_cfg_string(),
-                                    lock_vers.to_string()
+                                    lock_vers
                                 );
                                 req.constraints = vec![Constraint::new(
                                     dep_types::ReqType::Exact,
@@ -1024,7 +991,7 @@ py_version = \"3.7\"",
                 .filter(|req| !removed_reqs.contains(&req.name))
                 .collect();
 
-            let installed = find_installed(&lib_path);
+            let installed = util::find_installed(&lib_path);
             sync_deps(
                 lock_filename,
                 &bin_path,
@@ -1041,7 +1008,7 @@ py_version = \"3.7\"",
                 abort("Problem running Python");
             }
         }
-        SubCommand::Package {} => build::build(&bin_path, &lib_path, &cfg),
+        SubCommand::Package { extras } => build::build(&bin_path, &lib_path, &cfg, extras),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
         SubCommand::Reset {} => {
             if fs::remove_dir_all(&pypackages_dir).is_err() {
@@ -1084,7 +1051,7 @@ py_version = \"3.7\"",
                 return;
             }
         }
-
+        SubCommand::List {} => util::show_installed(&lib_path),
         // We already handled init and new
         SubCommand::Init {} => (),
         SubCommand::New { name: _ } => (),
