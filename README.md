@@ -14,7 +14,7 @@ Python ≥ 3.4 is required.
 
 
 ## Installation
-There are 2 main ways to install:
+There are 2 ways to install:
 - Download a binary from the [releases](https://github.com/David-OConnor/pypackage/releases)
  page. On Debian or Ubuntu, download and run
 [This deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.1/pypackage_0.0.1_amd64.deb). 
@@ -26,6 +26,11 @@ or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 - If you have `Rust` installed, the most convenient way is to 
 run `cargo install pypackage`.
 
+## Quickstart
+- Run `pypackage init` in an existing project folder, or `pypackage new projname` 
+to create a new project folder.
+- Run `pypackage install` to install dependencies
+- Run `pypackage python` to run python
 
 ## Use
 - Create a `pyproject.toml` file in your project directory. See
@@ -63,14 +68,14 @@ how to specify dependencies in this `Cargo.toml`-inspired
 [this guide](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html).
 
 
-## Example use
+## What you can do
 
 ### Managing dependencies:
 - `pypackage install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified
-- `pypackage install toolz` - If you specify one or more packages after `install`, only those packages will be installed, 
-and will be added to `pyproject.toml`.
+- `pypackage install toolz` - If you specify one or more packages after `install`, those packages will 
+be added to `pyproject.toml` and installed.
 - `pypackage install numpy==1.16.4 matplotlib>=3.1.` - Example with multiple dependencies, and specified versions
-- `pypackage uninstall toolz` - Remove a dependency
+- `pypackage uninstall toolz` - Remove one or more dependencies
 
 ### Running REPL and Python files in the environment:
 - `pypackage python` - Run a Python REPL

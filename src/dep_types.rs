@@ -188,7 +188,7 @@ impl fmt::Display for Version {
 
         write!(
             f,
-            "({}{}{}.{}{}{}.{}{}{})",
+            "{}{}{}.{}{}{}.{}{}{}",
             num_c, self.major, dot_c, num_c, self.minor, dot_c, num_c, self.patch, r
         )
     }

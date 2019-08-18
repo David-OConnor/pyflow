@@ -119,7 +119,7 @@ pub fn show_installed(lib_path: &PathBuf) {
     print_color("The following packages are installed:", Color::DarkBlue);
     for (name, version) in installed {
         //        print_color(&format!("{} == \"{}\"", name, version.to_string()), Color::Magenta);
-        println!("{}{}{} == \"{}\"", Colored::Fg(Color::Cyan), name, Colored::Fg(Color::Reset), version);
+        println!("{}{}{} == {}", Colored::Fg(Color::Cyan), name, Colored::Fg(Color::Reset), version);
     }
 
     print_color(
