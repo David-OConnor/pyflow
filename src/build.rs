@@ -4,24 +4,21 @@ use std::{env, fs, path::PathBuf, process::Command};
 
 // https://packaging.python.org/tutorials/packaging-projects/
 
-// todo: Test this and entry_points fns.
-fn classifiers_to_string(classifiers: &Vec<String>) -> String {
+/// Serialize to a python list of strings.
+fn serialize_py_list(items: &Vec<String>) -> String {
     let mut result = "[\n".to_string();
-    for classifier in classifiers.iter() {
-        result.push_str(&format!("\"{}\",\n", classifier));
+    for item in items.iter() {
+        result.push_str(&format!("    \"{}\",\n", item));
     }
     result.push(']');
     result
 }
 
-fn entry_pts_to_string(entry_pts: &HashMap<String, Vec<String>>) -> String {
+/// Serialize to a Python dics of lists of strings.
+fn serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
     let mut result = "{\n".to_string();
-    for (category, val) in entry_pts.iter() {
-        result.push_str(&format!("\"{}\": [\n", category));
-        for v in val.iter() {
-            result.push_str(&format!("\"{}\",", v));
-        }
-        result.push_str("],\n");
+    for (key, val) in hm.iter() {
+        result.push_str(&format!("    \"{}\": {}\n", key, serialize_py_list(val)));
     }
     result.push('}');
     result
@@ -33,11 +30,7 @@ fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
         Some(v) => v.to_string(),
         None => "".into(),
     };
-
     let cfg = cfg.clone();
-
-    let classifiers = classifiers_to_string(&cfg.classifiers);
-    let entry_points = entry_pts_to_string(&cfg.entry_points);
 
     let data = format!(
         r#"import setuptools
@@ -58,6 +51,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     classifiers={},
     entry_points={},
+    extras_require={},
 )
 "#,
         cfg.readme_filename.unwrap_or_else(|| "README.md".into()),
@@ -68,8 +62,12 @@ setuptools.setup(
         cfg.license.unwrap_or_else(|| "".into()),
         cfg.description.unwrap_or_else(|| "".into()),
         cfg.repo_url.unwrap_or_else(|| "".into()),
-        classifiers,
-        entry_points,
+        serialize_py_list(&cfg.classifiers),
+        serialize_py_dict(&cfg.entry_points),
+        match cfg.extras {
+            Some(e) => serialize_py_dict(&e),
+            None => "".into(),
+        }
     );
 
     fs::write(filename, data).expect("Problem writing dummy setup.py");
@@ -133,4 +131,45 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
         ])
         .status()
         .expect("Problem publishing");
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    fn py_list() {
+        let expected = r#"[
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]"#;
+
+        let actual = serialize_py_list(&vec![
+            "Programming Language :: Python :: 3".into(),
+            "License :: OSI Approved :: MIT License".into(),
+            "Operating System :: OS Independent".into(),
+        ]);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn py_dict() {
+        let expected = r#"{
+    "PDF": [
+        "ReportLab>=1.2",
+        "RXP"
+    ],
+    "reST": [
+        "docutils>=0.3"
+    ],
+    }"#;
+
+        let mut data = HashMap::new();
+        data.insert("PDF".into(), vec!["ReportLab>=1.2".into(), "RXP".into()]);
+        data.insert("reST".into(), vec!["docutils>=0.3".into()]);
+
+        assert_eq!(expected, serialize_py_dict(&data));
+    }
 }

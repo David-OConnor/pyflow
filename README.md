@@ -1,7 +1,5 @@
 # Py Packages
 
-*Early release - missing features, and will not work for some dependencies*
-
 This tool implements
 [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/). 
 It manages dependencies, keeping them isolated in the project directory, and runs
@@ -33,7 +31,8 @@ to create a new project folder.
 - Run `pypackage python` to run python
 
 ## Use
-- Create a `pyproject.toml` file in your project directory. See
+- Create a `pyproject.toml` file in your project directory. If you can
+ `init` or `new`, this will already exist. See
 [PEP 518](https://www.python.org/dev/peps/pep-0518/) for details.
 
 Example contents:
@@ -54,7 +53,9 @@ building and distributing a package. The `[tool.pypyackage.dependencies]` sectio
 contains all dependencies, and is an analog to `requirements.txt`. 
 
 You can specify `extra` dependencies, which will only be installed when passing
-explicit flags to `pyproject package` like this:
+explicit flags to `pyproject install`. When built with the `package` command, 
+these are included in `setup.py`, so packages requing this one can install them with 
+`pip install -e` etc.
 ```toml
 [tool.pypackage.extras]
 test = ["pytest", "nose"]

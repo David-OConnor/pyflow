@@ -71,16 +71,6 @@ struct Opt {
     script: Vec<String>,
 }
 
-///// eg `ipython`, `black` etc.
-//#[derive(StructOpt, Debug)]
-//struct CustomBin {
-//    test: bool,
-////    #[structopt(name = "name")]
-////    name: String,
-////    #[structopt(name = "args")]
-////    args: Vec<String>,
-//}
-
 #[derive(StructOpt, Debug)]
 enum SubCommand {
     /// Create a project folder with the basics
@@ -134,14 +124,18 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     /// Remove the environment, and uninstall all packages
     #[structopt(name = "reset")]
     Reset,
-    /// (Placeholder)
-    #[structopt(name = "script")] // todo: Do we want this?
-    Script,
+    /// Run a CLI script like `ipython` or `black`. Note that you can simply run `pypackage black`
+    /// as a shortcut.
+    #[structopt(name = "run")] // We don't need to invoke this directly, but the option exists
+    Run {
+        #[structopt(name = "args")]
+        args: Vec<String>,
+    },
 }
 
 /// A config, parsed from pyproject.toml
 #[derive(Clone, Debug, Default, Deserialize)]
-// todo: Auto-desr some of these!
+// todo: Auto-desr some of these
 pub struct Config {
     py_version: Option<Constraint>,
     reqs: Vec<Req>, // name, requirements.
@@ -150,7 +144,7 @@ pub struct Config {
     author: Option<String>,
     author_email: Option<String>,
     license: Option<String>,
-    extras: Option<HashMap<String, Vec<String>>>, // todo
+    extras: Option<HashMap<String, Vec<String>>>,
     description: Option<String>,
     classifiers: Vec<String>, // https://pypi.org/classifiers/
     keywords: Vec<String>,    // todo: Options for classifiers and keywords?
@@ -175,9 +169,9 @@ impl Config {
             Err(_) => return None,
         };
 
-        let mut in_sect = false;
+        let mut in_metadata = false;
         let mut in_dep = false;
-        let mut in_features = false;
+        let mut in_extras = false;
 
         let sect_re = Regex::new(r"\[.*\]").unwrap();
 
@@ -190,28 +184,28 @@ impl Config {
                 }
 
                 if &l == "[tool.pypackage]" {
-                    in_sect = true;
+                    in_metadata = true;
                     in_dep = false;
-                    in_features = false;
+                    in_extras = false;
                     continue;
                 } else if &l == "[tool.pypackage.dependencies]" {
-                    in_sect = false;
+                    in_metadata = false;
                     in_dep = true;
-                    in_features = false;
+                    in_extras = false;
                     continue;
                 } else if &l == "[tool.pypackage.features]" {
-                    in_sect = false;
+                    in_metadata = false;
                     in_dep = false;
-                    in_features = true;
+                    in_extras = true;
                     continue;
                 } else if sect_re.is_match(&l) {
-                    in_sect = false;
+                    in_metadata = false;
                     in_dep = false;
-                    in_features = false;
+                    in_extras = false;
                     continue;
                 }
 
-                if in_sect {
+                if in_metadata {
                     // todo DRY
                     if let Some(n2) = key_re("name").captures(&l) {
                         if let Some(n) = n2.get(1) {
@@ -745,7 +739,7 @@ fn main() {
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
-        None => SubCommand::Script,
+        None => SubCommand::Run { args: opt.script },
     };
 
     // New doesn't execute any other logic. Init must execute befor the rest of the logic,
@@ -1017,8 +1011,8 @@ py_version = \"3.7\"",
             util::print_color("Reset complete", Color::Green);
         }
 
-        SubCommand::Script {} => {
-            let args = opt.script;
+        SubCommand::Run { args } => {
+            // Allow both `pypackage run ipython` (args), and `pypackage ipython` (opt.script)
             if !args.is_empty() {
                 // todo better handling, eg abort
                 let name = args.get(0).expect("Missing first arg").clone();

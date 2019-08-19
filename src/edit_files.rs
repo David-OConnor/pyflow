@@ -1,4 +1,8 @@
-use crate::{dep_types::Req, util, Config};
+use crate::{
+    dep_types::{Constraint, Req, Version},
+    util, Config,
+};
+use crossterm::Color;
 use regex::Regex;
 use serde::Deserialize;
 use std::fs;
@@ -119,36 +123,20 @@ pub fn parse_req_dot_text(cfg: &mut Config) {
     for line in BufReader::new(file).lines() {
         if let Ok(l) = line {
             match Req::from_pip_str(&l) {
-                Some(d) => {
-                    cfg.reqs.push(d.clone());
-                    println!("Added {} from requirements.txt", d.name)
+                Some(r) => {
+                    cfg.reqs.push(r.clone());
+                    util::print_color(
+                        &format!("Added {} from requirements.txt", r.name),
+                        Color::Green,
+                    )
                 }
-                None => println!("Problem parsing {} from requirements.txt", &l),
+                None => util::print_color(
+                    &format!("Problem parsing {} from requirements.txt", l),
+                    Color::Red,
+                ),
             };
         }
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct PipfileSource {
-    url: Option<String>,
-    //    verify_ssl: Option<bool>,
-    name: Option<String>,
-    // todo: Populate rest
-}
-
-#[derive(Debug, Deserialize)]
-struct PipfileRequires {
-    python_version: String,
-}
-
-/// https://github.com/pypa/pipfile
-#[derive(Debug, Deserialize)]
-struct Pipfile {
-    source: Vec<PipfileSource>, //    source: Vec<Option<PipfileSource>>,
-                                //    requires: Option<PipfileRequires>,
-                                //    requires: Vec<String>,
-                                //    packages: Option<Vec<String>>, //    dev_packages: Option<Vec<String>>  // todo currently unimplemented
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,57 +173,86 @@ struct PoetryPyproject {
     extras: Option<Vec<String>>,
 }
 
+fn key_re(key: &str) -> Regex {
+    // todo DRY from main
+    Regex::new(&format!(r#"^{}\s*=\s*"(.*)"$"#, key)).unwrap()
+}
+
+// todo: Dry from config parsing!!
 pub fn parse_pipfile(cfg: &mut Config) {
-    let data = match fs::read_to_string("Pipfile") {
-        Ok(d) => d,
+    let file = match fs::File::open("Pipfile") {
+        Ok(f) => f,
         Err(_) => return,
     };
 
-    //    let t: Config = toml::from_str(&data).unwrap();
-    let pipfile: Pipfile = match toml::from_str(&data) {
-        Ok(p) => p,
-        Err(_) => {
-            println!("Problem parsing Pipfile - skipping");
-            return;
+    let mut in_metadata = false;
+    let mut in_dep = false;
+    let mut in_features = false;
+
+    let sect_re = Regex::new(r"\[.*\]").unwrap();
+
+    for line in BufReader::new(file).lines() {
+        if let Ok(l) = line {
+            // todo replace this with something that clips off
+            // todo post-# part of strings; not just ignores ones starting with #
+            if l.starts_with('#') {
+                continue;
+            }
+
+            if &l == "[[source]]" {
+                in_metadata = true;
+                in_dep = false;
+                in_features = false;
+                continue;
+            } else if &l == "[packages]" {
+                in_metadata = false;
+                in_dep = true;
+                in_features = false;
+                continue;
+            } else if &l == "[dev-packages]" {
+                in_metadata = false;
+                in_dep = false;
+                // todo
+                continue;
+            } else if sect_re.is_match(&l) {
+                in_metadata = false;
+                in_dep = false;
+                in_features = false;
+                continue;
+            }
+
+            if in_metadata {
+                // todo DRY
+                // Pipfile deliberately only includes minimal metadata.
+                if let Some(n2) = key_re("name").captures(&l) {
+                    if let Some(n) = n2.get(1) {
+                        cfg.name = Some(n.as_str().to_string());
+                    }
+                }
+                if let Some(n2) = key_re("url").captures(&l) {
+                    if let Some(n) = n2.get(1) {
+                        cfg.homepage = Some(n.as_str().to_string());
+                    }
+                }
+            } else if in_dep && !l.is_empty() {
+                match Req::from_str(&l, false) {
+                    Ok(r) => {
+                        cfg.reqs.push(r.clone());
+                        util::print_color(
+                            &format!("Added {} from Pipfile", r.name),
+                            Color::Green,
+                        )
+                    }
+                    Err(_) => util::print_color(
+                        &format!("Problem parsing {} from Pipfile", l),
+                        Color::Red,
+                    ),
+                }
+            }
+
+            // todo: [requires] section has python_version.
         }
-    };
-    //    if let Some(deps) = pipfile.packages {
-    //        for dep in deps.into_iter() {
-    //            match Dependency::from_str(&dep, false) {
-    //                Ok(parsed) => {
-    //                    cfg.dependencies.push(parsed.clone());
-    //                    println!("Added {} from requirements.txt", parsed.to_cfg_string());
-    //                }
-    //                Err(_) => {
-    //                    println!("Problem parsing {} from Pipfile - skipping", dep);
-    //                }
-    //            }
-    //        }
-    //    }
-
-    // Pipfile deliberately only includes minimal metadata.
-    //    if let Some(metadata) = pipfile.source {
-    //        if let Some(name) = metadata.name {
-    //            if cfg.name.is_none() {
-    //                cfg.name = Some(name)
-    //            }
-    //        }
-    //        if let Some(url) = metadata.url {
-    //            if cfg.homepage.is_none() {
-    //                cfg.homepage = Some(url)
-    //            }
-    //        }
-    //    }
-
-    //    if let Some(requires) = pipfile.requires {
-    //        if cfg.py_version.is_none() {
-    //            if let Some(py_v) = Version::from_str2(&requires.python_version) {
-    //                if cfg.py_version.is_none() {
-    //                    cfg.py_version = Some(py_v)
-    //                }
-    //            }
-    //        }
-    //    }
+    }
 }
 
 pub fn parse_poetry(cfg: &mut Config) {}
