@@ -1,7 +1,4 @@
-use crate::{
-    dep_types::{Constraint, Req, Version},
-    util, Config,
-};
+use crate::{dep_types::Req, util, Config};
 use crossterm::Color;
 use regex::Regex;
 use serde::Deserialize;
@@ -187,7 +184,7 @@ pub fn parse_pipfile(cfg: &mut Config) {
 
     let mut in_metadata = false;
     let mut in_dep = false;
-    let mut in_features = false;
+    let mut in_extras = false;
 
     let sect_re = Regex::new(r"\[.*\]").unwrap();
 
@@ -202,12 +199,12 @@ pub fn parse_pipfile(cfg: &mut Config) {
             if &l == "[[source]]" {
                 in_metadata = true;
                 in_dep = false;
-                in_features = false;
+                in_extras = false;
                 continue;
             } else if &l == "[packages]" {
                 in_metadata = false;
                 in_dep = true;
-                in_features = false;
+                in_extras = false;
                 continue;
             } else if &l == "[dev-packages]" {
                 in_metadata = false;
@@ -217,7 +214,7 @@ pub fn parse_pipfile(cfg: &mut Config) {
             } else if sect_re.is_match(&l) {
                 in_metadata = false;
                 in_dep = false;
-                in_features = false;
+                in_extras = false;
                 continue;
             }
 
@@ -238,10 +235,7 @@ pub fn parse_pipfile(cfg: &mut Config) {
                 match Req::from_str(&l, false) {
                     Ok(r) => {
                         cfg.reqs.push(r.clone());
-                        util::print_color(
-                            &format!("Added {} from Pipfile", r.name),
-                            Color::Green,
-                        )
+                        util::print_color(&format!("Added {} from Pipfile", r.name), Color::Green)
                     }
                     Err(_) => util::print_color(
                         &format!("Problem parsing {} from Pipfile", l),

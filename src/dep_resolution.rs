@@ -4,7 +4,7 @@ use crate::{
     util,
 };
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -192,19 +192,27 @@ fn fetch_req_data(
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
 ) -> Result<Vec<ReqCache>, DependencyError> {
     // Narrow-down our list of versions to query.
+
     let mut query_data = HashMap::new();
     for req in reqs {
         // todo: cache version info; currently may get this multiple times.
         let (name, latest_version, all_versions) = match vers_cache.get(&req.name) {
             Some(c) => c.clone(),
             None => {
-                let data = get_version_info(&req.name)?;
-                vers_cache.insert(req.name.clone(), data.clone());
-                data
+                match get_version_info(&req.name) {
+                    Ok(data) => {
+                        vers_cache.insert(req.name.clone(), data.clone());
+                        data
+                    }
+                    Err(e) => {
+                        util::abort(&format!("Can't get version info for the dependency `{}`. Is it spelled correctly?", &req.name));
+                        ("".to_string(), Version::new(0, 0, 0), vec![]) // match-compatibility placeholder
+                    }
+                }
             }
         };
 
-        // For no constraints, default to only getting the latest
+        // For no constraints, default to only gettinNg the latest
         //        let mut min_v_to_query = latest_version;
         //        let mut max_v_to_query = Version::new(0, 0, 0);
         let mut max_v_to_query = latest_version;
@@ -219,8 +227,9 @@ fn fetch_req_data(
                 ReqType::Ne => 1,
                 _ => 0,
             };
-            max_v_to_query = max(constr.compatible_range()[i].1, max_v_to_query);
 
+            // Ensure we don't query past the latest.
+            max_v_to_query = min(constr.compatible_range()[i].1, max_v_to_query);
             //            match constr.type_ {
             //                ReqType::Exact => {
             //                    // todo: impl add/subtr for version?
@@ -255,24 +264,20 @@ fn fetch_req_data(
             //                //                ReqType::Tilde => min_v_to_query = constr.version(),
             //            }
         }
-        // Ensure we don't query past the latest.
-        max_v_to_query = min(max_v_to_query, latest_version);
+
         let min_v_to_query = max_v_to_query; // todo: Only get one vers?
 
         let versions_in_rng = all_versions
             .into_iter()
             .filter(|v| min_v_to_query <= *v && *v <= max_v_to_query)
             .collect();
-        println!(
-            "name: {} {:?}, query rng: {}-{}",
-            req.name,
-            req.constraints,
-            min_v_to_query.to_string2(),
-            max_v_to_query.to_string2()
-        );
+
         query_data.insert(req.name.to_owned(), versions_in_rng);
     }
 
+    if query_data.is_empty() {
+        return Ok(vec![]);
+    }
     Ok(get_req_cache_multiple(&query_data)?)
     //    Ok(get_req_cache_single(&req.name, &max_v_to_query)?)
 }
@@ -288,20 +293,11 @@ fn guess_graph(
     result: &mut Vec<Dependency>,
     cache: &mut HashMap<(String, Version), Vec<&ReqCache>>,
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
-    reqs_searched: &mut Vec<Req>,
-    names_searched: &mut Vec<String>,
+    //    reqs_searched: &mut Vec<Req>,
+    //    names_searched: &mut Vec<String>,
 ) -> Result<(), DependencyError> {
     // Installed is required to reduce unecessary calls: Top-level reqs
     // are already filtered for this, but subreqs aren't.
-
-    //        if reqs_searched.any(|r| r.fully_contains(req)) { // todo
-    //        if reqs_searched.contains(req) {
-    //            continue;
-    //        }
-    //        reqs_searched.push(req.clone());
-
-    //     println!("reqs: {:#?}", &reqs);
-
     // todo: Pass in installed packages, and move on if satisfied.
 
     // If we've already satisfied this req, don't query it again. Otherwise we'll make extra
@@ -309,7 +305,7 @@ fn guess_graph(
     let reqs: Vec<&Req> = reqs
         .into_iter()
         //        .filter(|r| !reqs_searched.contains(*r))
-        .filter(|r| !names_searched.contains(&r.name.to_lowercase()))
+        //        .filter(|r| !names_searched.contains(&r.name.to_lowercase()))
         .filter(|r| match &r.extra {
             Some(ex) => extras.contains(&ex),
             None => true,
@@ -333,11 +329,11 @@ fn guess_graph(
         })
         .collect();
 
-    // todo: Name checks wont' catch imcompat vresion reqs.
-    for req in reqs.clone().into_iter() {
-        //        reqs_searched.push(req.clone());
-        names_searched.push(req.name.clone().to_lowercase());
-    }
+    // todo: Name checks won't catch imcompat vresion reqs.
+    //    for req in reqs.clone().into_iter() {
+    //        //        reqs_searched.push(req.clone());
+    //        names_searched.push(req.name.clone().to_lowercase());
+    //    }
 
     // Single http call here for all this package's reqs.
     let query_data = match fetch_req_data(&reqs, vers_cache) {
@@ -347,7 +343,7 @@ fn guess_graph(
             vec![] // todo satisfy match
         }
     };
-    //    println!("QUERY DATA: {:#?}", &query_data);
+
     for req in reqs {
         // Find matching packages for this requirement.
         let query_result: Vec<&ReqCache> = query_data
@@ -402,8 +398,8 @@ fn guess_graph(
             result,
             cache,
             vers_cache,
-            reqs_searched,
-            names_searched,
+            //            reqs_searched,
+            //            names_searched,
         ) {
             println!("Problem pulling dependency info for {}", &req.name);
             util::abort(&e.details)
@@ -424,17 +420,8 @@ pub fn resolve(
 ) -> Result<Vec<(String, Version)>, reqwest::Error> {
     let mut result = Vec::new();
     let mut cache = HashMap::new();
-    let mut reqs_searched = Vec::new();
-    let mut names_searched = Vec::new();
-
-    //    guess_graph(
-    //        tree,
-    //        &mut reqs_searched,
-    //        &mut deps_searched,
-    //        &[],
-    //        &mut cache,
-    //    )
-    //    .expect("Unable to resolve dependencies");
+    //    let mut reqs_searched = Vec::new();
+    //    let mut names_searched = Vec::new();
 
     let mut version_cache = HashMap::new();
 
@@ -447,17 +434,15 @@ pub fn resolve(
         &mut result,
         &mut cache,
         &mut version_cache,
-        &mut reqs_searched,
-        &mut names_searched,
+        //        &mut reqs_searched,
+        //        &mut names_searched,
     )
     .expect("Unable to resolve dependencies");
-
-    //    let mut flattened = vec![];
-    //    flatten(&mut flattened, &tree);
 
     let mut by_name: HashMap<String, Vec<Dependency>> = HashMap::new();
 
     for dep in result.iter() {
+        // The formatted name may be different from the pypi one. Eg `IPython` vice `ipython`.
         let formatted_name = &version_cache.get(&dep.name).unwrap().0;
         println!("Resolving {}, {}", formatted_name, dep.version.to_string());
 
@@ -474,6 +459,7 @@ pub fn resolve(
     let mut result_cleaned = vec![];
     for (name, deps) in by_name.into_iter() {
         let formatted_name = &version_cache.get(&name).unwrap().0;
+
         if deps.len() == 1 {
             // This dep is only specified once; no need to resolve conflicts.
             let dep = &deps[0];
@@ -485,7 +471,10 @@ pub fn resolve(
                 .collect();
 
             let inter = dep_types::intersection_many(&constraints);
-            println!("name: {}, inter: {:#?}", formatted_name, &inter);
+            println!(
+                "Specified more than once. name: {}, inter: {:#?}",
+                formatted_name, &inter
+            );
 
             let newest = deps
                 .iter()
@@ -502,25 +491,9 @@ pub fn resolve(
             for range in inter.iter() {
                 let updated_vers = range.1;
             }
-
-            //            let updated_data = get_req_cache_single(&updated_name, &updated_ver);
-
-            //        result_cleaned.push(Dependency {
-            //                name: name.to_owned(),
-            //                version: updated_vers,
-            //                reqs: vec![],  // No longer required.
-            //                constraints_for_this: vec![], // todo still required?
-            //                extras: vec![],               // todo
-            //        });
-            //            result_cleaned.push((name.to_owned(), updated_vers));
         }
     }
 
-    //    println!("RESOLVED RESULT: {:#?}", &result);
-    //    Ok(result
-    //        .into_iter()
-    //        .map(|dep| (dep.name, dep.version))
-    //        .collect())
     Ok(result_cleaned)
 }
 

@@ -14,7 +14,7 @@ categories = ["development-tools::build-utils"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crossterm = "0.10.2"
+crossterm = "^0.10.2"
 data-encoding = "^2.1.2"
 flate2 = "1.0.9"
 fs_extra = "^1.1.0"

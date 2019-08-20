@@ -67,19 +67,22 @@ fn replace_distutils(setup_path: &PathBuf) {
     }
 }
 
-// todo: Implement.
+/// Remove scripts. Used when uninstalling.
 fn remove_scripts(scripts: Vec<String>, scripts_path: &PathBuf) {
-    let mut result = String::new();
-
-    if let Ok(scripts_file) = fs::File::open(scripts_path) {
-        for line in io::BufReader::new(scripts_file).lines() {
-            if let Ok(l) = line {}
+    // todo: Likely not a great approach. QC.
+    for entry in fs::read_dir(scripts_path).expect("Problem reading dist directory") {
+        let entry = entry.unwrap();
+        if !entry.file_type().unwrap().is_file() {
+            continue;
+        }
+        let data = fs::read_to_string(entry.path()).unwrap();
+        for script in scripts.iter() {
+            if data.contains(&format!("from {}", script)) {
+                fs::remove_file(entry.path()).expect("Problem removing console script");
+                util::print_color(&format!("Removed console script {}", script), Color::Green);
+            }
         }
     }
-
-    for to_remove in scripts {}
-
-    fs::write(scripts_path, result).expect("Unable to write to the console_scripts file");
 }
 
 fn make_script(path: &PathBuf, name: &str, module: &str, func: &str) {
@@ -127,14 +130,14 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
 
     // Now that we've found scripts, add them to our unified file.
     // Note that normally, python uses a bin directory.
-    // todo: Currently we're setting up the unified file, and the bin/script file.
-    let scripts_file = &lib_path.join("../console_scripts.txt");
-    if !scripts_file.exists() {
-        fs::File::create(scripts_file).expect("Problem creating console_scripts.txt");
-    }
-
-    let mut existing_scripts =
-        fs::read_to_string(scripts_file).expect("Can't find console_scripts.txt");
+    //    // todo: Currently we're setting up the unified file, and the bin/script file.
+    //    let scripts_file = &lib_path.join("../console_scripts.txt");
+    //    if !scripts_file.exists() {
+    //        fs::File::create(scripts_file).expect("Problem creating console_scripts.txt");
+    //    }
+    //
+    //    let mut existing_scripts =
+    //        fs::read_to_string(scripts_file).expect("Can't find console_scripts.txt");
 
     let script_path = lib_path.join("../bin");
     if !script_path.exists() {
@@ -144,10 +147,10 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
     }
 
     for new_script in scripts {
-        if !existing_scripts.contains(&new_script) {
-            existing_scripts.push_str(&new_script);
-            existing_scripts.push_str("\n");
-        }
+        //        if !existing_scripts.contains(&new_script) {
+        //            existing_scripts.push_str(&new_script);
+        //            existing_scripts.push_str("\n");
+        //        }
         let re = Regex::new(r"^(.*?)\s*=\s*(.*?):(.*)$").unwrap();
         if let Some(caps) = re.captures(&new_script) {
             let name = caps.get(1).unwrap().as_str();
@@ -162,7 +165,7 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
         }
     }
 
-    fs::write(scripts_file, existing_scripts).expect("Unable to write to the console_scripts file");
+    //    fs::write(scripts_file, existing_scripts).expect("Unable to write to the console_scripts file");
 }
 
 /// Download and install a package. For wheels, we can just extract the contents into
@@ -178,6 +181,10 @@ pub fn download_and_install_package(
     package_type: PackageType,
 ) -> Result<(), reqwest::Error> {
     let mut resp = reqwest::get(url)?; // Download the file
+
+    if !lib_path.exists() {
+        fs::create_dir(lib_path).expect("Problem creating lib directory");
+    }
     let archive_path = lib_path.join(filename);
 
     // Save the file
@@ -363,4 +370,7 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
     // Remove the data directory, if it exists.
     fs::remove_dir_all(lib_path.join(format!("{}-{}.data", name_ins, vers_ins.to_string())))
         .unwrap_or_else(|_| ());
+
+    // Remove console scripts.
+    remove_scripts(vec![name_ins.into()], &lib_path.join("../bin"));
 }

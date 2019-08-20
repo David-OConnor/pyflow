@@ -249,7 +249,7 @@ impl Config {
             abort("`pyproject.toml` already exists")
         }
 
-        let mut result = String::new();
+        let mut result = "See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.".to_string();
 
         result.push_str("[tool.pypackage]\n");
         if let Some(name) = &self.name {
@@ -284,7 +284,7 @@ impl Config {
 }
 
 /// Create a template directory for a python project.
-pub(crate) fn new(name: &str) -> Result<(), Box<dyn Error>> {
+pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
     if !PathBuf::from(name).exists() {
         fs::create_dir_all(&format!("{}/{}", name, name))?;
         fs::File::create(&format!("{}/{}/main.py", name, name))?;
@@ -309,7 +309,9 @@ __pycache__/
 "##;
 
     let pyproject_init = &format!(
-        r##"[tool.pypackage]
+        r##"See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
+
+[tool.pypackage]
 name = "{}"
 py_version = "^3.7"
 version = "0.1.0"
@@ -636,6 +638,9 @@ fn sync_deps(
                     }
                 }
                 "sdist" => source_releases.push(rel.clone()),
+                // todo: handle dist_egg and bdist_wininst?
+                "bdist_egg" => println!("Found bdist_egg... skipping"),
+                "bdist_wininst" => (), // Don't execute Windows i nstallers
                 _ => abort(&format!(
                     "Found surprising package type: {}",
                     rel.packagetype
@@ -777,25 +782,25 @@ fn main() {
     match py_version_cfg {
         // The version's explicitly specified; check if an environment for that version
         // exists. If not, create one, and make sure it's the right version.
-        Some(cfg_v) => {
+        Some(cfg_constr) => {
             // The version's specified in the config. Ensure a virtualenv for this
             // is setup.  // todo: Confirm using --version on the python bin, instead of relying on folder name.
 
             if !util::venv_exists(&pypackages_dir.join(&format!(
                 "{}.{}/.venv",
-                cfg_v.major,
-                cfg_v.minor.unwrap_or(0)
+                cfg_constr.version.major,
+                cfg_constr.version.minor,
             ))) {
                 create_venv(None, &pypackages_dir);
             }
 
             // Don't include version patch in the directory name, per PEP 582.
             vers_path =
-                pypackages_dir.join(&format!("{}.{}", cfg_v.major, cfg_v.minor.unwrap_or(0)));
+                pypackages_dir.join(&format!("{}.{}", cfg_constr.version.major, cfg_constr.version.minor));
 
             // todo: Take into account type of version! Currently ignores, and just takes the major/minor,
             // todo, but we're dealing with a constraint.
-            py_vers = cfg_v.version();
+            py_vers = cfg_constr.version;
         }
         // The version's not specified in the config; Search for existing environments, and create
         // one if we can't find any.
@@ -893,9 +898,9 @@ py_version = \"3.7\"",
                             .expect("Problem getting latest version of the package you added.");
                     added_req.constraints.push(Constraint::new(
                         ReqType::Caret,
-                        vers.major,
+                        Version::new(vers.major,
                         vers.minor,
-                        vers.patch,
+                        vers.patch),
                     ));
                 }
             }
@@ -950,9 +955,7 @@ py_version = \"3.7\"",
                                 );
                                 req.constraints = vec![Constraint::new(
                                     dep_types::ReqType::Exact,
-                                    lock_vers.major,
-                                    lock_vers.minor,
-                                    lock_vers.patch,
+                                    Version::new(lock_vers.major, lock_vers.minor, lock_vers.patch),
                                 )];
                             }
                         }
