@@ -53,7 +53,7 @@ pub enum VersionModifier {
     Alpha,
     Beta,
     ReleaseCandidate,
-    Dep,  // todo: Not sure what this is, but have found it.
+    Dep, // todo: Not sure what this is, but have found it.
 }
 
 impl FromStr for VersionModifier {
@@ -130,11 +130,25 @@ impl Version {
         Self::new(MAX_VER, 0, 0)
     }
 
+    /// Prevents repetition.
+    fn add_str_mod(&self, s: &mut String) {
+        if let Some(extra_num) = self.extra_num {
+            s.push_str(&format!(".{}", extra_num.to_string()));
+        }
+        if let Some((modifier, num)) = self.modifier {
+            s.push_str(&format!("{}{}", modifier.to_string(), num.to_string()));
+        }
+    }
+
     pub fn to_string_med(&self) -> String {
-        format!("{}.{}", self.major, self.minor)
+        let mut result = format!("{}.{}", self.major, self.minor);
+        self.add_str_mod(&mut result);
+        result
     }
     pub fn to_string_short(&self) -> String {
-        format!("{}", self.major,)
+        let mut result = format!("{}", self.major);
+        self.add_str_mod(&mut result);
+        result
     }
 
     /// ie cp37, a version from Pypi.
@@ -176,13 +190,7 @@ impl Version {
     /// unlike Display, which overwrites to_string, don't add colors.
     pub fn to_string2(&self) -> String {
         let mut result = format!("{}.{}.{}", self.major, self.minor, self.patch);
-
-        if let Some(extra_num) = self.extra_num {
-            result += &format!(".{}", extra_num.to_string());
-        }
-        if let Some(modifier) = self.modifier {
-            result += &format!("{}{}", modifier.0.to_string(), modifier.1.to_string());
-        }
+        self.add_str_mod(&mut result);
         result
     }
 }
@@ -191,6 +199,9 @@ impl FromStr for Version {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Treat wildcards as 0.
+        let s = &s.replace("*", "0");
+
         let re = Regex::new(r"^(\d+)?\.?(\d+)?\.?(\d+)?\.?(\d+)?(?:(a|b|rc|dep)(\d+))?$").unwrap();
         if let Some(caps) = re.captures(s) {
             return Ok(Self {
@@ -217,7 +228,7 @@ impl FromStr for Version {
                                 // but we shouldn't have one without the other.
                                 None => {
                                     return Err(DependencyError::new(&format!(
-                                        "Problem parsing version: {}",
+                                        "Problem parsing version modifier: {}",
                                         s
                                     )))
                                 }
@@ -278,19 +289,19 @@ impl fmt::Display for Version {
         let dot_c = Colored::Fg(Color::DarkYellow);
         let r = Colored::Fg(Color::Reset);
 
-        //        let mut result = ;
-        //
-        //                if let some(extra_num) = self.extra_num {
-        //            result += &format!(".{}", extra_num.to_string());
-        //        }
-        //        if let some(modifier) = self.modifier {
-        //            result += &format!("{}{}", modifier.0.to_string(), modifier.1.to_string());
-        //        }
-
+        let mut suffix = "".to_string();
+        if let Some(num) = self.extra_num {
+            suffix.push('.');
+            suffix.push_str(&num.to_string());
+        }
+        if let Some((modifier, num)) = self.modifier {
+            suffix.push_str(&modifier.to_string());
+            suffix.push_str(&num.to_string());
+        }
         write!(
             f,
-            "{}{}{}.{}{}{}.{}{}{}",
-            num_c, self.major, dot_c, num_c, self.minor, dot_c, num_c, self.patch, r
+            "{}{}{}.{}{}{}.{}{}{}{}",
+            num_c, self.major, dot_c, num_c, self.minor, dot_c, num_c, self.patch, suffix, r
         )
     }
 }
@@ -355,10 +366,6 @@ impl FromStr for ReqType {
 pub struct Constraint {
     pub type_: ReqType,
     pub version: Version,
-    //    pub major: u32,
-    //    pub minor: Option<u32>,
-    //    pub patch: Option<u32>,
-    // Don't include fourth digit, alpha etc here.
 }
 
 impl FromStr for Constraint {
@@ -399,6 +406,7 @@ impl Constraint {
     /// From a comma-separated list
     pub fn from_str_multiple(vers: &str) -> Result<Vec<Self>, DependencyError> {
         let mut result = vec![];
+        let vers = vers.replace(" ", "");
         for req in vers.split(',') {
             match Self::from_str(req) {
                 Ok(r) => result.push(r),
@@ -543,6 +551,12 @@ impl Constraint {
                 min < *version && *version < max
             }
         }
+    }
+}
+
+impl fmt::Display for Constraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", self.type_.to_string(), self.version)
     }
 }
 
@@ -848,11 +862,27 @@ impl Req {
             ),
         }
     }
-
     //    /// Return true if other is a subset of self.
     //    fn _fully_contains(&self, other: &Self) -> bool {
     //
     //    }
+}
+
+impl fmt::Display for Req {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut constraints = "".to_string();
+        for constr in self.constraints.iter() {
+            constraints.push_str(&format!("{}", constr));
+        }
+        write!(
+            f,
+            "{}{} {}{}",
+            Colored::Fg(Color::DarkCyan),
+            self.name,
+            constraints,
+            Colored::Fg(Color::Reset)
+        )
+    }
 }
 
 /// Includes information for describing a `Python` dependency.
@@ -874,7 +904,7 @@ pub struct Dependency {
 
 /// Similar to that used by Cargo.lock. Represents an exact package to download. // todo(Although
 /// todo the dependencies field isn't part of that/?)
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LockPackage {
     // We use Strings here instead of types like Version to make it easier to
     // serialize and deserialize
@@ -887,7 +917,7 @@ pub struct LockPackage {
 }
 
 /// Modelled after [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Lock {
     pub package: Option<Vec<LockPackage>>,
     pub metadata: Option<Vec<String>>, // ie checksums
@@ -941,6 +971,13 @@ pub mod tests {
         assert_eq!(Version::from_str("0.1.0").unwrap(), Version::new(0, 1, 0));
         assert_eq!(Version::from_str("3.7").unwrap(), Version::new(3, 7, 0));
         assert_eq!(Version::from_str("1").unwrap(), Version::new(1, 0, 0));
+    }
+
+    #[test]
+    fn version_parse_w_wildcard() {
+        assert_eq!(Version::from_str("3.2.*").unwrap(), Version::new(3, 2, 0));
+        assert_eq!(Version::from_str("1.*").unwrap(), Version::new(1, 0, 0));
+        assert_eq!(Version::from_str("1.*.*").unwrap(), Version::new(1, 0, 0));
     }
 
     #[test]
@@ -1006,27 +1043,36 @@ pub mod tests {
         let b = "^1.3.32rc1";
         let c = "^1.3.32.dep1";
 
-        let req_a = Constraint::new(Ne, Version {
-            major: 2,
-            minor: 3,
-            patch: 0,
-            extra_num: None,
-            modifier: Some((Beta, 3)),
-        });
-        let req_b = Constraint::new(Caret, Version {
-            major: 1,
-            minor: 3,
-            patch: 32,
-            extra_num: None,
-            modifier: Some((ReleaseCandidate, 1)),
-        });
-        let req_c = Constraint::new(Caret, Version {
-            major: 1,
-            minor: 3,
-            patch: 32,
-            extra_num: None,
-            modifier: Some((Dep, 1)),
-        });
+        let req_a = Constraint::new(
+            Ne,
+            Version {
+                major: 2,
+                minor: 3,
+                patch: 0,
+                extra_num: None,
+                modifier: Some((Beta, 3)),
+            },
+        );
+        let req_b = Constraint::new(
+            Caret,
+            Version {
+                major: 1,
+                minor: 3,
+                patch: 32,
+                extra_num: None,
+                modifier: Some((ReleaseCandidate, 1)),
+            },
+        );
+        let req_c = Constraint::new(
+            Caret,
+            Version {
+                major: 1,
+                minor: 3,
+                patch: 32,
+                extra_num: None,
+                modifier: Some((Dep, 1)),
+            },
+        );
 
         assert_eq!(Constraint::from_str(a).unwrap(), req_a);
         assert_eq!(Constraint::from_str(b).unwrap(), req_b);
@@ -1034,7 +1080,22 @@ pub mod tests {
     }
 
     #[test]
-    fn version_req_tostring() {
+    fn constraint_multiple() {
+        let expected = vec![
+            Constraint::new(Gte, Version::new(2, 7, 0)),
+            Constraint::new(Ne, Version::new(3, 0, 0)),
+            Constraint::new(Ne, Version::new(3, 1, 0)),
+            Constraint::new(Ne, Version::new(3, 2, 0)),
+            Constraint::new(Lte, Version::new(3, 5, 0)),
+        ];
+
+        let actual =
+            Constraint::from_str_multiple(">=2.7, !=3.0.0, !=3.1.0, !=3.2.0, <=3.5.0").unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn constraint_to_string() {
         let a = "!=2.3";
         let b = "^1.3.32";
         let c = "~2.3";

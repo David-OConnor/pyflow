@@ -55,7 +55,6 @@ fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
 /// a vec of the versions found, so we can reuse this later without fetching a second time.
 /// Return name to, so we get correct capitalization.
 pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), DependencyError> {
-    println!("(dbg) Getting available versions for {}...", name);
     let data = get_warehouse_data(name)?;
 
     let all_versions = data
@@ -96,13 +95,8 @@ pub fn get_warehouse_release(
         }
     }
 
-    let release_data = release_data.unwrap_or_else(|| {
-        panic!(
-            "Unable to find release for {} = \"{}\"",
-            name,
-            version.to_string()
-        )
-    });
+    let release_data = release_data
+        .unwrap_or_else(|| panic!("Unable to find a release for {} = \"{}\"", name, version));
 
     Ok(release_data.clone())
 }
@@ -230,49 +224,19 @@ fn fetch_req_data(
 
             // Ensure we don't query past the latest.
             max_v_to_query = min(constr.compatible_range()[i].1, max_v_to_query);
-            //            match constr.type_ {
-            //                ReqType::Exact => {
-            //                    // todo: impl add/subtr for version?
-            //                    min_v_to_query = constr.version();
-            //                    max_v_to_query = constr.version();
-            //                    break;
-            //                }
-            //                ReqType::Lt => {
-            //                    max_v_to_query = *all_versions
-            //                        .iter()
-            //                        .filter(|v| **v < constr.version())
-            //                        .max()
-            //                        .expect("Can't find max");
-            //                }
-            //                ReqType::Lte => max_v_to_query = constr.version(),
-            //                ReqType::Gt => {
-            //                    //                    min_v_to_query = *all_versions
-            //                    //                        .iter()
-            //                    //                        .filter(|v| **v > constr.version())
-            //                    //                        .max()
-            //                    //                        .expect("Can't find max");
-            //                }
-            //                //                ReqType::Gte => min_v_to_query = constr.version(),
-            //                ReqType::Gte => (), // todo: Need to include more versions to satisfy conflicts
-            //                ReqType::Ne => (),  // todo
-            //                ReqType::Caret => {
-            //                    req.constraints.iter()
-            //                        .map(|c| c.compatible_range().1)
-            //                },
-            //                //                ReqType::Caret => min_v_to_query = constr.version(),
-            //                ReqType::Tilde => (),
-            //                //                ReqType::Tilde => min_v_to_query = constr.version(),
-            //            }
         }
 
-        let min_v_to_query = max_v_to_query; // todo: Only get one vers?
-
-        let versions_in_rng = all_versions
+        // To minimimize request time, only query the latest compatible version.
+        let best_version = match all_versions
             .into_iter()
-            .filter(|v| min_v_to_query <= *v && *v <= max_v_to_query)
-            .collect();
+            .filter(|v| *v <= max_v_to_query)
+            .max()
+        {
+            Some(v) => vec![v],
+            None => vec![],
+        };
 
-        query_data.insert(req.name.to_owned(), versions_in_rng);
+        query_data.insert(req.name.to_owned(), best_version);
     }
 
     if query_data.is_empty() {
@@ -286,7 +250,6 @@ fn fetch_req_data(
 // If unable to resolve this way, subsequently run this with additional deconfliction reqs.
 fn guess_graph(
     reqs: &[Req],
-    installed: &[(String, Version)],
     os: &crate::Os,
     extras: &[String],
     py_vers: &Version,
@@ -296,10 +259,6 @@ fn guess_graph(
     //    reqs_searched: &mut Vec<Req>,
     //    names_searched: &mut Vec<String>,
 ) -> Result<(), DependencyError> {
-    // Installed is required to reduce unecessary calls: Top-level reqs
-    // are already filtered for this, but subreqs aren't.
-    // todo: Pass in installed packages, and move on if satisfied.
-
     // If we've already satisfied this req, don't query it again. Otherwise we'll make extra
     // http calls, and could end up in infinite loops.
     let reqs: Vec<&Req> = reqs
@@ -310,18 +269,16 @@ fn guess_graph(
             Some(ex) => extras.contains(&ex),
             None => true,
         })
-        .filter(|r| {
-            match r.sys_platform {
-                Some((rt, os_)) => match rt {
-                    ReqType::Exact => os_ == *os,
-                    ReqType::Ne => os_ != *os,
-                    _ => {
-                        util::abort("Reqtypes for Os must be == or !=");
-                        false // todo satisfy compiler
-                    }
-                },
-                None => true,
-            }
+        .filter(|r| match r.sys_platform {
+            Some((rt, os_)) => match rt {
+                ReqType::Exact => os_ == *os,
+                ReqType::Ne => os_ != *os,
+                _ => {
+                    util::abort("Reqtypes for Os must be == or !=");
+                    unreachable!()
+                }
+            },
+            None => true,
         })
         .filter(|r| match &r.python_version {
             Some(v) => v.is_compatible(py_vers),
@@ -349,8 +306,9 @@ fn guess_graph(
         let query_result: Vec<&ReqCache> = query_data
             .iter()
             .filter(|d| d.name == Some(req.name.clone()))
-            .into_iter()
-            .filter(|r| filter_compat(&req.constraints, r))
+            // todo fix filter_compat for modifiers and put back.
+            //            .into_iter()
+            //            .filter(|r| filter_compat(&req.constraints, r))
             .collect();
 
         let deps: Vec<Dependency> = query_result
@@ -377,7 +335,7 @@ fn guess_graph(
         //        }
 
         if deps.is_empty() {
-            util::abort(&format!("Can't find a compatible package for {:#?}", &req));
+            util::abort(&format!("Can't find a compatible package for {:?}", &req));
         }
 
         // Todo: Figure out when newest_compat isn't what you want, due to dealing with
@@ -391,7 +349,6 @@ fn guess_graph(
 
         if let Err(e) = guess_graph(
             &newest_compat.reqs,
-            installed,
             os,
             extras,
             py_vers,
@@ -409,15 +366,14 @@ fn guess_graph(
 }
 
 /// Determine which dependencies we need to install, using the newest ones which meet
-/// all constraints. Gets data from a cached repo, and Pypi.
+/// all constraints. Gets data from a cached repo, and Pypi. Returns name, version, and name/version of its deps.
 //pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
 pub fn resolve(
     reqs: &[Req],
-    installed: &[(String, Version)],
     os: &crate::Os,
     extras: &[String],
     py_vers: &Version,
-) -> Result<Vec<(String, Version)>, reqwest::Error> {
+) -> Result<Vec<(String, Version, Vec<Req>)>, reqwest::Error> {
     let mut result = Vec::new();
     let mut cache = HashMap::new();
     //    let mut reqs_searched = Vec::new();
@@ -427,7 +383,6 @@ pub fn resolve(
 
     guess_graph(
         reqs,
-        installed,
         os,
         extras,
         py_vers,
@@ -444,7 +399,7 @@ pub fn resolve(
     for dep in result.iter() {
         // The formatted name may be different from the pypi one. Eg `IPython` vice `ipython`.
         let formatted_name = &version_cache.get(&dep.name).unwrap().0;
-        println!("Resolving {}, {}", formatted_name, dep.version.to_string());
+        println!("Resolving {}, {}", formatted_name, dep.version);
 
         match by_name.get_mut(&dep.name) {
             Some(k) => k.push(dep.clone()),
@@ -463,7 +418,7 @@ pub fn resolve(
         if deps.len() == 1 {
             // This dep is only specified once; no need to resolve conflicts.
             let dep = &deps[0];
-            result_cleaned.push((formatted_name.to_owned(), dep.version));
+            result_cleaned.push((formatted_name.to_owned(), dep.version, dep.reqs.clone()));
         } else {
             let constraints: Vec<Vec<Constraint>> = deps
                 .iter()
@@ -475,17 +430,26 @@ pub fn resolve(
                 "Specified more than once. name: {}, inter: {:#?}",
                 formatted_name, &inter
             );
+            println!("Constr: {:?}", &constraints);
 
             let newest = deps
                 .iter()
                 .max_by(|a, b| a.version.cmp(&b.version))
                 .expect("Can't find max for newest");
+
             if inter
                 .iter()
                 .all(|(min, max)| *min <= newest.version && newest.version <= *max)
             {
-                result_cleaned.push((formatted_name.to_string(), newest.version));
+                result_cleaned.push((
+                    formatted_name.to_string(),
+                    newest.version,
+                    newest.reqs.clone(),
+                ));
                 continue;
+            } else {
+                // todo
+                println!("Handle this: intersection doesn't overlap newest")
             }
 
             for range in inter.iter() {

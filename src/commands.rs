@@ -21,7 +21,7 @@ impl fmt::Display for _ExecutionError {
 }
 
 /// Find the py_version from the `python --py_version` command. Eg: "Python 3.7".
-pub(crate) fn find_py_version(alias: &str) -> Option<crate::Version> {
+pub fn find_py_version(alias: &str) -> Option<crate::Version> {
     let output = Command::new(alias).arg("--version").output();
     let output_bytes = match output {
         Ok(ob) => {
@@ -67,43 +67,6 @@ pub(crate) fn create_venv(
 
     Ok(())
 }
-
-//pub(crate) fn install(
-//    bin_path: &PathBuf,
-//    packages: &[crate::dep_types::Package],
-//    uninstall: bool,
-//    bin: bool,
-//) -> Result<(), Box<Error>> {
-//    // We don't need an alias from the venv's bin directory; we call the
-//    // executble directly.
-//    let install = if uninstall { "uninstall" } else { "install" };
-//
-//    // todo perhaps we can mark in the package if it's bin, and perhaps
-//    // todo that's even indicated in a package' sconfig...
-//    for package in packages {
-//        // todo: Perhaps there's a way to install bins to __pypackages__ ?
-//        let package_fullname = &package.to_pip_string();
-//        let mut args = vec!["-m", "pip", install, package_fullname];
-//        if !bin {
-//            args.push("--target");
-//            args.push("../../lib");
-//            //            args.push("--quiet"); // Put this back unless debugging.
-//            //            args.push("--install-option=\"--install-scripts=../../lib/bin2\"");
-//        }
-//
-//        // Even though `bin` contains `pip`, it doesn't appear to work directly.
-//        Command::new("./python")
-//            .current_dir(bin_path)
-//            .args(args)
-//            // todo: This may not be viable for older packages with poorly-specified deps.
-//            .arg("--no-deps")
-//            .status()?;
-//    }
-//
-//    Ok(())
-//}
-
-// todo have these propogate errors.
 
 pub(crate) fn run_python(
     bin_path: &PathBuf,

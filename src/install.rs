@@ -107,7 +107,16 @@ if __name__ == '__main__':
 fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
     let mut scripts = vec![];
     // todo: Sep fn for dist_info path, to avoid repetition between here and uninstall?
-    let dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
+    let mut dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
+    // If we can't find the dist_info path, it may be due to it not using a full 3-digit semvar format.
+    // todo: Dry from dep_resolution, release check.
+    if !dist_info_path.exists() && version.patch == 0 {
+        dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string_med()));
+        if !dist_info_path.exists() && version.minor == 0 {
+            dist_info_path =
+                lib_path.join(format!("{}-{}.dist-info", name, version.to_string_short()));
+        }
+    }
 
     if let Ok(ep_file) = fs::File::open(&dist_info_path.join("entry_points.txt")) {
         let mut in_scripts_section = false;
@@ -274,7 +283,6 @@ pub fn download_and_install_package(
             }
 
             // todo: Again, try to move vice copy.
-            println!("ex par: {:?}", extracted_parent);
             let options = fs_extra::file::CopyOptions::new();
             fs_extra::file::move_file(
                 extracted_parent.join("dist").join(built_wheel_filename),
@@ -321,7 +329,24 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
     // Uninstall the package
     // package folders appear to be lowercase, while metadata keeps the package title's casing.
 
-    let dist_info_path = lib_path.join(format!("{}-{}.dist-info", name_ins, vers_ins.to_string()));
+    let mut dist_info_path =
+        lib_path.join(format!("{}-{}.dist-info", name_ins, vers_ins.to_string()));
+    // todo: DRY
+    if !dist_info_path.exists() && vers_ins.patch == 0 {
+        dist_info_path = lib_path.join(format!(
+            "{}-{}.dist-info",
+            name_ins,
+            vers_ins.to_string_med()
+        ));
+        if !dist_info_path.exists() && vers_ins.minor == 0 {
+            dist_info_path = lib_path.join(format!(
+                "{}-{}.dist-info",
+                name_ins,
+                vers_ins.to_string_short()
+            ));
+        }
+    }
+
     let egg_info_path = lib_path.join(format!("{}-{}.egg-info", name_ins, vers_ins.to_string()));
 
     // todo: could top_level.txt be in egg-info too?
@@ -341,12 +366,16 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
 
     for folder_name in folder_names {
         if fs::remove_dir_all(lib_path.join(folder_name)).is_err() {
-            println!(
-                "{}Problem uninstalling {} {}",
-                Colored::Fg(Color::DarkRed),
-                name_ins,
-                vers_ins.to_string(),
-            )
+            // Some packages include a .py file directly in the lib directory instead of a folder.
+            // Check that if removing the folder fails.
+            if fs::remove_file(lib_path.join(&format!("{}.py", name_ins))).is_err() {
+                println!(
+                    "{}Problem uninstalling {} {}",
+                    Colored::Fg(Color::DarkRed),
+                    name_ins,
+                    vers_ins.to_string(),
+                )
+            }
         }
     }
 

@@ -1,3 +1,6 @@
+[![crates.io version](https://meritbadge.herokuapp.com/pypackage)](https://crates.io/crates/pypackage)
+[![docs.rs](https://docs.rs/pypackage/badge.svg)](https://docs.rs/pypackage)
+
 # Py Packages
 
 This tool implements
@@ -28,7 +31,7 @@ run `cargo install pypackage`.
 - Run `pypackage init` in an existing project folder, or `pypackage new projname` 
 to create a new project folder.
 - Run `pypackage install` to install dependencies
-- Run `pypackage python` to run python
+- Run `pypackage python` to run Python
 
 
 ## Why add another Python dependency manager?
@@ -36,11 +39,11 @@ to create a new project folder.
  Some reasons why this tool is different:
 
 - It keeps dependencies in the project directory, in `__pypackages__`, and
-doesn't modify files outside the project directory.
+doesn't modify outside files.
 
 - Its dependency resolution and locking is faster due to using a cached
 database of dependencies, vice downloading and checking each package, or relying
-on the incomplete data available on the `pypi warehouse`.
+on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
 
 - By not requiring Python to install or run, it remains intallation-agnostic and 
 environment-agnostic.
@@ -51,9 +54,9 @@ to not run properly when installed from `pip` due to the `PATH`
 not being configured in the expected way.
 
 - If multiple Python installations are found, it allows the user to select the desired 
-one to set up the environment with. This is a notable problem with `Poetry`; it
+one to use for each project. This is a notable problem with `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
-Where existing tools, including `Poetry` expect you to manage environments, this tools abstracts
+Where existing tools expect you to manage environments, this one abstracts
 it away.
 
 - Multiple versions of a dependency can be installed, allowing resolution
@@ -64,19 +67,19 @@ each requirement.
 ## Virtual environments are easy. What's the point of this?
 Hopefully we're not replacing [this](https://xkcd.com/1987/) with [this](https://xkcd.com/927/).
 
-Some people like the virtual-environment work-flow - it requires only tools that
-come with Python, and uses only few console commands to create,
+Some people like the virtual-environment workflow - it requires only tools included 
+with Python, and uses few console commands to create,
 and activate and environments. However, it may be tedius depending on workflow:
 The few commands may be long depending on the path of virtual envs and projects,
-and it requires modifying the state of the terminal for each project, 
-which you may find inelegant.
+and it requires modifying the state of the terminal for each project, each time
+you use it, which you may find inconvenient or inelegant.
 
 If you're satisified with an existing flow, there may be no reason to change, but
 I think we can do better. This is especially relevant for new Python users
 who haven't groked venvs, or are unaware of the hazards of working with a system Python.
  
 `Pipenv` improves the workflow by automating environment use, and 
-allowing reproducable dependency resolution. `Poetry` improves `Pipenv's` API,
+allowing reproducable dependency resolution. `Poetry` improves upon `Pipenv's` API,
 speed, and dependency resolution, as well as improving
 the packaging and distributing process by using a consolidating project config. This tool
 attempts to improve upon both in the areas listed in the section above. Its goal is to be
@@ -87,6 +90,7 @@ of binaries from `PyPi`. If all packages you need are available on `Conda`, it m
 be the best solution. If not, it requires falling back to `Pip`, which means 
 using two separate package managers, and eschewing the benefits of a modern workflow.
 
+Overall: Good-enough solutions exist, but I think we can do better.
 
 ## Use
 - Create a `pyproject.toml` file in your project directory. If you can
@@ -111,10 +115,11 @@ building and distributing a package. The `[tool.pypyackage.dependencies]` sectio
 contains all dependencies, and is an analog to `requirements.txt`. 
 
 You can specify `extra` dependencies, which will only be installed when passing
-explicit flags to `pyproject install`. When built with the `package` command, 
-these are included in `setup.py`, so packages requing this one can install them with 
+explicit flags to `pypackage install`, or when included in another project with the appropriate
+ flag enabled. Ie packages requirng this one can enable with 
 `pip install -e` etc.
 ```toml
+[tool.pypackage.extras]
 [tool.pypackage.extras]
 test = ["pytest", "nose"]
 secure = ["crypto"]
@@ -158,15 +163,30 @@ a project: a readme, pyproject.toml, and directory for source code
 - `pypackage help` Get help, including a list of available commands
 
 
+## How installation and locking work
+When `pypackage install` is run, installed dependencies are synced with requirements in 
+`pypackage.lock` and `pyproject.toml`. `pypackage.lock` is generated by this tool, and shouldn't
+to be edited directly. `pyproject.toml` is meant to be edited, and determines what dependencies
+should be installed. 
+ 
+Each dependency listed in `pyproject.toml` is checked for a compatible match in `pypackage.lock`
+ If a constraint is met by something in the lock file, 
+the version we'll sync will match that listed in the lock file. If not met, a new entry
+is added to the lock file, containing the highest version allowed by `pyproject.toml`.
+Once complete, packages are installed and removed in order to exactly meet those listed
+in the updated lock file.
+
 ## How dependencies are resolved
-Running `pypackage install` loads the project's requirements from `pyproject.toml`. Adding a
+Running `pypackage install` sync's the project's installed dependencies with those
+ specified in `pyproject.toml`. It generates `pypackage.lock`, which on subsequent runs,
+  keeps dependencies each package a fixed version, as long as it continues to meet the constraints
+  specified in `pyproject.toml`. Adding a
 package name via the CLI, eg `pypackage install matplotlib` simply adds that requirement before proceeding.
 Compatible versions of dependencies are determined using info from 
 the [PyPi Warehosue](https://github.com/pypa/warehouse) (available versions, and hash info), 
 and the `pydeps` database. We use `pydeps`, which is built specifically for this project,
 due to inconsistent dependency information stored on `pypi`. A dependency graph is built
-using this cached database. We attempt to use the newest compatible version of each package,
-but older ones are used if needed to satisfy the dependency occuring with different requirements.
+using this cached database. We attempt to use the newest compatible version of each package..
 
 This tool downloads and unpacks wheels from `pypi`, or builds
 wheels from source if none are availabile. It verifies the integrity of the downloaded file
@@ -176,13 +196,12 @@ versions used are stored in a lock file.
 If a lockfile already exists, package versions stored in it which are compatible with those
 in `pyproject.toml` and resolved subdependencies are used.
 
-Important caveat: There appears to be no way install multiple versions of a package
-simultaneously without renaming them; this is a factor when encountering incompatible sub-dependencies.
-Perhaps this can be sorted around through behind-the-scenes renaming and import-line
-edits, but for now may result in unresolvable trees.
-
 When a dependency is removed from `pyproject.toml`, it, and its subdependencies not
 also required by other packages are removed from the `__pypackages__` folder.
+
+
+
+
 
 ## Why?
 Using a Python installation directly when installing dependencies can become messy.
@@ -223,9 +242,9 @@ traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`
 ## Not-yet-implemented
 
 - Installing from sources other than `pypi` (eg repos)
-- The lock file is missing some info like dependencies and hashes.
-- Windows installer and Mac binaries.
-- Adding a dependency via the CLI with a specific version.
+- The lock file is missing some info like dependencies and hashes
+- Windows installer and Mac binaries
+- Adding a dependency via the CLI with a specific version constraint
 - Developer requirements
 
 
@@ -243,10 +262,14 @@ description = "Small, but packs a punch!"
 homepage = "https://everything.math"
 repository = "https://github.com/raz/everythingkiller"
 license = "MIT"
+classifiers = [
+    "Topic :: System :: Hardware",
+    "Topic :: Scientific/Engineering :: Human Machine Interfaces",
+]
 
 [tool.pypackage.dependencies]
 numpy = "^1.16.4"
-django = "2.0.0"
+manim = "0.1.8"
 ```
 
 ## Building this from source                      
@@ -254,7 +277,6 @@ If you’d like to build from source, [download and install Rust]( https://www.r
 clone the repo, and in the repo directory, run `cargo build --release`.
 
 Ie on Linux:
-
 ```bash
 curl https://sh.rustup.rs -sSf | sh
 git clone https://github.com/david-oconnor/pypackage.git
@@ -267,8 +289,7 @@ If installed via `Cargo`, run `cargo install pypackage --force`.
 
 ## Contributing
 If you notice unexpected behavior or missing features, please post an issue,
-or submit a PR. There are probably multiple problems with the dependency resolver. 
-If you see unexpected
+or submit a PR. If you see unexpected
 behavior, it's probably a bug! Post an issue listing the dependencies that did
 not install correctly.
 

@@ -249,9 +249,12 @@ impl Config {
             abort("`pyproject.toml` already exists")
         }
 
-        let mut result = "See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.".to_string();
+        let mut result =
+            "# See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this \
+             # file's structure."
+                .to_string();
 
-        result.push_str("[tool.pypackage]\n");
+        result.push_str("\n[tool.pypackage]\n");
         if let Some(name) = &self.name {
             result.push_str(&("name = \"".to_owned() + name + "\"\n"));
         } else {
@@ -295,10 +298,10 @@ pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
     }
 
     let gitignore_init = r##"# General Python ignores
-
 build/
 dist/
 __pycache__/
+__pypackages__/
 .ipynb_checkpoints/
 *.pyc
 *~
@@ -471,7 +474,7 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
         Ok(a) => a,
         Err(_) => {
             abort("Unable to find a Python version on the path");
-            ("".to_string(), Version::new_short(0, 0)) // Required for compiler
+            unreachable!()
         }
     };
 
@@ -533,61 +536,36 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
 
 /// Install/uninstall deps as required from the passed list, and re-write the lock file.
 fn sync_deps(
-    lock_filename: &str,
     bin_path: &PathBuf,
     lib_path: &PathBuf,
-    reqs: &[Req],
+    packages: &[(String, Version)], // name, version
     installed: &[(String, Version)],
+    os: &Os,
     python_vers: &Version,
+    resolved: &Vec<(String, Version, Vec<Req>)>,
 ) {
-    #[cfg(target_os = "windows")]
-    let os = Os::Windows;
-    #[cfg(target_os = "linux")]
-    let os = Os::Linux;
-    #[cfg(target_os = "macos")]
-    let os = Os::Mac;
+    // Filter by not-already-installed.
+    let to_install: Vec<&(String, Version)> = packages
+        .into_iter()
+        // todo: Do we need to compare names with .to_lowercase()?
+        .filter(|pack| !installed.contains(pack))
+        .collect();
 
-    println!("Resolving dependencies...");
+    let to_uninstall: Vec<&(String, Version)> = installed
+        .into_iter()
+        // todo: Do we need to compare names with .to_lowercase()?
+        .filter(|pack| !packages.contains(pack))
+        .collect();
 
-    //    // Recursively add sub-dependencies.
-    //    let mut tree = DepNode {
-    //        // dummy parent
-    //        name: String::from("root"),
-    //        version: Version::new(0, 0, 0),
-    //        reqs: reqs.to_vec(), // todo clone?
-    //        dependencies: vec![],
-    //        extras: vec![],
-    //        constraints_for_this: vec![],
-    //    };
+    println!("TO install: {:#?}", &to_install);
+    println!("TO unin: {:#?}", &to_uninstall);
 
-    println!("REQS: {:?}", &reqs);
-    let extras = vec![];
-
-    let resolved = match dep_resolution::resolve(reqs, installed, &os, &extras, python_vers) {
-        //    let resolved = match dep_resolution::resolve(&mut tree) {
-        Ok(r) => r,
-        Err(_) => {
-            abort("Problem resolving dependencies");
-            vec![] // todo find proper way to equlaize mathc arms.
-        }
-    };
-
-    // Resolve is made from non-nested deps, with their subdeps stripped: It's flattened.
-    for (name, version) in resolved.iter() {
-        // Move on if we've already installed this specific package/version
-        let mut already_installed = false;
-        for (inst_name, inst_ver) in installed.iter() {
-            if inst_name.to_lowercase() == name.to_lowercase() && inst_ver == version {
-                already_installed = true;
-            }
-        }
-        if already_installed {
-            continue;
-        }
-
+    for (name, version) in to_install.iter() {
         let data = dep_resolution::get_warehouse_release(&name, &version)
             .expect("Problem getting warehouse data");
 
+        // Find which release we should download. Preferably wheels, and if so, for the right OS and
+        // Python version.
         let mut compatible_releases = vec![];
         // Store source releases as a fallback, for if no wheels are found.
         let mut source_releases = vec![];
@@ -598,17 +576,19 @@ fn sync_deps(
                 "bdist_wheel" => {
                     if let Some(py_ver) = &rel.requires_python {
                         // If a version constraint exists, make sure it's compatible.
-                        let py_req = Constraint::from_str(&py_ver)
+                        let py_constrs = Constraint::from_str_multiple(&py_ver)
                             .expect("Problem parsing constraint from requires_python");
 
-                        if !py_req.is_compatible(&python_vers) {
-                            compatible = false;
+                        for constr in py_constrs.iter() {
+                            if !constr.is_compatible(&python_vers) {
+                                compatible = false;
+                            }
                         }
                     }
 
                     let wheel_os = os_from_wheel_fname(&rel.filename)
                         .expect("Problem getting os from wheel name");
-                    if wheel_os != os && wheel_os != Os::Any {
+                    if wheel_os != *os && wheel_os != Os::Any {
                         compatible = false;
                     }
 
@@ -640,11 +620,12 @@ fn sync_deps(
                 "sdist" => source_releases.push(rel.clone()),
                 // todo: handle dist_egg and bdist_wininst?
                 "bdist_egg" => println!("Found bdist_egg... skipping"),
-                "bdist_wininst" => (), // Don't execute Windows i nstallers
-                _ => abort(&format!(
-                    "Found surprising package type: {}",
-                    rel.packagetype
-                )),
+                "bdist_wininst" => (), // Don't execute Windows installers
+                "bdist_msi" => (),     // Don't execute Windows installers
+                _ => {
+                    println!("Found surprising package type: {}", rel.packagetype);
+                    continue;
+                }
             }
         }
 
@@ -669,11 +650,7 @@ fn sync_deps(
             package_type = Wheel;
         }
 
-        println!(
-            "Downloading and installing {} = \"{}\"",
-            &name,
-            &version.to_string()
-        );
+        println!("Downloading and installing {} = \"{}\"", &name, &version);
 
         if install::download_and_install_package(
             &name,
@@ -691,47 +668,26 @@ fn sync_deps(
         }
     }
 
-    for (inst_name, inst_vers) in installed.iter() {
-        let mut required = false;
-        for (name, version) in resolved.iter() {
-            if name.to_lowercase() == inst_name.to_lowercase() && version == inst_vers {
-                required = true;
-            }
+    for (name, version) in to_uninstall.iter() {
+        install::uninstall(name, version, lib_path)
+    }
+}
+
+fn already_locked(locked: &[(String, Version)], name: &str, constraints: &[Constraint]) -> bool {
+    let mut result = true;
+    for constr in constraints.iter() {
+        let mut constr_passed = false;
+        if locked.iter().any(|(name_, vers)| {
+            name_.to_lowercase() == name.to_lowercase() && constr.is_compatible(vers)
+        }) {
+            constr_passed = true;
+            break;
         }
-        if !required {
-            install::uninstall(inst_name, inst_vers, lib_path)
+        if !constr_passed {
+            result = false;
         }
     }
-
-    //    let lock_metadata = resolved.iter().map(|dep|
-    //        // todo: Probably incorporate hash etc info in the depNode.
-    //        format!("\"checksum {} {} ({})\" = \"{}\"", &dep.name, &dep.version.to_string(), "", "placeholder")
-    //    )
-    //        .collect();
-
-    let lock_packs = resolved
-        .into_iter()
-        .map(|(name, version)| LockPackage {
-            name: name.clone(),
-            version: version.to_string(),
-            source: Some(format!(
-                "pypi+https://pypi.org/pypi/{}/{}/json",
-                name,
-                version.to_string()
-            )), // todo
-            dependencies: None, // todo!
-        })
-        .collect();
-
-    let new_lock = Lock {
-        //        metadata: Some(lock_metadata),
-        metadata: None, // todo: Problem with toml conversion.
-        package: Some(lock_packs),
-    };
-
-    if write_lock(lock_filename, &new_lock).is_err() {
-        abort("Problem writing lock file");
-    }
+    result
 }
 
 fn main() {
@@ -788,15 +744,16 @@ fn main() {
 
             if !util::venv_exists(&pypackages_dir.join(&format!(
                 "{}.{}/.venv",
-                cfg_constr.version.major,
-                cfg_constr.version.minor,
+                cfg_constr.version.major, cfg_constr.version.minor,
             ))) {
                 create_venv(None, &pypackages_dir);
             }
 
             // Don't include version patch in the directory name, per PEP 582.
-            vers_path =
-                pypackages_dir.join(&format!("{}.{}", cfg_constr.version.major, cfg_constr.version.minor));
+            vers_path = pypackages_dir.join(&format!(
+                "{}.{}",
+                cfg_constr.version.major, cfg_constr.version.minor
+            ));
 
             // todo: Take into account type of version! Currently ignores, and just takes the major/minor,
             // todo, but we're dealing with a constraint.
@@ -854,150 +811,142 @@ py_version = \"3.7\"",
         Err(_) => Lock::default(),
     };
 
+    #[cfg(target_os = "windows")]
+    let os = Os::Windows;
+    #[cfg(target_os = "linux")]
+    let os = Os::Linux;
+    #[cfg(target_os = "macos")]
+    let os = Os::Mac;
+
     match subcmd {
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
+        // We use data from three sources: `pyproject.toml`, `pypackage.lock`, and
+        // the currently-installed packages, found by crawling metadata in the `lib` path.
+        // See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages } => {
-            let mut added_reqs = vec![];
-            for p in packages.into_iter() {
-                match Req::from_str(&p, false) {
-                    Ok(r) => added_reqs.push(r),
-                    Err(_) => abort(&format!("Unable to parse this package: {}. \
-                    Note that installing a specific version via the CLI is currently unsupported. If you need to specify a version,\
-                     edit `pyproject.toml`", &p)),
-                }
-            }
-
-            // Reqs to add to `pyproject.toml`
-            let mut added_reqs_unique: Vec<Req> = added_reqs
-                .into_iter()
-                .filter(|ar| {
-                    // return true if the added req's not in the cfg reqs, or if it is
-                    // and the version's different.
-                    let mut add = true;
-                    for cr in cfg.reqs.iter() {
-                        if cr == ar
-                            || (cr.name.to_lowercase() == ar.name.to_lowercase()
-                                && ar.constraints.is_empty())
-                        {
-                            // Same req/version exists
-                            add = false;
-                            break;
-                        }
-                    }
-                    add
-                })
-                .collect();
-
-            // If no constraints are specified, use a carot constraint with the latest
-            // version.
-            for added_req in added_reqs_unique.iter_mut() {
-                if added_req.constraints.is_empty() {
-                    let (formatted_name, vers, _) =
-                        dep_resolution::get_version_info(&added_req.name)
-                            .expect("Problem getting latest version of the package you added.");
-                    added_req.constraints.push(Constraint::new(
-                        ReqType::Caret,
-                        Version::new(vers.major,
-                        vers.minor,
-                        vers.patch),
-                    ));
-                }
-            }
-
-            let mut merged_reqs = vec![]; // Reqs to sync
-
-            // Merge reqs from the config and added via CLI. If there's a conflict in version,
-            // use the added req.
-            for cr in cfg.reqs.into_iter() {
-                let mut replaced = false;
-                for added_req in added_reqs_unique.iter() {
-                    if added_req.name == cr.name && added_req.constraints != cr.constraints {
-                        merged_reqs.push(added_req.clone());
-                        replaced = true;
-                        break;
-                    }
-                }
-                if !replaced {
-                    merged_reqs.push(cr);
-                }
-            }
-
-            if !added_reqs_unique.is_empty() {
-                edit_files::add_reqs_to_cfg(cfg_filename, &added_reqs_unique);
-            }
-
-            merged_reqs.append(&mut added_reqs_unique);
-
+            // Merge reqs added via cli with those in `pyproject.toml`.
             let installed = util::find_installed(&lib_path);
 
-            // todo excessive nesting
-            // If able, tie reqs to a specific version specified in the lock.
-            if let Some(lock_packs) = lock.package {
-                for req in merged_reqs.iter_mut() {
-                    for lock_pack in lock_packs.iter() {
-                        let lock_vers = Version::from_str(&lock_pack.version).unwrap();
-                        if lock_pack.name == req.name {
-                            let mut compatible = true;
-                            for constraint in req.constraints.iter() {
-                                if !constraint.is_compatible(&lock_vers) {
-                                    compatible = false;
-                                    break;
-                                }
-                            }
-                            if compatible {
-                                // Fix the constraint to the lock if compatible.
-                                // todo printline temp
-                                println!(
-                                    "Locking constraint: {} → {}",
-                                    &req.to_cfg_string(),
-                                    lock_vers
-                                );
-                                req.constraints = vec![Constraint::new(
-                                    dep_types::ReqType::Exact,
-                                    Version::new(lock_vers.major, lock_vers.minor, lock_vers.patch),
-                                )];
-                            }
-                        }
-                    }
+            let mut merged_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
+
+            println!("(dbg) to merged {:#?}", &merged_reqs);
+
+            // todo: chain this with the merged_reqs = line above?
+            // We don't need to resolve reqs that are already locked.
+            let mut locked = match lock.package.clone() {
+                Some(lps) => lps
+                    .into_iter()
+                    .map(|lp| (lp.name, Version::from_str(&lp.version).unwrap()))
+                    .collect(),
+                None => vec![],
+            };
+
+            println!("(dbg) locked {:#?}", &locked);
+
+            let reqs_to_resolve: Vec<Req> = merged_reqs
+                .into_iter()
+                .filter(|req| !already_locked(&locked, &req.name, &req.constraints))
+                .collect();
+
+            println!("(dbg) to resolve: {:#?}", &reqs_to_resolve);
+
+            println!("Resolving dependencies...");
+
+            let extras = vec![]; // todo
+            let resolved = match dep_resolution::resolve(&reqs_to_resolve, &os, &extras, &py_vers) {
+                Ok(r) => r,
+                Err(_) => {
+                    abort("Problem resolving dependencies");
+                    unreachable!()
+                }
+            };
+            println!("RES: {:#?}", &resolved);
+            println!("INSTALLED: {:?}", &installed);
+
+            // Now merge the existing lock packages with new ones from resolved packages.
+            // We have a collection of requirements; attempt to merge them with the already-locked ones.
+            //            let mut updated_lock_packs = lock.package.unwrap_or(vec![]);
+            let mut updated_lock_packs = vec![];
+
+            for (name, vers, subdeps) in resolved.iter() {
+                let dummy_constraints = vec![Constraint::new(ReqType::Exact, *vers)];
+                if already_locked(&locked, &name, &dummy_constraints) {
+                    continue;
+                }
+
+                updated_lock_packs.push(LockPackage {
+                    name: name.clone(),
+                    version: vers.to_string(),
+                    source: Some(format!(
+                        "pypi+https://pypi.org/pypi/{}/{}/json",
+                        name,
+                        vers.to_string()
+                    )), // todo
+                    dependencies: None, // todo!
+                });
+            }
+
+            let updated_lp_names: Vec<String> = updated_lock_packs
+                .iter()
+                .map(|ulp| ulp.name.to_lowercase())
+                .collect();
+
+            // Now add any previously-locked packs not updated.
+            for existing_lp in lock.package.unwrap_or(vec![]).iter() {
+                if !updated_lp_names.contains(&existing_lp.name.to_lowercase()) {
+                    updated_lock_packs.push(existing_lp.clone());
                 }
             }
 
+            println!("Updated LPs: {:#?}", &updated_lock_packs);
+
+            //    let lock_metadata = resolved.iter().map(|dep|
+            //        // todo: Probably incorporate hash etc info in the depNode.
+            //        format!("\"checksum {} {} ({})\" = \"{}\"", &dep.name, &dep.version.to_string(), "", "placeholder")
+            //    )
+            //        .collect();
+
+            let updated_lock = Lock {
+                //        metadata: Some(lock_metadata),
+                metadata: None, // todo: Problem with toml conversion.
+                package: Some(updated_lock_packs.clone()),
+            };
+            if write_lock(lock_filename, &updated_lock).is_err() {
+                abort("Problem writing lock file");
+            }
+
+            let packages: Vec<(String, Version)> = updated_lock_packs
+                .into_iter()
+                .map(|lp| (lp.name, Version::from_str(&lp.version).unwrap()))
+                .collect();
+
+            // Now that we've confirmed or modified the lock file, we're ready to sync installed
+            // depenencies with it.
             sync_deps(
-                lock_filename,
-                &bin_path,
-                &lib_path,
-                &merged_reqs,
-                &installed,
-                &py_vers,
+                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
             );
             util::print_color("Installation complete", Color::Green);
         }
 
         SubCommand::Uninstall { packages } => {
-            let removed_reqs: Vec<String> = packages
-                .into_iter()
-                .map(|p| Req::from_str(&p, false).unwrap().name)
-                .collect();
-
-            edit_files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
-
-            let updated_reqs: Vec<Req> = cfg
-                .reqs
-                .into_iter()
-                .filter(|req| !removed_reqs.contains(&req.name))
-                .collect();
-
-            let installed = util::find_installed(&lib_path);
-            sync_deps(
-                lock_filename,
-                &bin_path,
-                &lib_path,
-                &updated_reqs,
-                &installed,
-                &py_vers,
-            );
-            util::print_color("Uninstall complete", Color::Green);
+            // todo
+            //            let removed_reqs: Vec<String> = packages
+            //                .into_iter()
+            //                .map(|p| Req::from_str(&p, false).unwrap().name)
+            //                .collect();
+            //
+            //            edit_files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
+            //
+            //            let updated_reqs: Vec<Req> = cfg
+            //                .reqs
+            //                .into_iter()
+            //                .filter(|req| !removed_reqs.contains(&req.name))
+            //                .collect();
+            //
+            //            let installed = util::find_installed(&lib_path);
+            //            sync_deps(&bin_path, &lib_path, &updated_reqs, &installed, &os, &py_vers);
+            //            util::print_color("Uninstall complete", Color::Green);
         }
 
         SubCommand::Python { args } => {

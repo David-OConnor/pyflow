@@ -6,13 +6,13 @@
   <component name="ChangeListManager">
     <list default="true" id="8e8ec656-42c1-4de6-aedd-231786fe5c7c" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/dep_resolution.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_resolution.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/dep_types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_types.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/edit_files.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/edit_files.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/install.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/install.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/util.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/util.rs" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -159,7 +159,9 @@
       <workItem from="1566141392688" duration="385000" />
       <workItem from="1566226939591" duration="24854000" />
       <workItem from="1566272378631" duration="335000" />
-      <workItem from="1566306041154" duration="9679000" />
+      <workItem from="1566306041154" duration="23945000" />
+      <workItem from="1566350326068" duration="3521000" />
+      <workItem from="1566386949054" duration="12352000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed bugs in python-version checking and package installation">
       <created>1563704289313</created>

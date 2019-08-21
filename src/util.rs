@@ -1,4 +1,8 @@
-use crate::dep_types::Version;
+use crate::{
+    dep_resolution,
+    dep_types::{Constraint, Req, ReqType, Version},
+    edit_files,
+};
 use crossterm::{Color, Colored};
 use regex::Regex;
 use std::str::FromStr;
@@ -188,5 +192,77 @@ pub fn find_console_scripts(bin_path: &PathBuf) -> Vec<String> {
             }
         }
     }
+    result
+}
+
+/// Handle reqs added via the CLI
+pub fn merge_reqs(added: &Vec<String>, cfg: &crate::Config, cfg_filename: &str) -> Vec<Req> {
+    let mut added_reqs = vec![];
+    for p in added.into_iter() {
+        match Req::from_str(&p, false) {
+            Ok(r) => added_reqs.push(r),
+            Err(_) => abort(&format!("Unable to parse this package: {}. \
+                    Note that installing a specific version via the CLI is currently unsupported. If you need to specify a version,\
+                     edit `pyproject.toml`", &p)),
+        }
+    }
+
+    // Reqs to add to `pyproject.toml`
+    let mut added_reqs_unique: Vec<Req> = added_reqs
+        .into_iter()
+        .filter(|ar| {
+            // return true if the added req's not in the cfg reqs, or if it is
+            // and the version's different.
+            let mut add = true;
+            for cr in cfg.reqs.iter() {
+                if cr == ar
+                    || (cr.name.to_lowercase() == ar.name.to_lowercase()
+                        && ar.constraints.is_empty())
+                {
+                    // Same req/version exists
+                    add = false;
+                    break;
+                }
+            }
+            add
+        })
+        .collect();
+
+    // If no constraints are specified, use a caret constraint with the latest
+    // version.
+    for added_req in added_reqs_unique.iter_mut() {
+        if added_req.constraints.is_empty() {
+            let (formatted_name, vers, _) = dep_resolution::get_version_info(&added_req.name)
+                .expect("Problem getting latest version of the package you added.");
+            added_req.constraints.push(Constraint::new(
+                ReqType::Caret,
+                Version::new(vers.major, vers.minor, vers.patch),
+            ));
+        }
+    }
+
+    let mut result = vec![]; // Reqs to sync
+
+    // Merge reqs from the config and added via CLI. If there's a conflict in version,
+    // use the added req.
+    for cr in cfg.reqs.iter() {
+        let mut replaced = false;
+        for added_req in added_reqs_unique.iter() {
+            if added_req.name == cr.name && added_req.constraints != cr.constraints {
+                result.push(added_req.clone());
+                replaced = true;
+                break;
+            }
+        }
+        if !replaced {
+            result.push(cr.clone());
+        }
+    }
+
+    if !added_reqs_unique.is_empty() {
+        edit_files::add_reqs_to_cfg(cfg_filename, &added_reqs_unique);
+    }
+
+    result.append(&mut added_reqs_unique);
     result
 }
