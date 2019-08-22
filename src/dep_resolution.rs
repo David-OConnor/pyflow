@@ -1,6 +1,7 @@
 use crate::dep_types::DependencyError;
 use crate::{
-    dep_types::{self, Constraint, Dependency, Req, ReqType, Version},
+    //    dep_types::{self, Constraint, Dependency, Req, ReqType, Version},
+    dep_types::{Constraint, Req, ReqType, Version},
     util,
 };
 use serde::{Deserialize, Serialize};
@@ -55,6 +56,7 @@ fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
 /// a vec of the versions found, so we can reuse this later without fetching a second time.
 /// Return name to, so we get correct capitalization.
 pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), DependencyError> {
+    println!("(dbg) Getting version info for {}", name);
     let data = get_warehouse_data(name)?;
 
     let all_versions = data
@@ -166,13 +168,9 @@ fn get_req_cache_multiple(
 //}
 
 /// Helper fn for `guess_graph`.
-fn filter_compat(constraints: &[Constraint], r: &ReqCache) -> bool {
+fn is_compat(constraints: &[Constraint], vers: &Version) -> bool {
     for constraint in constraints.iter() {
-        if let Ok(v) = Version::from_str(&r.version) {
-            if !constraint.is_compatible(&v) {
-                return false;
-            }
-        } else {
+        if !constraint.is_compatible(&vers) {
             return false;
         }
     }
@@ -250,20 +248,24 @@ fn fetch_req_data(
 // If unable to resolve this way, subsequently run this with additional deconfliction reqs.
 fn guess_graph(
     reqs: &[Req],
+    locked: &[(String, Version, Vec<(String, Version)>)],
     os: &crate::Os,
     extras: &[String],
     py_vers: &Version,
-    result: &mut Vec<Dependency>,
+    //    result: &mut Vec<(String, Version, Vec<(String, Version)>)>,
+    result: &mut Vec<(String, Version, Vec<Req>)>,
     cache: &mut HashMap<(String, Version), Vec<&ReqCache>>,
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
-    //    reqs_searched: &mut Vec<Req>,
+    reqs_searched: &mut Vec<Req>,
     //    names_searched: &mut Vec<String>,
 ) -> Result<(), DependencyError> {
-    // If we've already satisfied this req, don't query it again. Otherwise we'll make extra
-    // http calls, and could end up in infinite loops.
+    println!("IN guess graph for {:?}", &reqs);
+
     let reqs: Vec<&Req> = reqs
         .into_iter()
-        //        .filter(|r| !reqs_searched.contains(*r))
+        // If we've already satisfied this req, don't query it again. Otherwise we'll make extra
+        // http calls, and could end up in infinite loops.
+        .filter(|r| !reqs_searched.contains(*r))
         //        .filter(|r| !names_searched.contains(&r.name.to_lowercase()))
         .filter(|r| match &r.extra {
             Some(ex) => extras.contains(&ex),
@@ -292,14 +294,73 @@ fn guess_graph(
     //        names_searched.push(req.name.clone().to_lowercase());
     //    }
 
-    // Single http call here for all this package's reqs.
-    let query_data = match fetch_req_data(&reqs, vers_cache) {
+    let mut non_locked_reqs = vec![];
+    let mut locked_reqs = vec![];
+
+    // Partition reqs into ones we have lock-file data for, and ones where we need to make
+    // http calls to the pypi warehouse (for versions) and pydeps (for deps).
+    for req in reqs.iter() {
+        reqs_searched.push((*req).clone());
+
+        let mut found_in_locked = false;
+        for (name, vers, deps) in locked.iter() {
+            if *name != req.name {
+                continue;
+            }
+            if is_compat(&req.constraints, &vers) {
+                locked_reqs.push(req.clone());
+                found_in_locked = true;
+                break;
+            }
+        }
+        if !found_in_locked {
+            non_locked_reqs.push(req.clone());
+        }
+    }
+
+    // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
+    let mut query_data = match fetch_req_data(&non_locked_reqs, vers_cache) {
         Ok(d) => d,
         Err(e) => {
             util::abort(&format!("Problem getting dependency data: {:?}", e));
-            vec![] // todo satisfy match
+            unreachable!()
         }
     };
+
+    println!("Locked reqs: {:?}", &locked_reqs);
+
+    // Now add info from lock packs for data we didn't query. The purpose of passing locks
+    // into the dep resolution process is to avoid unecessary HTTP calls and resolution iterations.
+    for req in locked_reqs.iter() {
+        // Find the corresponding lock package. There should be exactly one.
+        let (lp_name, lp_vers, lp_deps) = locked
+            .iter()
+            .find(|(name, _, _)| name.to_lowercase() == req.name.to_lowercase())
+            .expect("Can't find matching lock package");
+
+        //        let reqs = lp_deps
+        //            .iter()
+        //            .map(|(name, vers)| {
+        //                Req::new(name.clone(), vec![Constraint::new(ReqType::Exact, *vers)])
+        //            })
+        //            .collect();
+        let requires_dist = lp_deps
+            .iter()
+            .map(|(name, vers)| format!("{} (=={})", name, vers.to_string()))
+            .collect();
+
+        // Note that we convert from normal data types to strings here, for the sake of consistency
+        // with the http call results.
+        query_data.push(ReqCache {
+            name: Some(lp_name.clone()),
+            version: lp_vers.to_string(),
+            requires_python: None,
+            requires_dist,
+        });
+    }
+
+    // We've now merged the query data with locked data. A difference though, is we've already
+    // narrowed down the locked ones to one version with an exact constraint.
 
     for req in reqs {
         // Find matching packages for this requirement.
@@ -308,31 +369,28 @@ fn guess_graph(
             .filter(|d| d.name == Some(req.name.clone()))
             // todo fix filter_compat for modifiers and put back.
             //            .into_iter()
-            //            .filter(|r| filter_compat(&req.constraints, r))
+            //            .filter(|r| filter_compat(&req.constraints, &req_cache.version))
             .collect();
 
-        let deps: Vec<Dependency> = query_result
+        let deps: Vec<(String, Version, Vec<Req>)> = query_result
             .into_iter()
-            .map(|r| {
-                Dependency {
-                    name: req.name.to_owned(),
-                    version: Version::from_str(&r.version).expect("Problem parsing vers"),
-                    reqs: r.reqs(),
-                    constraints_for_this: req.constraints.clone(),
-                    extras: vec![], // todo
-                }
-            })
+            .map(
+                |r| {
+                    (
+                        req.name.to_owned(),
+                        Version::from_str(&r.version).expect("Problem parsing vers"),
+                        r.reqs(),
+                    )
+                }, //                Dependency {
+                   //                    name: req.name.to_owned(),
+                   //                    version: Version::from_str(&r.version).expect("Problem parsing vers"),
+                   //                    reqs: r.reqs(),
+                   //                    //                    deps: vec![], // todo
+                   //                    constraints_for_this: req.constraints.clone(),
+                   //                    extras: vec![], // todo
+                   //                }
+            )
             .collect();
-
-        //        for dep in deps.iter() {
-        //            cache.insert(
-        //                (
-        //                    dep.name.clone(),
-        //                    dep.version,
-        //                ),
-        //                dep.clone(),
-        //            );
-        //        }
 
         if deps.is_empty() {
             util::abort(&format!("Can't find a compatible package for {:?}", &req));
@@ -342,20 +400,21 @@ fn guess_graph(
         // todo conflicting sub-reqs.
         let newest_compat = deps
             .into_iter()
-            .max_by(|a, b| a.version.cmp(&b.version))
+            .max_by(|a, b| a.1.cmp(&b.1))
             .expect("Problem finding newest compatible match");
 
         result.push(newest_compat.clone());
 
         if let Err(e) = guess_graph(
-            &newest_compat.reqs,
+            &newest_compat.2,
+            locked,
             os,
             extras,
             py_vers,
             result,
             cache,
             vers_cache,
-            //            reqs_searched,
+            reqs_searched,
             //            names_searched,
         ) {
             println!("Problem pulling dependency info for {}", &req.name);
@@ -370,41 +429,51 @@ fn guess_graph(
 //pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
 pub fn resolve(
     reqs: &[Req],
+    locked: &[(String, Version, Vec<(String, Version)>)],
     os: &crate::Os,
     extras: &[String],
     py_vers: &Version,
-) -> Result<Vec<(String, Version, Vec<Req>)>, reqwest::Error> {
+    //) -> Result<Vec<(String, Version, Vec<Req>)>, reqwest::Error> {
+) -> Result<Vec<(String, Version, Vec<(String, Version)>)>, reqwest::Error> {
     let mut result = Vec::new();
     let mut cache = HashMap::new();
-    //    let mut reqs_searched = Vec::new();
+    let mut reqs_searched = Vec::new();
     //    let mut names_searched = Vec::new();
 
     let mut version_cache = HashMap::new();
 
-    guess_graph(
-        reqs,
+    if guess_graph(
+        &reqs,
+        locked,
         os,
         extras,
         py_vers,
         &mut result,
         &mut cache,
         &mut version_cache,
-        //        &mut reqs_searched,
+        &mut reqs_searched,
         //        &mut names_searched,
     )
-    .expect("Unable to resolve dependencies");
+    .is_err()
+    {
+        util::abort("Problem resolving dependencies");
+    }
 
-    let mut by_name: HashMap<String, Vec<Dependency>> = HashMap::new();
+    let mut by_name: HashMap<String, Vec<(String, Version, Vec<Req>)>> = HashMap::new();
 
-    for dep in result.iter() {
+    for dep in result.clone().into_iter() {
+        // todo eval if you still need clone later.
         // The formatted name may be different from the pypi one. Eg `IPython` vice `ipython`.
-        let formatted_name = &version_cache.get(&dep.name).unwrap().0;
-        println!("Resolving {}, {}", formatted_name, dep.version);
+        // todo DRY
+        let formatted_name = match &version_cache.get(&dep.0) {
+            Some(vc) => vc.0.clone(),
+            None => dep.0.clone(), // ie this is from a locked dep.
+        };
 
-        match by_name.get_mut(&dep.name) {
-            Some(k) => k.push(dep.clone()),
+        match by_name.get_mut(&dep.0) {
+            Some(k) => k.push(dep),
             None => {
-                by_name.insert(dep.name.clone(), vec![dep.clone()]);
+                by_name.insert(dep.0.clone(), vec![dep]);
             }
         }
     }
@@ -413,48 +482,59 @@ pub fn resolve(
     // we can pick the newest compatible version for each req.
     let mut result_cleaned = vec![];
     for (name, deps) in by_name.into_iter() {
-        let formatted_name = &version_cache.get(&name).unwrap().0;
+        let formatted_name = match &version_cache.get(&name) {
+            Some(vc) => vc.0.clone(),
+            None => name.clone(), // ie this is from a locked dep.
+        };
 
         if deps.len() == 1 {
             // This dep is only specified once; no need to resolve conflicts.
             let dep = &deps[0];
-            result_cleaned.push((formatted_name.to_owned(), dep.version, dep.reqs.clone()));
-        } else {
-            let constraints: Vec<Vec<Constraint>> = deps
-                .iter()
-                .map(|d| d.constraints_for_this.clone())
-                .collect();
 
-            let inter = dep_types::intersection_many(&constraints);
-            println!(
-                "Specified more than once. name: {}, inter: {:#?}",
-                formatted_name, &inter
-            );
-            println!("Constr: {:?}", &constraints);
+            // We need to pass subdeps so we can add them to the lock file. Build them from reqs,
+            // they each correspond to a resolved dep we'll loop again for.
+            let mut subdeps = vec![];
+            // todo: Iterate over by_name instead?
+            for r in dep.2.iter() {
+                for (name, vers, _) in result.iter() {
+                    // todo: Make sure you've picked the right one if multiple exist!!
+                    // todo qc this. This is what we add to the lockfile deps section.
+                    if r.name == *name {
+                        subdeps.push((name.to_owned(), *vers));
+                    }
+                }
+            }
+
+            result_cleaned.push((formatted_name.to_owned(), dep.1, subdeps));
+        } else {
+            // todo: re-impl this! Multiple instances won't lock and install until you do
+            //            let constraints: Vec<Vec<Constraint>> = deps
+            //                .iter()
+            //                .map(|d| d.constraints_for_this.clone())
+            //                .collect();
+            //
+            //            let inter = dep_types::intersection_many(&constraints);
+            println!("Specified more than once. name: {}", formatted_name,);
+            //            println!("Constr: {:?}", &constraints);
 
             let newest = deps
                 .iter()
-                .max_by(|a, b| a.version.cmp(&b.version))
+                .max_by(|a, b| a.1.cmp(&b.1))
                 .expect("Can't find max for newest");
 
-            if inter
-                .iter()
-                .all(|(min, max)| *min <= newest.version && newest.version <= *max)
-            {
-                result_cleaned.push((
-                    formatted_name.to_string(),
-                    newest.version,
-                    newest.reqs.clone(),
-                ));
-                continue;
-            } else {
-                // todo
-                println!("Handle this: intersection doesn't overlap newest")
-            }
+            //            if inter
+            //                .iter()
+            //                .all(|(min, max)| *min <= newest.1 && newest.1 <= *max)
+            //            {
 
-            for range in inter.iter() {
-                let updated_vers = range.1;
-            }
+            //                result_cleaned.push((
+            //                    formatted_name.to_string(),
+            //                    newest.1,
+            //                    newest.2.clone(),
+            //                ));
+            //            } else {
+            //                println!("Handle this: intersection doesn't overlap newest")
+            //            }
         }
     }
 

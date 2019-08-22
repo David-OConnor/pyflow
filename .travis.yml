@@ -1,0 +1,40 @@
+language: rust
+
+rust:
+  - stable
+
+install:
+
+
+os:
+  - windows
+  - osx
+  - linux
+
+# https://levans.fr/rust_travis_cache.html
+cache:
+  directories:
+    - $HOME/.cargo
+
+before_cache:
+  - rm -rf $HOME/.cargo/registry
+
+env:
+  global:
+    - RUST_BACKTRACE=1
+
+matrix:
+  allow_failures:
+    - rust: nightly
+
+script:
+  - cargo test
+
+
+# TODO: make it faster ; useful links:
+# https://www.reddit.com/r/rust/comments/9zpyww/idea_a_local_cache_of_compiled_dependencies_in/
+# https://doc.rust-lang.org/cargo/reference/environment-variables.html - CARGO_TARGET_DIR
+# https://github.com/holmgr/cargo-sweep
+# https://github.com/matthiaskrgr/cargo-cache
+# https://github.com/mozilla/sccache
+# https://github.com/alexcrichton/cargo-vendor

@@ -1,5 +1,7 @@
 [![crates.io version](https://meritbadge.herokuapp.com/pypackage)](https://crates.io/crates/pypackage)
 [![docs.rs](https://docs.rs/pypackage/badge.svg)](https://docs.rs/pypackage)
+[![Build Status](https://travis-ci.org/David-OConnor/pypackage.svg?branch=master)](https://travis-ci.org/David-OConnor/pypackage)
+
 
 # Py Packages
 
@@ -8,8 +10,9 @@ This tool implements
 It manages dependencies, keeping them isolated in the project directory, and runs
 python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
-A virtual environment is created in the same diretory as `lib`, and is used
-transparently.
+
+**Goal**: Make using and publishing Python projects as simple as possible. Understanding
+Python environments shoudn't be required to use dependencies safely.
 
 Python ≥ 3.4 is required.
 
@@ -30,7 +33,7 @@ run `cargo install pypackage`.
 ## Quickstart
 - Run `pypackage init` in an existing project folder, or `pypackage new projname` 
 to create a new project folder.
-- Run `pypackage install` to install dependencies
+- Run `pypackage install` to sync dependencies with `pyproject.toml`, or add dependencies to it
 - Run `pypackage python` to run Python
 
 
@@ -38,20 +41,20 @@ to create a new project folder.
 `Pipenv` and `Poetry` both address this problem. Goal: Faster and less finicky.
  Some reasons why this tool is different:
 
-- It keeps dependencies in the project directory, in `__pypackages__`, and
-doesn't modify outside files.
-
 - Its dependency resolution and locking is faster due to using a cached
 database of dependencies, vice downloading and checking each package, or relying
 on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
 
 - By not requiring Python to install or run, it remains intallation-agnostic and 
-environment-agnostic.
-This is especially important on Linux, where there may be several versions
+environment-agnostic. This is important for making setup and use as simple and decison-free as
+ possible. It's especially important on Linux, where there may be several versions
 of Python installed, with different versions and access levels. This avoids
 complications, especially for new users. It's common for Python-based CLI tools
 to not run properly when installed from `pip` due to the `PATH` 
 not being configured in the expected way.
+
+- It keeps dependencies in the project directory, in `__pypackages__`, and
+doesn't modify outside files.
 
 - If multiple Python installations are found, it allows the user to select the desired 
 one to use for each project. This is a notable problem with `Poetry`; it
@@ -81,7 +84,8 @@ who haven't groked venvs, or are unaware of the hazards of working with a system
 `Pipenv` improves the workflow by automating environment use, and 
 allowing reproducable dependency resolution. `Poetry` improves upon `Pipenv's` API,
 speed, and dependency resolution, as well as improving
-the packaging and distributing process by using a consolidating project config. This tool
+the packaging and distributing process by using a consolidating project config. Both
+ are sensitive to the Python environment used to run them. This tool
 attempts to improve upon both in the areas listed in the section above. Its goal is to be
 as intuitive as possible.
 
@@ -91,6 +95,26 @@ be the best solution. If not, it requires falling back to `Pip`, which means
 using two separate package managers, and eschewing the benefits of a modern workflow.
 
 Overall: Good-enough solutions exist, but I think we can do better.
+
+
+## Thoroughly biased feature table, or visual explanation of why this tool exists 
+(Please PR anything here that's innacurate, incomplete, or misleading)
+
+These tools have different scopes and purposes:
+
+| Name | Pip + venv | Pipenv | Poetry | Pyenv | pythonloc | Conda |this |
+|------|------------|--------|--------|-------|-----------|-------|-----|
+| **Manages dependencies** | ✓ | ✓ | ✓ | | | ✓ | ✓|
+| **Environment-agnostic** | | | | ✓ | | ✓ | ✓ |
+| **Included with Python** | ✓ | | | | | | |
+| **Keeps packages local** | | | | | ✓ | | ✓|
+| **Locks dependencies** |  | ✓ | ✓ | | | ✓ | ✓|
+| **Requires changing session state** | ✓ | | | | | | |
+| **Slow** |  | ✓ | | | | | |
+| **Clean build/publish flow** | | | ✓ | | | | ✓ |
+| **Buggy** | | | | | | | ✓ |
+| **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+
 
 ## Use
 - Create a `pyproject.toml` file in your project directory. If you can

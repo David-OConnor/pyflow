@@ -1,6 +1,6 @@
 use crate::dep_types::{Constraint, DependencyError, Lock, LockPackage, Req, ReqType, Version};
 use crate::util::abort;
-use crossterm::Color;
+use crossterm::{Color, Colored};
 use install::PackageType::{Source, Wheel};
 use regex::Regex;
 use serde::Deserialize;
@@ -542,7 +542,7 @@ fn sync_deps(
     installed: &[(String, Version)],
     os: &Os,
     python_vers: &Version,
-    resolved: &Vec<(String, Version, Vec<Req>)>,
+    //    resolved: &Vec<(String, Version, Vec<(String, Version)>)>,
 ) {
     // Filter by not-already-installed.
     let to_install: Vec<&(String, Version)> = packages
@@ -650,7 +650,7 @@ fn sync_deps(
             package_type = Wheel;
         }
 
-        println!("Downloading and installing {} = \"{}\"", &name, &version);
+        println!("Downloading and installing {}{}{} = \"{}\"",  Colored::Fg(Color::Cyan), &name, Colored::Fg(Color::Reset), &version);
 
         if install::download_and_install_package(
             &name,
@@ -673,11 +673,15 @@ fn sync_deps(
     }
 }
 
-fn already_locked(locked: &[(String, Version)], name: &str, constraints: &[Constraint]) -> bool {
+fn already_locked(
+    locked: &[(String, Version, Vec<(String, Version)>)],
+    name: &str,
+    constraints: &[Constraint],
+) -> bool {
     let mut result = true;
     for constr in constraints.iter() {
         let mut constr_passed = false;
-        if locked.iter().any(|(name_, vers)| {
+        if locked.iter().any(|(name_, vers, _)| {
             name_.to_lowercase() == name.to_lowercase() && constr.is_compatible(vers)
         }) {
             constr_passed = true;
@@ -688,6 +692,116 @@ fn already_locked(locked: &[(String, Version)], name: &str, constraints: &[Const
         }
     }
     result
+}
+
+/// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
+/// the config and lock files.
+fn sync(
+    bin_path: &PathBuf,
+    lib_path: &PathBuf,
+    lockpacks: &[LockPackage],
+    reqs: &[Req],
+    os: &Os,
+    extras: &[String],
+    py_vers: &Version,
+    lock_filename: &str,
+) {
+    let installed = util::find_installed(&lib_path);
+    // We control the lock format, so this regex will always match
+    let dep_re = Regex::new(r"^(.*?)\s(.*)\s.*$").unwrap();
+
+    // We don't need to resolve reqs that are already locked.
+    let locked: Vec<(String, Version, Vec<(String, Version)>)> = lockpacks
+        .into_iter()
+        .map(|lp| {
+            let mut deps = vec![];
+            for dep in lp.dependencies.as_ref().unwrap_or(&vec![]) {
+                let caps = dep_re
+                    .captures(&dep)
+                    .expect("Problem reading lock file dependencies");
+                let name = caps.get(1).unwrap().as_str().to_owned();
+                let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
+                deps.push((name, vers));
+            }
+
+            (lp.name.clone(), Version::from_str(&lp.version).unwrap(), deps)
+        })
+        .collect();
+
+    println!("Resolving dependencies...");
+
+    let resolved = match dep_resolution::resolve(&reqs, &locked, &os, &extras, &py_vers) {
+        Ok(r) => r,
+        Err(_) => {
+            abort("Problem resolving dependencies");
+            unreachable!()
+        }
+    };
+    //            println!("RES: {:#?}", &resolved);
+    //            println!("INSTALLED: {:?}", &installed);
+
+    // Now merge the existing lock packages with new ones from resolved packages.
+    // We have a collection of requirements; attempt to merge them with the already-locked ones.
+    let mut updated_lock_packs = vec![];
+
+    for (name, vers, subdeps) in resolved.iter() {
+        let dummy_constraints = vec![Constraint::new(ReqType::Exact, *vers)];
+        if already_locked(&locked, &name, &dummy_constraints) {
+            let existing: Vec<&LockPackage> = lockpacks
+                .iter()
+                .filter(|lp| lp.name.to_lowercase() == name.to_lowercase())
+                .collect();
+            let existing2 = existing[0];
+
+            updated_lock_packs.push(existing2.clone());
+            continue;
+        }
+
+        let deps = subdeps
+            .iter()
+            .map(|(name, version)| {
+                format!(
+                    "{} {} pypi+https://pypi.org/pypi/{}/{}/json",
+                    name,
+                    version.to_string2(),
+                    name,
+                    version.to_string2(),
+                )
+            })
+            .collect();
+
+        updated_lock_packs.push(LockPackage {
+            name: name.clone(),
+            version: vers.to_string(),
+            source: Some(format!(
+                "pypi+https://pypi.org/pypi/{}/{}/json",
+                name,
+                vers.to_string()
+            )), // todo
+            dependencies: Some(deps),
+        });
+    }
+
+    let updated_lock = Lock {
+        //        metadata: Some(lock_metadata),
+        metadata: None, // todo: Problem with toml conversion.
+        package: Some(updated_lock_packs.clone()),
+    };
+    if write_lock(lock_filename, &updated_lock).is_err() {
+        abort("Problem writing lock file");
+    }
+
+    let packages: Vec<(String, Version)> = updated_lock_packs
+        .into_iter()
+        .map(|lp| (lp.name, Version::from_str(&lp.version).unwrap()))
+        .collect();
+
+    // Now that we've confirmed or modified the lock file, we're ready to sync installed
+    // depenencies with it.
+    sync_deps(
+        //                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
+        &bin_path, &lib_path, &packages, &installed, &os, &py_vers,
+    );
 }
 
 fn main() {
@@ -818,6 +932,10 @@ py_version = \"3.7\"",
     #[cfg(target_os = "macos")]
     let os = Os::Mac;
 
+    let extras = vec![]; // todo temp!!
+    let lockpacks = lock.package.unwrap_or(vec![]);
+    //    let extras = cfg.extras;
+
     match subcmd {
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
@@ -826,127 +944,51 @@ py_version = \"3.7\"",
         // See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages } => {
             // Merge reqs added via cli with those in `pyproject.toml`.
-            let installed = util::find_installed(&lib_path);
+            let mut updated_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
+            println!("(dbg) to merged {:#?}", &updated_reqs);
 
-            let mut merged_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
-
-            println!("(dbg) to merged {:#?}", &merged_reqs);
-
-            // todo: chain this with the merged_reqs = line above?
-            // We don't need to resolve reqs that are already locked.
-            let mut locked = match lock.package.clone() {
-                Some(lps) => lps
-                    .into_iter()
-                    .map(|lp| (lp.name, Version::from_str(&lp.version).unwrap()))
-                    .collect(),
-                None => vec![],
-            };
-
-            println!("(dbg) locked {:#?}", &locked);
-
-            let reqs_to_resolve: Vec<Req> = merged_reqs
-                .into_iter()
-                .filter(|req| !already_locked(&locked, &req.name, &req.constraints))
-                .collect();
-
-            println!("(dbg) to resolve: {:#?}", &reqs_to_resolve);
-
-            println!("Resolving dependencies...");
-
-            let extras = vec![]; // todo
-            let resolved = match dep_resolution::resolve(&reqs_to_resolve, &os, &extras, &py_vers) {
-                Ok(r) => r,
-                Err(_) => {
-                    abort("Problem resolving dependencies");
-                    unreachable!()
-                }
-            };
-            println!("RES: {:#?}", &resolved);
-            println!("INSTALLED: {:?}", &installed);
-
-            // Now merge the existing lock packages with new ones from resolved packages.
-            // We have a collection of requirements; attempt to merge them with the already-locked ones.
-            //            let mut updated_lock_packs = lock.package.unwrap_or(vec![]);
-            let mut updated_lock_packs = vec![];
-
-            for (name, vers, subdeps) in resolved.iter() {
-                let dummy_constraints = vec![Constraint::new(ReqType::Exact, *vers)];
-                if already_locked(&locked, &name, &dummy_constraints) {
-                    continue;
-                }
-
-                updated_lock_packs.push(LockPackage {
-                    name: name.clone(),
-                    version: vers.to_string(),
-                    source: Some(format!(
-                        "pypi+https://pypi.org/pypi/{}/{}/json",
-                        name,
-                        vers.to_string()
-                    )), // todo
-                    dependencies: None, // todo!
-                });
-            }
-
-            let updated_lp_names: Vec<String> = updated_lock_packs
-                .iter()
-                .map(|ulp| ulp.name.to_lowercase())
-                .collect();
-
-            // Now add any previously-locked packs not updated.
-            for existing_lp in lock.package.unwrap_or(vec![]).iter() {
-                if !updated_lp_names.contains(&existing_lp.name.to_lowercase()) {
-                    updated_lock_packs.push(existing_lp.clone());
-                }
-            }
-
-            println!("Updated LPs: {:#?}", &updated_lock_packs);
-
-            //    let lock_metadata = resolved.iter().map(|dep|
-            //        // todo: Probably incorporate hash etc info in the depNode.
-            //        format!("\"checksum {} {} ({})\" = \"{}\"", &dep.name, &dep.version.to_string(), "", "placeholder")
-            //    )
-            //        .collect();
-
-            let updated_lock = Lock {
-                //        metadata: Some(lock_metadata),
-                metadata: None, // todo: Problem with toml conversion.
-                package: Some(updated_lock_packs.clone()),
-            };
-            if write_lock(lock_filename, &updated_lock).is_err() {
-                abort("Problem writing lock file");
-            }
-
-            let packages: Vec<(String, Version)> = updated_lock_packs
-                .into_iter()
-                .map(|lp| (lp.name, Version::from_str(&lp.version).unwrap()))
-                .collect();
-
-            // Now that we've confirmed or modified the lock file, we're ready to sync installed
-            // depenencies with it.
-            sync_deps(
-                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
+            sync(
+                &bin_path,
+                &lib_path,
+                &lockpacks,
+                &updated_reqs,
+                &os,
+                &extras,
+                &py_vers,
+                &lock_filename,
             );
             util::print_color("Installation complete", Color::Green);
         }
 
         SubCommand::Uninstall { packages } => {
-            // todo
-            //            let removed_reqs: Vec<String> = packages
-            //                .into_iter()
-            //                .map(|p| Req::from_str(&p, false).unwrap().name)
-            //                .collect();
-            //
-            //            edit_files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
-            //
-            //            let updated_reqs: Vec<Req> = cfg
-            //                .reqs
-            //                .into_iter()
-            //                .filter(|req| !removed_reqs.contains(&req.name))
-            //                .collect();
-            //
-            //            let installed = util::find_installed(&lib_path);
-            //            sync_deps(&bin_path, &lib_path, &updated_reqs, &installed, &os, &py_vers);
-            //            util::print_color("Uninstall complete", Color::Green);
+            // Remove dependencies specified in the CLI from the config, then lock and sync.
+
+            let removed_reqs: Vec<String> = packages
+                .into_iter()
+                .map(|p| Req::from_str(&p, false).unwrap().name)
+                .collect();
+            println!("(dbg) to remove {:#?}", &removed_reqs);
+
+            edit_files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
+
+            // Filter reqs here instead of re-reading the config from file.
+            let updated_reqs: Vec<Req> = cfg
+                .reqs
+                .into_iter()
+                .filter(|req| !removed_reqs.contains(&req.name))
+                .collect();
+
+            sync(
+                &bin_path,
+                &lib_path,
+                &lockpacks,
+                &updated_reqs,
+                &os,
+                &extras,
+                &py_vers,
+                &lock_filename,
+            );
+            util::print_color("Uninstall complete", Color::Green);
         }
 
         SubCommand::Python { args } => {

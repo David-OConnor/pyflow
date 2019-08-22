@@ -885,22 +885,29 @@ impl fmt::Display for Req {
     }
 }
 
-/// Includes information for describing a `Python` dependency.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct Dependency {
-    pub name: String,
-    pub version: Version,
+///// Includes information for describing a `Python` dependency.
+//#[derive(Clone, Debug, Deserialize, PartialEq)]
+//pub struct Dependency {
+//    pub name: String,
+//    pub version: Version,
+//
+//    //    pub filename: String,
+//    //    pub hash: String, // todo do you want hash, url, filename here?
+//    //    pub file_url: String,
+//    pub reqs: Vec<Req>,
+////    pub deps: Vec<(String, Version)>,
+//
+//    pub constraints_for_this: Vec<Constraint>, // Ie what constraints drove this node's version?
+//
+//    //    pub dependencies: Vec<DepNode>,
+//    pub extras: Vec<String>,
+//}
 
-    //    pub filename: String,
-    //    pub hash: String, // todo do you want hash, url, filename here?
-    //    pub file_url: String,
-    pub reqs: Vec<Req>,
-
-    pub constraints_for_this: Vec<Constraint>, // Ie what constraints drove this node's version?
-
-    //    pub dependencies: Vec<DepNode>,
-    pub extras: Vec<String>,
-}
+//impl Dependency {
+//    pub fn simple_deps(&self) - {
+//
+//    }
+//}
 
 /// Similar to that used by Cargo.lock. Represents an exact package to download. // todo(Although
 /// todo the dependencies field isn't part of that/?)
