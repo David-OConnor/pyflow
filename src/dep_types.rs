@@ -736,23 +736,23 @@ impl Req {
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
         // eg some-crate = { version = "1.0", registry = "my-registry" }
         // todo
-        let re_detailed = Regex::new(r#"^(.*?)\s*=\s*\{(.*)\}"#).unwrap();
-        if let Some(caps) = re_detailed.captures(s) {
-            let name = caps.get(1).unwrap().as_str().to_owned();
-
-            let re_dets = Regex::new(r#"\s*(.*?)/s*=\s*?(.*)?}"#).unwrap();
-            let dets = caps.get(2).unwrap().as_str();
-            //            let features: Vec<(String, String)> = re_dets
-            let features: Vec<String> = re_dets
-                .find_iter(dets)
-                .map(|caps| {
-                    //                    (
-                    caps.as_str().to_owned()
-                    //                        caps.get(2).unwrap().as_str().to_owned(),
-                    //                    )
-                })
-                .collect();
-        }
+//        let re_detailed = Regex::new(r#"^(.*?)\s*=\s*\{(.*)\}"#).unwrap();
+//        if let Some(caps) = re_detailed.captures(s) {
+//            let name = caps.get(1).unwrap().as_str().to_owned();
+//
+//            let re_dets = Regex::new(r#"\s*(.*?)/s*=\s*?(.*)?}"#).unwrap();
+//            let dets = caps.get(2).unwrap().as_str();
+//            //            let features: Vec<(String, String)> = re_dets
+//            let features: Vec<String> = re_dets
+//                .find_iter(dets)
+//                .map(|caps| {
+//                    //                    (
+//                    caps.as_str().to_owned()
+//                    //                        caps.get(2).unwrap().as_str().to_owned(),
+//                    //                    )
+//                })
+//                .collect();
+//        }
 
         let re = if pypi_fmt {
             // eg saturn (>=0.3.4) or argon2-cffi (>=16.1.0) ; extra == 'argon2'

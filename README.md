@@ -27,7 +27,7 @@ On other Operating systems, download the appropriate binary, and place it somewh
 accessible by the system path. For example, place it under `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 
-- If you have `Rust` installed, the most convenient way is to 
+- If you have [Rust](https://www.rust-lang.org) installed, the most convenient way is to 
 run `cargo install pypackage`.
 
 ## Quickstart
@@ -59,8 +59,6 @@ doesn't modify outside files.
 - If multiple Python installations are found, it allows the user to select the desired 
 one to use for each project. This is a notable problem with `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
-Where existing tools expect you to manage environments, this one abstracts
-it away.
 
 - Multiple versions of a dependency can be installed, allowing resolution
 of conflicting sub-dependencies, and using the highest version allowed for
@@ -68,12 +66,12 @@ each requirement.
 
 
 ## Virtual environments are easy. What's the point of this?
-Hopefully we're not replacing [this](https://xkcd.com/1987/) with [this](https://xkcd.com/927/).
+Hopefully we're not replacing [one problem](https://xkcd.com/1987/) with [another](https://xkcd.com/927/).
 
 Some people like the virtual-environment workflow - it requires only tools included 
 with Python, and uses few console commands to create,
 and activate and environments. However, it may be tedius depending on workflow:
-The few commands may be long depending on the path of virtual envs and projects,
+The commands may be long depending on the path of virtual envs and projects,
 and it requires modifying the state of the terminal for each project, each time
 you use it, which you may find inconvenient or inelegant.
 
@@ -94,20 +92,23 @@ of binaries from `PyPi`. If all packages you need are available on `Conda`, it m
 be the best solution. If not, it requires falling back to `Pip`, which means 
 using two separate package managers, and eschewing the benefits of a modern workflow.
 
-Overall: Good-enough solutions exist, but I think we can do better.
+When building and deploying packages, a set of degenerate files are 
+traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`. We use
+`pyproject.toml` as the single-source of project info required to build
+and publish.
 
 
-## Thoroughly biased feature table, or visual explanation of why this tool exists 
+## A thoroughly biased feature table
 (Please PR anything here that's innacurate, incomplete, or misleading)
 
 These tools have different scopes and purposes:
 
-| Name | Pip + venv | Pipenv | Poetry | Pyenv | pythonloc | Conda |this |
+| Name | [Pip + venv](https://docs.python.org/3/library/venv.html) | [Pipenv](https://docs.pipenv.org) | [Poetry](https://poetry.eustace.io) | [pyenv](https://github.com/pyenv/pyenv) | [pythonloc](https://github.com/cs01/pythonloc) | [Conda](https://docs.conda.io/en/latest/) |this |
 |------|------------|--------|--------|-------|-----------|-------|-----|
 | **Manages dependencies** | ✓ | ✓ | ✓ | | | ✓ | ✓|
-| **Environment-agnostic** | | | | ✓ | | ✓ | ✓ |
+| **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
 | **Included with Python** | ✓ | | | | | | |
-| **Keeps packages local** | | | | | ✓ | | ✓|
+| **Stores packages with project** | | | | | ✓ | | ✓|
 | **Locks dependencies** |  | ✓ | ✓ | | | ✓ | ✓|
 | **Requires changing session state** | ✓ | | | | | | |
 | **Slow** |  | ✓ | | | | | |
@@ -179,10 +180,11 @@ as defined in `pyproject.toml`
 
 ### Misc:
 - `pypackage list` - Display all installed packages and console scripts
-- `pypackage new projname` - Create a directory containing the basics for
+- `pypackage new projname` - Create a directory containing the basics for a project: 
+a readme, pyproject.toml, .gitignore, and directory for code
 - `pypackage init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
 `requirements.text`, `Pipfile` etc as required.
-a project: a readme, pyproject.toml, and directory for source code
+
 - `pypackage -V` - Get the current version of this tool
 - `pypackage help` Get help, including a list of available commands
 
@@ -201,11 +203,12 @@ Once complete, packages are installed and removed in order to exactly meet those
 in the updated lock file.
 
 ## How dependencies are resolved
-Running `pypackage install` sync's the project's installed dependencies with those
+Running `pypackage install` syncs the project's installed dependencies with those
  specified in `pyproject.toml`. It generates `pypackage.lock`, which on subsequent runs,
   keeps dependencies each package a fixed version, as long as it continues to meet the constraints
   specified in `pyproject.toml`. Adding a
 package name via the CLI, eg `pypackage install matplotlib` simply adds that requirement before proceeding.
+
 Compatible versions of dependencies are determined using info from 
 the [PyPi Warehosue](https://github.com/pypa/warehouse) (available versions, and hash info), 
 and the `pydeps` database. We use `pydeps`, which is built specifically for this project,
@@ -224,49 +227,10 @@ When a dependency is removed from `pyproject.toml`, it, and its subdependencies 
 also required by other packages are removed from the `__pypackages__` folder.
 
 
-
-
-
-## Why?
-Using a Python installation directly when installing dependencies can become messy.
-If using a system-level Python, which is ubiqutious in Linux, altering dependencies
-may break the OS. Virtual environments correct this, but are cumbersome to use. 
-An example workflow:
-
-Setup:
-```bash
-cd ~/.virtualenvs
-python -m venv "myproject"
-cd myproject/bin
-source activate
-cd ~/myproject
-python install -r requirements.txt
-deactivate
-```
-Use:
-```bash
-cd ~/.virtualenvs/myproject/bin
-source activate
-cd ~/myproject
-python main.py
-deactivate
-```
-
-This signifcantly impacts the usability of Python, especially for new users. 
-IDEs like `PyCharm` abstract this away, but are a specific solution
-to a general problem. See [this section of PEP 582](https://www.python.org/dev/peps/pep-0582/#id3).
-
-If multiple versions of Python are installed, verifying you're using
-the one you want may be difficult.
-
-When building and deploying packages, a set of other, redudant files are 
-traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`
-
-
 ## Not-yet-implemented
 
 - Installing from sources other than `pypi` (eg repos)
-- The lock file is missing some info like dependencies and hashes
+- The lock file is missing some info like hashes
 - Windows installer and Mac binaries
 - Adding a dependency via the CLI with a specific version constraint
 - Developer requirements
@@ -289,6 +253,9 @@ license = "MIT"
 classifiers = [
     "Topic :: System :: Hardware",
     "Topic :: Scientific/Engineering :: Human Machine Interfaces",
+]
+console_scripts = [
+    "activate" = "jeejah::activate"
 ]
 
 [tool.pypackage.dependencies]

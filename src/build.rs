@@ -24,6 +24,16 @@ fn serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
     result
 }
 
+///// A different format, as used in console_scripts
+//fn serialize_py_dict2(hm: &HashMap<String, String>) -> String {
+//    let mut result = "{\n".to_string();
+//    for (key, val) in hm.iter() {
+//        result.push_str(&format!("    \"{}\": {}\n", key, serialize_py_list(val)));
+//    }
+//    result.push('}');
+//    result
+//}
+
 /// Creates a temporary file which imitates setup.py
 fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
     let version = match cfg.version {
@@ -64,6 +74,7 @@ setuptools.setup(
         cfg.repo_url.unwrap_or_else(|| "".into()),
         serialize_py_list(&cfg.classifiers),
         serialize_py_dict(&cfg.entry_points),
+//        serialize_py_dict2(&cfg.console_scripts),
         match cfg.extras {
             Some(e) => serialize_py_dict(&e),
             None => "".into(),

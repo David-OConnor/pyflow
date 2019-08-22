@@ -249,4 +249,78 @@ pub fn parse_pipfile(cfg: &mut Config) {
     }
 }
 
-pub fn parse_poetry(cfg: &mut Config) {}
+// todo: DRY from parse_pipfile and parsing pyproject.toml!
+pub fn parse_poetry(cfg: &mut Config) {
+     let file = match fs::File::open("pyproject.toml") {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+
+    let mut in_metadata = false;
+    let mut in_dep = false;
+    let mut in_extras = false;
+
+    let sect_re = Regex::new(r"\[.*\]").unwrap();
+
+    for line in BufReader::new(file).lines() {
+        if let Ok(l) = line {
+            // todo replace this with something that clips off
+            // todo post-# part of strings; not just ignores ones starting with #
+            if l.starts_with('#') {
+                continue;
+            }
+
+            if &l == "[tool.poetry]" {
+                in_metadata = true;
+                in_dep = false;
+                in_extras = false;
+                continue;
+            } else if &l == "[tool.poetry.dependencies]" {
+                in_metadata = false;
+                in_dep = true;
+                in_extras = false;
+                continue;
+            } else if &l == "[dev-packages]" {
+                in_metadata = false;
+                in_dep = false;
+                in_extras = false;
+                // todo
+                continue;
+            } else if sect_re.is_match(&l) {
+                in_metadata = false;
+                in_dep = false;
+                in_extras = false;
+                continue;
+            }
+
+            if in_metadata {
+                // todo DRY
+                // Pipfile deliberately only includes minimal metadata.
+                if let Some(n2) = key_re("name").captures(&l) {
+                    if let Some(n) = n2.get(1) {
+                        cfg.name = Some(n.as_str().to_string());
+                    }
+                }
+                if let Some(n2) = key_re("url").captures(&l) {
+                    if let Some(n) = n2.get(1) {
+                        cfg.homepage = Some(n.as_str().to_string());
+                    }
+                }
+            } else if in_dep && !l.is_empty() {
+                match Req::from_str(&l, false) {
+                    Ok(r) => {
+                        cfg.reqs.push(r.clone());
+                        util::print_color(&format!("Added {} from Pipfile", r.name), Color::Green)
+                    }
+                    Err(_) => util::print_color(
+                        &format!("Problem parsing {} from Pipfile", l),
+                        Color::Red,
+                    ),
+                }
+            }
+
+            // todo: [requires] section has python_version.
+        }
+    }
+
+}

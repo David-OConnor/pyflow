@@ -153,6 +153,7 @@ pub struct Config {
     package_url: Option<String>,
     readme_filename: Option<String>,
     entry_points: HashMap<String, Vec<String>>, // todo option?
+    console_scripts: HashMap<String, String>, // todo option?
 }
 
 fn key_re(key: &str) -> Regex {
@@ -650,7 +651,7 @@ fn sync_deps(
             package_type = Wheel;
         }
 
-        println!("Downloading and installing {}{}{} = \"{}\"",  Colored::Fg(Color::Cyan), &name, Colored::Fg(Color::Reset), &version);
+        println!("Installing {}{}{} {}",  Colored::Fg(Color::Cyan), &name, Colored::Fg(Color::Reset), &version);
 
         if install::download_and_install_package(
             &name,
@@ -737,8 +738,8 @@ fn sync(
             unreachable!()
         }
     };
-    //            println!("RES: {:#?}", &resolved);
-    //            println!("INSTALLED: {:?}", &installed);
+//    println!("RES: {:#?}", &resolved);
+//                println!("INSTALLED: {:?}", &installed);
 
     // Now merge the existing lock packages with new ones from resolved packages.
     // We have a collection of requirements; attempt to merge them with the already-locked ones.
@@ -834,6 +835,10 @@ fn main() {
             edit_files::parse_pipfile(&mut cfg);
             edit_files::parse_poetry(&mut cfg);
 
+            // todo: implement so we can parse Poetry's pyproject.toml.
+            if PathBuf::from(cfg_filename).exists() {
+                abort("pyproject.toml already exists - not overwriting.")
+            }
             cfg.write_file(cfg_filename);
         }
         _ => (),
@@ -944,7 +949,7 @@ py_version = \"3.7\"",
         // See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages } => {
             // Merge reqs added via cli with those in `pyproject.toml`.
-            let mut updated_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
+            let updated_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
             println!("(dbg) to merged {:#?}", &updated_reqs);
 
             sync(

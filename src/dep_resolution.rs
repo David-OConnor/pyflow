@@ -180,7 +180,7 @@ fn is_compat(constraints: &[Constraint], vers: &Version) -> bool {
 /// Pull data on pydeps for a req. Only pull what we need.
 /// todo: Group all reqs and pull with a single call to pydeps to improve speed?
 fn fetch_req_data(
-    reqs: &[&Req],
+    reqs: &[Req],
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
 ) -> Result<Vec<ReqCache>, DependencyError> {
     // Narrow-down our list of versions to query.
@@ -259,7 +259,7 @@ fn guess_graph(
     reqs_searched: &mut Vec<Req>,
     //    names_searched: &mut Vec<String>,
 ) -> Result<(), DependencyError> {
-    println!("IN guess graph for {:?}", &reqs);
+//    println!("IN guess graph for {:?}", &reqs);
 
     let reqs: Vec<&Req> = reqs
         .into_iter()
@@ -295,7 +295,7 @@ fn guess_graph(
     //    }
 
     let mut non_locked_reqs = vec![];
-    let mut locked_reqs = vec![];
+    let mut locked_reqs: Vec<Req> = vec![];
 
     // Partition reqs into ones we have lock-file data for, and ones where we need to make
     // http calls to the pypi warehouse (for versions) and pydeps (for deps).
@@ -304,19 +304,22 @@ fn guess_graph(
 
         let mut found_in_locked = false;
         for (name, vers, deps) in locked.iter() {
-            if *name != req.name {
+            if *name.to_lowercase() != req.name.to_lowercase() {
                 continue;
             }
             if is_compat(&req.constraints, &vers) {
-                locked_reqs.push(req.clone());
+                locked_reqs.push((*req).clone());
                 found_in_locked = true;
                 break;
             }
         }
         if !found_in_locked {
-            non_locked_reqs.push(req.clone());
+            non_locked_reqs.push((*req).clone());
         }
     }
+
+    println!("locked: {:?}", &locked_reqs);
+    println!("non-locked: {:?}", &non_locked_reqs);
 
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
     let mut query_data = match fetch_req_data(&non_locked_reqs, vers_cache) {
@@ -327,23 +330,15 @@ fn guess_graph(
         }
     };
 
-    println!("Locked reqs: {:?}", &locked_reqs);
-
     // Now add info from lock packs for data we didn't query. The purpose of passing locks
     // into the dep resolution process is to avoid unecessary HTTP calls and resolution iterations.
-    for req in locked_reqs.iter() {
+    for req in locked_reqs {
         // Find the corresponding lock package. There should be exactly one.
         let (lp_name, lp_vers, lp_deps) = locked
             .iter()
             .find(|(name, _, _)| name.to_lowercase() == req.name.to_lowercase())
             .expect("Can't find matching lock package");
 
-        //        let reqs = lp_deps
-        //            .iter()
-        //            .map(|(name, vers)| {
-        //                Req::new(name.clone(), vec![Constraint::new(ReqType::Exact, *vers)])
-        //            })
-        //            .collect();
         let requires_dist = lp_deps
             .iter()
             .map(|(name, vers)| format!("{} (=={})", name, vers.to_string()))
@@ -366,7 +361,7 @@ fn guess_graph(
         // Find matching packages for this requirement.
         let query_result: Vec<&ReqCache> = query_data
             .iter()
-            .filter(|d| d.name == Some(req.name.clone()))
+            .filter(|d| d.name.as_ref().unwrap().to_lowercase() == req.name.to_lowercase())
             // todo fix filter_compat for modifiers and put back.
             //            .into_iter()
             //            .filter(|r| filter_compat(&req.constraints, &req_cache.version))
@@ -381,14 +376,7 @@ fn guess_graph(
                         Version::from_str(&r.version).expect("Problem parsing vers"),
                         r.reqs(),
                     )
-                }, //                Dependency {
-                   //                    name: req.name.to_owned(),
-                   //                    version: Version::from_str(&r.version).expect("Problem parsing vers"),
-                   //                    reqs: r.reqs(),
-                   //                    //                    deps: vec![], // todo
-                   //                    constraints_for_this: req.constraints.clone(),
-                   //                    extras: vec![], // todo
-                   //                }
+                },
             )
             .collect();
 
@@ -499,11 +487,12 @@ pub fn resolve(
                 for (name, vers, _) in result.iter() {
                     // todo: Make sure you've picked the right one if multiple exist!!
                     // todo qc this. This is what we add to the lockfile deps section.
-                    if r.name == *name {
+                    if r.name.to_lowercase() == *name.to_lowercase() {
                         subdeps.push((name.to_owned(), *vers));
                     }
                 }
             }
+            println!("SUB for: {:?} , P{:?}", &dep.0, &subdeps);
 
             result_cleaned.push((formatted_name.to_owned(), dep.1, subdeps));
         } else {

@@ -232,7 +232,7 @@ pub fn merge_reqs(added: &Vec<String>, cfg: &crate::Config, cfg_filename: &str) 
     // version.
     for added_req in added_reqs_unique.iter_mut() {
         if added_req.constraints.is_empty() {
-            let (formatted_name, vers, _) = dep_resolution::get_version_info(&added_req.name)
+            let (_, vers, _) = dep_resolution::get_version_info(&added_req.name)
                 .expect("Problem getting latest version of the package you added.");
             added_req.constraints.push(Constraint::new(
                 ReqType::Caret,
