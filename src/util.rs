@@ -137,7 +137,7 @@ pub fn show_installed(lib_path: &PathBuf) {
         Color::DarkBlue,
     );
     for script in scripts {
-        print_color(&script, Color::Cyan);
+        print_color(&script, Color::DarkCyan);
     }
 }
 
@@ -196,9 +196,9 @@ pub fn find_console_scripts(bin_path: &PathBuf) -> Vec<String> {
 }
 
 /// Handle reqs added via the CLI
-pub fn merge_reqs(added: &Vec<String>, cfg: &crate::Config, cfg_filename: &str) -> Vec<Req> {
+pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> Vec<Req> {
     let mut added_reqs = vec![];
-    for p in added.into_iter() {
+    for p in added.iter() {
         match Req::from_str(&p, false) {
             Ok(r) => added_reqs.push(r),
             Err(_) => abort(&format!("Unable to parse this package: {}. \

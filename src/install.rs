@@ -98,7 +98,8 @@ if __name__ == '__main__':
         module, func, func
     );
 
-    fs::write(path, contents).expect(&format!("Problem creating CLI script file for {}", name));
+    fs::write(path, contents)
+        .unwrap_or_else(|_| panic!("Problem creating CLI script file for {}", name));
 }
 
 /// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
@@ -380,13 +381,13 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
     }
 
     // Only report error if both dist-info and egg-info removal fail.
-    let mut meta_folder_removed = false;
-    if fs::remove_dir_all(dist_info_path).is_ok() {
-        meta_folder_removed = true;
-    }
-    if fs::remove_dir_all(egg_info_path).is_ok() {
-        meta_folder_removed = true;
-    }
+
+    let meta_folder_removed = if fs::remove_dir_all(egg_info_path).is_ok() {
+        true
+    } else {
+        fs::remove_dir_all(dist_info_path).is_ok()
+    };
+
     if !meta_folder_removed {
         println!(
             "{}Problem uninstalling metadata for {}: {}",

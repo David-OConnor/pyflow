@@ -2,33 +2,28 @@ language: rust
 
 rust:
   - stable
+  - beta
+  - nightly
 
-install:
-
+matrix:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
 
 os:
   - windows
   - osx
   - linux
 
-# https://levans.fr/rust_travis_cache.html
-cache:
-  directories:
-    - $HOME/.cargo
-
-before_cache:
-  - rm -rf $HOME/.cargo/registry
+cache: cargo
 
 env:
   global:
     - RUST_BACKTRACE=1
 
-matrix:
-  allow_failures:
-    - rust: nightly
-
 script:
-  - cargo test
+  - cargo build --verbose --all
+  - cargo test --verbose --all
 
 
 # TODO: make it faster ; useful links:

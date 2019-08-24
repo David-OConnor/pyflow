@@ -251,7 +251,7 @@ pub fn parse_pipfile(cfg: &mut Config) {
 
 // todo: DRY from parse_pipfile and parsing pyproject.toml!
 pub fn parse_poetry(cfg: &mut Config) {
-     let file = match fs::File::open("pyproject.toml") {
+    let file = match fs::File::open("pyproject.toml") {
         Ok(f) => f,
         Err(_) => return,
     };
@@ -322,5 +322,4 @@ pub fn parse_poetry(cfg: &mut Config) {
             // todo: [requires] section has python_version.
         }
     }
-
 }

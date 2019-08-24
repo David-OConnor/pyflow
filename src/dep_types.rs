@@ -1,6 +1,7 @@
 use crossterm::{Color, Colored};
 use regex::{Match, Regex};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
 
@@ -54,6 +55,8 @@ pub enum VersionModifier {
     Beta,
     ReleaseCandidate,
     Dep, // todo: Not sure what this is, but have found it.
+    // Used to allow comparisons between versions that have and don't have modifiers.
+    Null,
 }
 
 impl FromStr for VersionModifier {
@@ -78,13 +81,26 @@ impl ToString for VersionModifier {
             Self::Beta => "b".into(),
             Self::ReleaseCandidate => "rc".into(),
             Self::Dep => "dep".into(),
+            Self::Null => panic!("Can't convert Null to string; misused"),
+        }
+    }
+}
+
+impl VersionModifier {
+    fn orderval(&self) -> u8 {
+        match self {
+            VersionModifier::Null => 4,
+            VersionModifier::ReleaseCandidate => 3,
+            VersionModifier::Beta => 2,
+            VersionModifier::Alpha => 1,
+            VersionModifier::Dep => 0,
         }
     }
 }
 
 impl Ord for VersionModifier {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        other.to_string().cmp(&self.to_string())
+        self.orderval().cmp(&other.orderval())
     }
 }
 
@@ -152,7 +168,11 @@ impl Version {
     }
 
     /// ie cp37, a version from Pypi.
-    pub fn from_cp_str(s: &str) -> Result<Self, DependencyError> {
+    pub fn from_warehouse_str(s: &str) -> Result<Self, DependencyError> {
+        if let Ok(v) = Self::from_str(s) {
+            return Ok(v);
+        }
+
         if s == "py2.py3" {
             return Ok(Self::new(3, 3, 0));
         }
@@ -250,8 +270,9 @@ impl FromStr for Version {
 
 impl Ord for Version {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let self_mod = self.modifier.unwrap_or((VersionModifier::Alpha, 0));
-        let other_mod = self.modifier.unwrap_or((VersionModifier::Alpha, 0));
+        // None version modifiers should rank highest. Ie 17.0 > 17.0rc1
+        let self_mod = self.modifier.unwrap_or((VersionModifier::Null, 0));
+        let other_mod = other.modifier.unwrap_or((VersionModifier::Null, 0));
 
         if self.major != other.major {
             self.major.cmp(&other.major)
@@ -686,19 +707,21 @@ fn parse_extras(
                     "extra" => extra = Some(val.to_owned()),
                     "sys_platform" => {
                         sys_platform = Some((
-                            ReqType::from_str(req_type)
-                                .expect(&format!("Problem parsing reqtype: {}", req_type)),
+                            ReqType::from_str(req_type).unwrap_or_else(|_| {
+                                panic!("Problem parsing reqtype: {}", req_type)
+                            }),
                             crate::Os::from_str(val)
-                                .expect(&format!("Problem parsing Os: {}", val)),
+                                .unwrap_or_else(|_| panic!("Problem parsing Os: {}", val)),
                         ))
                     }
                     "python_version" => {
                         // If we parse reqtype and version separately, version will be forced
                         // to take 3 digits, even if not all 3 are specified.
-                        python_version =
-                            Some(Constraint::from_str(&(req_type.to_owned() + val)).expect(
-                                &format!("Problem parsing constraint: {} {}", req_type, val),
-                            ));
+                        python_version = Some(
+                            Constraint::from_str(&(req_type.to_owned() + val)).unwrap_or_else(
+                                |_| panic!("Problem parsing constraint: {} {}", req_type, val),
+                            ),
+                        );
                     }
                     _ => println!("Found unexpected extra: {}", type_),
                 }
@@ -736,23 +759,23 @@ impl Req {
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
         // eg some-crate = { version = "1.0", registry = "my-registry" }
         // todo
-//        let re_detailed = Regex::new(r#"^(.*?)\s*=\s*\{(.*)\}"#).unwrap();
-//        if let Some(caps) = re_detailed.captures(s) {
-//            let name = caps.get(1).unwrap().as_str().to_owned();
-//
-//            let re_dets = Regex::new(r#"\s*(.*?)/s*=\s*?(.*)?}"#).unwrap();
-//            let dets = caps.get(2).unwrap().as_str();
-//            //            let features: Vec<(String, String)> = re_dets
-//            let features: Vec<String> = re_dets
-//                .find_iter(dets)
-//                .map(|caps| {
-//                    //                    (
-//                    caps.as_str().to_owned()
-//                    //                        caps.get(2).unwrap().as_str().to_owned(),
-//                    //                    )
-//                })
-//                .collect();
-//        }
+        //        let re_detailed = Regex::new(r#"^(.*?)\s*=\s*\{(.*)\}"#).unwrap();
+        //        if let Some(caps) = re_detailed.captures(s) {
+        //            let name = caps.get(1).unwrap().as_str().to_owned();
+        //
+        //            let re_dets = Regex::new(r#"\s*(.*?)/s*=\s*?(.*)?}"#).unwrap();
+        //            let dets = caps.get(2).unwrap().as_str();
+        //            //            let features: Vec<(String, String)> = re_dets
+        //            let features: Vec<String> = re_dets
+        //                .find_iter(dets)
+        //                .map(|caps| {
+        //                    //                    (
+        //                    caps.as_str().to_owned()
+        //                    //                        caps.get(2).unwrap().as_str().to_owned(),
+        //                    //                    )
+        //                })
+        //                .collect();
+        //        }
 
         let re = if pypi_fmt {
             // eg saturn (>=0.3.4) or argon2-cffi (>=16.1.0) ; extra == 'argon2'
@@ -927,7 +950,8 @@ pub struct LockPackage {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Lock {
     pub package: Option<Vec<LockPackage>>,
-    pub metadata: Option<Vec<String>>, // ie checksums
+    //    pub metadata: Option<Vec<String>>, // ie checksums
+    pub metadata: HashMap<String, String>, // ie checksums
 }
 
 #[cfg(test)]
@@ -1318,6 +1342,50 @@ pub mod tests {
     }
 
     #[test]
+    fn version_ordering_modded() {
+        let a = Version {
+            major: 4,
+            minor: 9,
+            patch: 4,
+            extra_num: Some(2),
+            modifier: None,
+        };
+        let b = Version::new(4, 9, 4);
+
+        let c = Version {
+            major: 4,
+            minor: 9,
+            patch: 4,
+            extra_num: None,
+            modifier: Some((VersionModifier::ReleaseCandidate, 2)),
+        };
+        let d = Version {
+            major: 4,
+            minor: 9,
+            patch: 4,
+            extra_num: None,
+            modifier: Some((VersionModifier::ReleaseCandidate, 1)),
+        };
+        let e = Version {
+            major: 4,
+            minor: 9,
+            patch: 4,
+            extra_num: None,
+            modifier: Some((VersionModifier::Beta, 6)),
+        };
+        let f = Version {
+            major: 4,
+            minor: 9,
+            patch: 4,
+            extra_num: None,
+            modifier: Some((VersionModifier::Alpha, 7)),
+        };
+        let g = Version::new(4, 9, 2);
+
+        assert!(a > b && b > c && c > d && d > e && e > f && f > g);
+    }
+
+    #[test]
     fn compat_rng() {
         let actual1 = Constraint::new(Gte, Version::new(5, 1, 0)).compatible_range();
         let expected1 = vec![(Version::new(5, 1, 0), Version::_max())];
@@ -1404,6 +1472,7 @@ pub mod tests {
             vec![(Version::new(4, 9, 4), Version::new(5, 5, 4))]
         );
     }
+
     //    #[test]
     //    fn intersection_contained_many_more() {
     //        let reqs1 = vec![Constraint::new(Gte, 4, 9, 2)];

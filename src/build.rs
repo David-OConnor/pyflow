@@ -5,7 +5,7 @@ use std::{env, fs, path::PathBuf, process::Command};
 // https://packaging.python.org/tutorials/packaging-projects/
 
 /// Serialize to a python list of strings.
-fn serialize_py_list(items: &Vec<String>) -> String {
+fn serialize_py_list(items: &[String]) -> String {
     let mut result = "[\n".to_string();
     for item in items.iter() {
         result.push_str(&format!("    \"{}\",\n", item));
@@ -74,7 +74,7 @@ setuptools.setup(
         cfg.repo_url.unwrap_or_else(|| "".into()),
         serialize_py_list(&cfg.classifiers),
         serialize_py_dict(&cfg.entry_points),
-//        serialize_py_dict2(&cfg.console_scripts),
+        //        serialize_py_dict2(&cfg.console_scripts),
         match cfg.extras {
             Some(e) => serialize_py_dict(&e),
             None => "".into(),

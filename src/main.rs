@@ -26,6 +26,8 @@ mod edit_files;
 mod install;
 mod util;
 
+type Package = (String, Version, Vec<(String, Version)>);
+
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
 /// Used to determine which version of a binary package to download. Assume 64-bit.
 pub enum Os {
@@ -153,7 +155,7 @@ pub struct Config {
     package_url: Option<String>,
     readme_filename: Option<String>,
     entry_points: HashMap<String, Vec<String>>, // todo option?
-    console_scripts: HashMap<String, String>, // todo option?
+    console_scripts: HashMap<String, String>,   // todo option?
 }
 
 fn key_re(key: &str) -> Regex {
@@ -456,7 +458,9 @@ fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyErro
     let re = Regex::new(r"^(?:.*?-)+(.*).whl$").unwrap();
     if let Some(caps) = re.captures(filename) {
         let parsed = caps.get(1).unwrap().as_str();
-        return Ok(Os::from_str(parsed).expect(&format!("Problem parsing Os: {}", parsed)));
+        return Ok(
+            Os::from_str(parsed).unwrap_or_else(|_| panic!("Problem parsing Os: {}", parsed))
+        );
     }
 
     Err(dep_types::DependencyError::new(
@@ -541,25 +545,29 @@ fn sync_deps(
     lib_path: &PathBuf,
     packages: &[(String, Version)], // name, version
     installed: &[(String, Version)],
-    os: &Os,
+    os: Os,
     python_vers: &Version,
     //    resolved: &Vec<(String, Version, Vec<(String, Version)>)>,
 ) {
     // Filter by not-already-installed.
     let to_install: Vec<&(String, Version)> = packages
-        .into_iter()
+        .iter()
         // todo: Do we need to compare names with .to_lowercase()?
         .filter(|pack| !installed.contains(pack))
         .collect();
 
     let to_uninstall: Vec<&(String, Version)> = installed
-        .into_iter()
+        .iter()
         // todo: Do we need to compare names with .to_lowercase()?
         .filter(|pack| !packages.contains(pack))
         .collect();
 
-    println!("TO install: {:#?}", &to_install);
-    println!("TO unin: {:#?}", &to_uninstall);
+    //    println!("TO install: {:#?}", &to_install);
+    //    println!("TO unin: {:#?}", &to_uninstall);
+
+    for (name, version) in to_uninstall.iter() {
+        install::uninstall(name, version, lib_path)
+    }
 
     for (name, version) in to_install.iter() {
         let data = dep_resolution::get_warehouse_release(&name, &version)
@@ -589,14 +597,14 @@ fn sync_deps(
 
                     let wheel_os = os_from_wheel_fname(&rel.filename)
                         .expect("Problem getting os from wheel name");
-                    if wheel_os != *os && wheel_os != Os::Any {
+                    if wheel_os != os && wheel_os != Os::Any {
                         compatible = false;
                     }
 
                     // Packages that use C code(eg numpy) may fail to load C extensions if installing
                     // for the wrong version of python (eg  cp35 when python 3.7 is installed), even
                     // if `requires_python` doesn't indicate an incompatibility. Check `python_version`.
-                    match Version::from_cp_str(&rel.python_version) {
+                    match Version::from_warehouse_str(&rel.python_version) {
                         Ok(req_v) => {
                             if req_v != *python_vers
                                 // todo: Awk place for this logic.
@@ -611,7 +619,7 @@ fn sync_deps(
                                 "Unable to match python version from python_version: {}",
                                 &rel.python_version
                             ))
-                        } // todo
+                        }
                     }
 
                     if compatible {
@@ -651,8 +659,13 @@ fn sync_deps(
             package_type = Wheel;
         }
 
-        println!("Installing {}{}{} {}",  Colored::Fg(Color::Cyan), &name, Colored::Fg(Color::Reset), &version);
-
+        println!(
+            "Installing {}{}{} {}",
+            Colored::Fg(Color::Cyan),
+            &name,
+            Colored::Fg(Color::Reset),
+            &version
+        );
         if install::download_and_install_package(
             &name,
             &version,
@@ -668,17 +681,9 @@ fn sync_deps(
             abort("Problem downloading packages");
         }
     }
-
-    for (name, version) in to_uninstall.iter() {
-        install::uninstall(name, version, lib_path)
-    }
 }
 
-fn already_locked(
-    locked: &[(String, Version, Vec<(String, Version)>)],
-    name: &str,
-    constraints: &[Constraint],
-) -> bool {
+fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) -> bool {
     let mut result = true;
     for constr in constraints.iter() {
         let mut constr_passed = false;
@@ -702,7 +707,7 @@ fn sync(
     lib_path: &PathBuf,
     lockpacks: &[LockPackage],
     reqs: &[Req],
-    os: &Os,
+    os: Os,
     extras: &[String],
     py_vers: &Version,
     lock_filename: &str,
@@ -712,8 +717,8 @@ fn sync(
     let dep_re = Regex::new(r"^(.*?)\s(.*)\s.*$").unwrap();
 
     // We don't need to resolve reqs that are already locked.
-    let locked: Vec<(String, Version, Vec<(String, Version)>)> = lockpacks
-        .into_iter()
+    let locked: Vec<Package> = lockpacks
+        .iter()
         .map(|lp| {
             let mut deps = vec![];
             for dep in lp.dependencies.as_ref().unwrap_or(&vec![]) {
@@ -725,21 +730,23 @@ fn sync(
                 deps.push((name, vers));
             }
 
-            (lp.name.clone(), Version::from_str(&lp.version).unwrap(), deps)
+            (
+                lp.name.clone(),
+                Version::from_str(&lp.version).unwrap(),
+                deps,
+            )
         })
         .collect();
 
     println!("Resolving dependencies...");
 
-    let resolved = match dep_resolution::resolve(&reqs, &locked, &os, &extras, &py_vers) {
+    let resolved = match dep_resolution::resolve(&reqs, &locked, os, &extras, &py_vers) {
         Ok(r) => r,
         Err(_) => {
             abort("Problem resolving dependencies");
             unreachable!()
         }
     };
-//    println!("RES: {:#?}", &resolved);
-//                println!("INSTALLED: {:?}", &installed);
 
     // Now merge the existing lock packages with new ones from resolved packages.
     // We have a collection of requirements; attempt to merge them with the already-locked ones.
@@ -785,7 +792,7 @@ fn sync(
 
     let updated_lock = Lock {
         //        metadata: Some(lock_metadata),
-        metadata: None, // todo: Problem with toml conversion.
+        metadata: HashMap::new(), // todo: Problem with toml conversion.
         package: Some(updated_lock_packs.clone()),
     };
     if write_lock(lock_filename, &updated_lock).is_err() {
@@ -801,7 +808,7 @@ fn sync(
     // depenencies with it.
     sync_deps(
         //                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
-        &bin_path, &lib_path, &packages, &installed, &os, &py_vers,
+        &bin_path, &lib_path, &packages, &installed, os, &py_vers,
     );
 }
 
@@ -938,7 +945,7 @@ py_version = \"3.7\"",
     let os = Os::Mac;
 
     let extras = vec![]; // todo temp!!
-    let lockpacks = lock.package.unwrap_or(vec![]);
+    let lockpacks = lock.package.unwrap_or_else(|| vec![]);
     //    let extras = cfg.extras;
 
     match subcmd {
@@ -950,14 +957,14 @@ py_version = \"3.7\"",
         SubCommand::Install { packages } => {
             // Merge reqs added via cli with those in `pyproject.toml`.
             let updated_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
-            println!("(dbg) to merged {:#?}", &updated_reqs);
+            //            println!("(dbg) to merged {:#?}", &updated_reqs);
 
             sync(
                 &bin_path,
                 &lib_path,
                 &lockpacks,
                 &updated_reqs,
-                &os,
+                os,
                 &extras,
                 &py_vers,
                 &lock_filename,
@@ -988,7 +995,7 @@ py_version = \"3.7\"",
                 &lib_path,
                 &lockpacks,
                 &updated_reqs,
-                &os,
+                os,
                 &extras,
                 &py_vers,
                 &lock_filename,

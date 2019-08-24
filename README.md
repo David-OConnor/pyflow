@@ -90,7 +90,7 @@ as intuitive as possible.
 `Conda` addresses these problems elegantly, but maintains a separate repository
 of binaries from `PyPi`. If all packages you need are available on `Conda`, it may
 be the best solution. If not, it requires falling back to `Pip`, which means 
-using two separate package managers, and eschewing the benefits of a modern workflow.
+using two separate package managers.
 
 When building and deploying packages, a set of degenerate files are 
 traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`. We use
@@ -234,6 +234,7 @@ also required by other packages are removed from the `__pypackages__` folder.
 - Windows installer and Mac binaries
 - Adding a dependency via the CLI with a specific version constraint
 - Developer requirements
+- Global package cache to avoid downloading the same package for each project??
 
 
 ## Building and uploading your project to PyPi.
@@ -254,9 +255,9 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Topic :: Scientific/Engineering :: Human Machine Interfaces",
 ]
-console_scripts = [
-    "activate" = "jeejah::activate"
-]
+    [console_scripts]
+    activate = "jeejah::activate"
+
 
 [tool.pypackage.dependencies]
 numpy = "^1.16.4"
