@@ -26,7 +26,21 @@ mod edit_files;
 mod install;
 mod util;
 
-type Package = (String, Version, Vec<(String, Version)>);
+#[derive(Debug)]
+pub enum Rename {
+    No,
+    // todo: May not need to store self id.
+    Yes(u32, u32, String), // parent id, self id, name
+}
+
+#[derive(Debug)]
+pub struct Package {
+    id: u32,
+    name: String,
+    version: Version,
+    deps: Vec<(String, Version)>,
+    rename: Rename,
+}
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
 /// Used to determine which version of a binary package to download. Assume 64-bit.
@@ -687,8 +701,8 @@ fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) ->
     let mut result = true;
     for constr in constraints.iter() {
         let mut constr_passed = false;
-        if locked.iter().any(|(name_, vers, _)| {
-            name_.to_lowercase() == name.to_lowercase() && constr.is_compatible(vers)
+        if locked.iter().any(|p| {
+            p.name.to_lowercase() == name.to_lowercase() && constr.is_compatible(&p.version)
         }) {
             constr_passed = true;
             break;
@@ -730,11 +744,13 @@ fn sync(
                 deps.push((name, vers));
             }
 
-            (
-                lp.name.clone(),
-                Version::from_str(&lp.version).unwrap(),
+            Package {
+                id: lp.id, // todo
+                name: lp.name.clone(),
+                version: Version::from_str(&lp.version).unwrap(),
                 deps,
-            )
+                rename: Rename::No, // todo
+            }
         })
         .collect();
 
@@ -748,16 +764,18 @@ fn sync(
         }
     };
 
+    println!("RESOLVED: {:#?}", &resolved);
+
     // Now merge the existing lock packages with new ones from resolved packages.
     // We have a collection of requirements; attempt to merge them with the already-locked ones.
     let mut updated_lock_packs = vec![];
 
-    for (name, vers, subdeps) in resolved.iter() {
-        let dummy_constraints = vec![Constraint::new(ReqType::Exact, *vers)];
-        if already_locked(&locked, &name, &dummy_constraints) {
+    for package in resolved.iter() {
+        let dummy_constraints = vec![Constraint::new(ReqType::Exact, package.version)];
+        if already_locked(&locked, &package.name, &dummy_constraints) {
             let existing: Vec<&LockPackage> = lockpacks
                 .iter()
-                .filter(|lp| lp.name.to_lowercase() == name.to_lowercase())
+                .filter(|lp| lp.name.to_lowercase() == package.name.to_lowercase())
                 .collect();
             let existing2 = existing[0];
 
@@ -765,7 +783,7 @@ fn sync(
             continue;
         }
 
-        let deps = subdeps
+        let deps = package.deps
             .iter()
             .map(|(name, version)| {
                 format!(
@@ -779,13 +797,14 @@ fn sync(
             .collect();
 
         updated_lock_packs.push(LockPackage {
-            name: name.clone(),
-            version: vers.to_string(),
+            id: package.id,
+            name: package.name.clone(),
+            version: package.version.to_string(),
             source: Some(format!(
                 "pypi+https://pypi.org/pypi/{}/{}/json",
-                name,
-                vers.to_string()
-            )), // todo
+                package.name,
+                package.version.to_string()
+            )),
             dependencies: Some(deps),
         });
     }

@@ -939,8 +939,8 @@ pub struct LockPackage {
     // We use Strings here instead of types like Version to make it easier to
     // serialize and deserialize
     // todo: We have an analog Package type; perhaps just figure out how to serialize that.
+    pub id: u32, // used for tracking renames
     pub name: String,
-    //    version: Version,  todo
     pub version: String,
     pub source: Option<String>,
     pub dependencies: Option<Vec<String>>,

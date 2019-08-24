@@ -1,4 +1,5 @@
 use crate::util;
+use crossterm::Color;
 use std::collections::HashMap;
 use std::{env, fs, path::PathBuf, process::Command};
 
@@ -117,11 +118,13 @@ pub(crate) fn build(
         .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
         .status()
         .expect("Problem building");
-    println!("Build complete.");
 
-    if fs::remove_file(dummy_setup_fname).is_err() {
-        println!("Problem removing temporary setup file while building ")
-    };
+    util::print_color("Build complete.", Color::Green)
+
+    // todo: Temporarily removed this for debugging
+    //    if fs::remove_file(dummy_setup_fname).is_err() {
+    //        println!("Problem removing temporary setup file while building ")
+    //    };
 }
 
 pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {

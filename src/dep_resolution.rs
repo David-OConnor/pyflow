@@ -53,7 +53,7 @@ struct Dependency {
     // Identify what constraints drove this, and by what package name/version.
     // The latter is so we know which package to mangle the inputs for, if
     // we need to rename this one.
-    parent: u32,  // id
+    parent: u32, // id
 }
 
 /// Format a name based on how it's listed on PyPi. Ie capitalize or convert - to _'
@@ -267,16 +267,15 @@ fn fetch_req_data(
 fn guess_graph(
     parent_id: u32,
     reqs: &[Req],
-    locked: &[(String, Version, Vec<(String, Version)>)],
+    locked: &[crate::Package],
     os: crate::Os,
     extras: &[String],
     py_vers: &Version,
-    result: &mut Vec<Dependency>,  // parent id, self id.
+    result: &mut Vec<Dependency>, // parent id, self id.
     cache: &mut HashMap<(String, Version), Vec<&ReqCache>>,
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
     reqs_searched: &mut Vec<Req>,
 ) -> Result<(), DependencyError> {
-
     let reqs: Vec<&Req> = reqs
         .into_iter()
         // If we've already satisfied this req, don't query it again. Otherwise we'll make extra
@@ -312,11 +311,11 @@ fn guess_graph(
         reqs_searched.push((*req).clone());
 
         let mut found_in_locked = false;
-        for (name, vers, deps) in locked.iter() {
-            if *name.to_lowercase() != req.name.to_lowercase() {
+        for package in locked.iter() {
+            if *package.name.to_lowercase() != req.name.to_lowercase() {
                 continue;
             }
-            if is_compat(&req.constraints, &vers) {
+            if is_compat(&req.constraints, &package.version) {
                 locked_reqs.push((*req).clone());
                 found_in_locked = true;
                 break;
@@ -340,12 +339,12 @@ fn guess_graph(
     // into the dep resolution process is to avoid unecessary HTTP calls and resolution iterations.
     for req in locked_reqs {
         // Find the corresponding lock package. There should be exactly one.
-        let (lp_name, lp_vers, lp_deps) = locked
+        let package = locked
             .iter()
-            .find(|(name, _, _)| name.to_lowercase() == req.name.to_lowercase())
+            .find(|p| p.name.to_lowercase() == req.name.to_lowercase())
             .expect("Can't find matching lock package");
 
-        let requires_dist = lp_deps
+        let requires_dist = package.deps
             .iter()
             .map(|(name, vers)| format!("{} (=={})", name, vers.to_string()))
             .collect();
@@ -353,12 +352,14 @@ fn guess_graph(
         // Note that we convert from normal data types to strings here, for the sake of consistency
         // with the http call results.
         query_data.push(ReqCache {
-            name: Some(lp_name.clone()),
-            version: lp_vers.to_string(),
+            name: Some(package.name.clone()),
+            version: package.version.to_string(),
             requires_python: None,
             requires_dist,
         });
     }
+
+    // todo: We must take locked ids into account, or will bork renames on subsequent runs!
 
     // We've now merged the query data with locked data. A difference though, is we've already
     // narrowed down the locked ones to one version with an exact constraint.
@@ -378,29 +379,28 @@ fn guess_graph(
                 version: Version::from_str(&r.version).expect("Problem parsing vers"),
                 reqs: r.reqs(),
                 parent: parent_id,
-
                 //                    reqs_for_this: reqs.iter().map(|r| {
                 //                        Req::new(r.name.clone(), r.constraints.clone())
                 //                    }).collect()
                 // todo QC this when you get a chance.
 
-//                constrs_for_this: {
-//                    let mut result2 = vec![];
-//                    let relevant_reqs = reqs
-//                        .iter()
-//                        .filter(|r| r.name.to_lowercase() == req.name.to_lowercase());
-//
-//                    for rel_req in relevant_reqs.into_iter() {
-//                        let mut constrs = vec![];
-//                        for constr in rel_req.constraints.iter() {
-//                            constrs.push(constr.clone());
-//                        }
-//                        // todo: Version parsing DRY.
-//                        result2.push((req.name.to_owned(), Version::from_str(&r.version).expect("Problem parsing vers"), constrs));
-//                    }
-//
-//                    result2
-//                },
+                //                constrs_for_this: {
+                //                    let mut result2 = vec![];
+                //                    let relevant_reqs = reqs
+                //                        .iter()
+                //                        .filter(|r| r.name.to_lowercase() == req.name.to_lowercase());
+                //
+                //                    for rel_req in relevant_reqs.into_iter() {
+                //                        let mut constrs = vec![];
+                //                        for constr in rel_req.constraints.iter() {
+                //                            constrs.push(constr.clone());
+                //                        }
+                //                        // todo: Version parsing DRY.
+                //                        result2.push((req.name.to_owned(), Version::from_str(&r.version).expect("Problem parsing vers"), constrs));
+                //                    }
+                //
+                //                    result2
+                //                },
             })
             .collect();
 
@@ -434,18 +434,21 @@ fn guess_graph(
     Ok(())
 }
 
-fn setup_dep(
+/// Trim the info used in dependency resolution down to only what's needed to build the lock file,
+/// and sync installed packages.
+fn prepare_package(
     name: &str,
     dep: &Dependency,
     deps: &Vec<Dependency>,
     version_cache: &HashMap<String, (String, Version, Vec<Version>)>,
+    rename: crate::Rename,
 ) -> crate::Package {
     // We need to pass subdeps so we can add them to the lock file. Build them from reqs,
     // they each correspond to a resolved dep we'll loop again for.
     let mut subdeps = vec![];
     // todo: Iterate over by_name instead?
     for r in dep.reqs.iter() {
-        for (package) in deps.iter() {
+        for package in deps.iter() {
             // todo: Make sure you've picked the right one if multiple exist!!
             // todo qc this. This is what we add to the lockfile deps section.
             let fmtd_name_inner = format_name(&package.name, &version_cache);
@@ -458,8 +461,13 @@ fn setup_dep(
             }
         }
     }
-
-    (name.to_owned(), dep.version, subdeps)
+    crate::Package {
+        id: dep.id,
+        name: name.to_owned(),
+        version: dep.version,
+        deps: subdeps,
+        rename,
+    }
 }
 
 /// Determine which dependencies we need to install, using the newest ones which meet
@@ -467,7 +475,7 @@ fn setup_dep(
 //pub fn resolve(tree: &mut DepNode) -> Result<Vec<DepNode>, reqwest::Error> {
 pub fn resolve(
     reqs: &[Req],
-    locked: &[(String, Version, Vec<(String, Version)>)],
+    locked: &[crate::Package],
     os: crate::Os,
     extras: &[String],
     py_vers: &Version,
@@ -479,8 +487,6 @@ pub fn resolve(
 
     let mut version_cache = HashMap::new();
 
-
-//    let id = result.iter().map(|(id_, _)| *id_).max().unwrap_or(-1) + 1;
     if guess_graph(
         0,
         &reqs,
@@ -499,9 +505,7 @@ pub fn resolve(
     }
 
     let mut by_name: HashMap<String, Vec<Dependency>> = HashMap::new();
-
     for dep in result.clone().into_iter() {
-        // todo eval if you still need clone later.
         // The formatted name may be different from the pypi one. Eg `IPython` vice `ipython`.
         let fmted_name = format_name(&dep.name, &version_cache);
 
@@ -516,7 +520,9 @@ pub fn resolve(
     println!("BY NAME: {:#?}", &by_name);
 
     // Deal with duplicates, conflicts etc. The code above assumed no conflicts, and that
-    // we can pick the newest compatible version for each req.
+    // we can pick the newest compatible version for each req. We pass only the info
+    // needed to build the locked dependencies, and strip intermediary info like ids.
+
     let mut result_cleaned = vec![];
     for (name, deps) in by_name.into_iter() {
         let fmtd_name = format_name(&name, &version_cache);
@@ -525,25 +531,52 @@ pub fn resolve(
             // This dep is only specified once; no need to resolve conflicts.
             let dep = &deps[0];
 
-            result_cleaned.push(setup_dep(&fmtd_name, &dep, &result, &version_cache));
+            result_cleaned.push(prepare_package(
+                &fmtd_name,
+                &dep,
+                &result,
+                &version_cache,
+                crate::Rename::No,
+            ));
         } else if deps.len() > 1 {
             let newest = deps
                 .iter()
                 .max_by(|a, b| a.version.cmp(&b.version))
                 .expect("Can't find max for newest");
 
-//            println!("Multiple versions found for {}: {:#?}", name, deps);
-//            let constraints: Vec<(String, Version, Vec<Constraint>)> =
-//                deps.iter().map(|d| d.constrs_for_this.clone()).collect();
-//
-//            let inter = dep_types::intersection_many(&constraints);
-//            // todo: Fix intersection logic for input and output. For now, take the first inter item.
-//            // todo: Why's it even a vec?
-//            let inter = inter
-//                .get(0)
-//                .expect("Problem finding intersection in conflict");
-//            println!("Constr: {:?}", &constraints);
-//            println!("inter: {:?}", &inter);
+            let mut constraints = vec![];
+            for dep in deps.iter() {
+                let parent = match result.iter().find(|d| d.id == dep.parent) {
+                    Some(p) => p.clone(),
+                    // ie top-level; set up a dummy
+                    None => Dependency {
+                        id: 0,
+                        name: "top".to_owned(),
+                        version: Version::new(0, 0, 0),
+                        reqs: reqs.to_vec(),
+                        parent: 0,
+                    },
+                };
+
+                for rel_req in parent
+                    .clone()
+                    .reqs
+                    .iter()
+                    .filter(|r| r.name.to_lowercase() == dep.name.to_lowercase())
+                {
+                    constraints.push(rel_req.constraints.clone())
+                }
+            }
+            println!("(dbg): Multiple versions found: {:#?}", &deps);
+            println!("(dbg): constraints: {:#?}", &constraints);
+
+            let inter = dep_types::intersection_many(&constraints);
+            //            // todo: Fix intersection logic for input and output. For now, take the first inter item.
+            //            // todo: Why's it even a vec?
+            let inter = inter
+                .get(0)
+                .expect("Problem finding intersection in conflict");
+            println!("inter: {:?}", &inter);
 
             // If the newest version meets the constraints, use it - we've already built
             // the graph to accomodate its sub-deps. otherwise install all,
@@ -555,13 +588,35 @@ pub fn resolve(
             // downloading extra versions; this approach requires more downloads,
             // and takes up more space.
 
-//
-//            let resolved;
-//            if inter.0 <= newest.version && newest.version <= inter.1 {
-//                resolved = newest;
-//            }
-//
-//            result_cleaned.push(setup_dep(&fmtd_name, &resolved, &result, &version_cache));
+            if inter.0 <= newest.version && newest.version <= inter.1 {
+                result_cleaned.push(prepare_package(
+                    &fmtd_name,
+                    &newest,
+                    &result,
+                    &version_cache,
+                    crate::Rename::No,
+                ));
+            } else {
+                // We were unable to resolve using the newest version; add and rename packages.
+                for (i, dep) in deps.iter().enumerate() {
+                    // Don't rename the first one.
+                    let rename = if i == 0 {
+                        crate::Rename::Yes(dep.parent, dep.id, format!("{}_renamed_{}", dep.name, i))
+                    } else {
+                        crate::Rename::No
+                    };
+
+                    result_cleaned.push(prepare_package(
+                        &fmtd_name,
+                        &newest,
+                        &result,
+                        &version_cache,
+                        rename,
+                    ));
+                }
+            }
+
+        //
         } else {
             panic!("We shouldn't be seeing this!")
         }
