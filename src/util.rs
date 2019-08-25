@@ -5,8 +5,9 @@ use crate::{
 };
 use crossterm::{Color, Colored};
 use regex::Regex;
+use std::io::{BufRead, BufReader};
 use std::str::FromStr;
-use std::{env, path::PathBuf, process, thread, time};
+use std::{env, fs, path::PathBuf, process, thread, time};
 
 /// Print in a color, then reset formatting.
 pub fn print_color(message: &str, color: Color) {
@@ -18,7 +19,9 @@ pub fn print_color(message: &str, color: Color) {
     );
 }
 
-/// A convenience function
+/// Used when the program should exit from a condition that may arise normally from program use,
+/// like incorrect info in config files, problems with dependencies, or internet connection problems.
+/// We use `expect`, `panic!` etc for problems that indicate a bug in this program.
 pub fn abort(message: &str) {
     println!(
         "{}{}{}",
@@ -121,7 +124,7 @@ pub fn show_installed(lib_path: &PathBuf) {
     let scripts = find_console_scripts(&lib_path.join("../bin"));
 
     print_color("The following packages are installed:", Color::DarkBlue);
-    for (name, version) in installed {
+    for (name, version, tops) in installed {
         //        print_color(&format!("{} == \"{}\"", name, version.to_string()), Color::Magenta);
         println!(
             "{}{}{} == {}",
@@ -141,8 +144,9 @@ pub fn show_installed(lib_path: &PathBuf) {
     }
 }
 
-/// Find the packages installed, by browsing the lib folder.
-pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
+/// Find the packages installed, by browsing the lib folder for metadata.
+/// Returns package-name, version, folder names
+pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version, Vec<String>)> {
     let mut package_folders = vec![];
 
     if !lib_path.exists() {
@@ -160,19 +164,40 @@ pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version)> {
 
     for folder in package_folders.iter() {
         let folder_name = folder.to_str().unwrap();
-        let re = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
+        let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
         let re_egg = Regex::new(r"^(.*?)-(.*?)\.egg-info$").unwrap();
 
-        if let Some(caps) = re.captures(&folder_name) {
+        if let Some(caps) = re_dist.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
-            result.push((name.to_owned(), vers));
+
+            let top_level = lib_path.join(folder_name).join("top_level.txt");
+            let top_level_f = fs::File::open(top_level).expect("Can't find top_level.txt");
+
+            let mut tops = vec![];
+            for line in BufReader::new(top_level_f).lines() {
+                if let Ok(l) = line {
+                    tops.push(l);
+                }
+            }
+
+            result.push((name.to_owned(), vers, tops));
 
         // todo dry
         } else if let Some(caps) = re_egg.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
-            result.push((name.to_owned(), vers));
+
+            let top_level = lib_path.join(folder_name).join("top_level.txt");
+            let top_level_f = fs::File::open(top_level).expect("Can't find top_level.txt");
+
+            let mut tops = vec![];
+            for line in BufReader::new(top_level_f).lines() {
+                if let Ok(l) = line {
+                    tops.push(l);
+                }
+            }
+            result.push((name.to_owned(), vers, tops));
         }
     }
     result

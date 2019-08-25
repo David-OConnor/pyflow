@@ -16,6 +16,8 @@ use std::{
     thread, time,
 };
 
+use crate::dep_resolution::WarehouseRelease;
+use crate::install::PackageType;
 use structopt::StructOpt;
 
 mod build;
@@ -32,6 +34,16 @@ pub enum Rename {
     // todo: May not need to store self id.
     Yes(u32, u32, String), // parent id, self id, name
 }
+
+//impl Rename {
+//    // todo: Perhaps just have this option instead of a sep enum
+//    pub fn to_opt(&self) -> Option<(u32, String)> {
+//        match self {
+//            Self::No => None,
+//            Self::Yes(parent_id, self_id, name) => Some((parent_id, name))
+//        }
+//    }
+//}
 
 #[derive(Debug)]
 pub struct Package {
@@ -553,128 +565,172 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
     py_ver_from_alias
 }
 
+fn parse_lockpack_rename(rename: &str) -> (u32, String) {
+    let re = Regex::new(r"^(\d)\s(.*)$").unwrap();
+    let caps = re
+        .captures(&rename)
+        .expect("Problem reading lock file rename");
+
+    let id = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
+    let name = caps.get(2).unwrap().as_str().to_owned();
+
+    (id, name)
+}
+
+/// Find the most appropriate release to download. Ie Windows vs Linux, wheel vs source.
+fn find_best_release(
+    data: &[WarehouseRelease],
+    name: &str,
+    version: &Version,
+    os: Os,
+    python_vers: &Version,
+) -> (WarehouseRelease, PackageType) {
+    // Find which release we should download. Preferably wheels, and if so, for the right OS and
+    // Python version.
+    let mut compatible_releases = vec![];
+    // Store source releases as a fallback, for if no wheels are found.
+    let mut source_releases = vec![];
+
+    for rel in data.iter() {
+        let mut compatible = true;
+        match rel.packagetype.as_ref() {
+            "bdist_wheel" => {
+                if let Some(py_ver) = &rel.requires_python {
+                    // If a version constraint exists, make sure it's compatible.
+                    let py_constrs = Constraint::from_str_multiple(&py_ver)
+                        .expect("Problem parsing constraint from requires_python");
+
+                    for constr in py_constrs.iter() {
+                        if !constr.is_compatible(&python_vers) {
+                            compatible = false;
+                        }
+                    }
+                }
+
+                let wheel_os =
+                    os_from_wheel_fname(&rel.filename).expect("Problem getting os from wheel name");
+                if wheel_os != os && wheel_os != Os::Any {
+                    compatible = false;
+                }
+
+                // Packages that use C code(eg numpy) may fail to load C extensions if installing
+                // for the wrong version of python (eg  cp35 when python 3.7 is installed), even
+                // if `requires_python` doesn't indicate an incompatibility. Check `python_version`.
+                match Version::from_warehouse_str(&rel.python_version) {
+                    Ok(req_v) => {
+                        if req_v != *python_vers
+                            // todo: Awk place for this logic.
+                            && rel.python_version != "py2.py3"
+                            && rel.python_version != "py3"
+                        {
+                            compatible = false;
+                        }
+                    }
+                    Err(_) => {
+                        (println!(
+                            "Unable to match python version from python_version: {}",
+                            &rel.python_version
+                        ))
+                    }
+                }
+
+                if compatible {
+                    compatible_releases.push(rel.clone());
+                }
+            }
+            "sdist" => source_releases.push(rel.clone()),
+            // todo: handle dist_egg and bdist_wininst?
+            "bdist_egg" => println!("Found bdist_egg... skipping"),
+            "bdist_wininst" => (), // Don't execute Windows installers
+            "bdist_msi" => (),     // Don't execute Windows installers
+            _ => {
+                println!("Found surprising package type: {}", rel.packagetype);
+                continue;
+            }
+        }
+    }
+
+    let best_release;
+    let package_type;
+    // todo: Sort further / try to match exact python_version if able.
+    if compatible_releases.is_empty() {
+        if source_releases.is_empty() {
+            abort(&format!(
+                "Unable to find a compatible release for {}: {}",
+                name,
+                version.to_string()
+            ));
+            unreachable!()
+        } else {
+            best_release = source_releases[0].clone();
+            package_type = Source;
+        }
+    } else {
+        best_release = compatible_releases[0].clone();
+        package_type = Wheel;
+    }
+
+    (best_release, package_type)
+}
+
 /// Install/uninstall deps as required from the passed list, and re-write the lock file.
 fn sync_deps(
     bin_path: &PathBuf,
     lib_path: &PathBuf,
-    packages: &[(String, Version)], // name, version
-    installed: &[(String, Version)],
+    //    packages: &[(String, Version)], // name, version
+    lock_packs: &[LockPackage],
+    installed: &[(String, Version, Vec<String>)],
     os: Os,
     python_vers: &Version,
     //    resolved: &Vec<(String, Version, Vec<(String, Version)>)>,
 ) {
-    // Filter by not-already-installed.
-    let to_install: Vec<&(String, Version)> = packages
-        .iter()
-        // todo: Do we need to compare names with .to_lowercase()?
-        .filter(|pack| !installed.contains(pack))
+    let packages: Vec<((String, Version), Option<(u32, String)>)> = lock_packs
+        .into_iter()
+        .map(|lp| {
+            (
+                (lp.name.clone(), Version::from_str(&lp.version).unwrap()),
+                match &lp.rename {
+                    // todo back to our custom type?
+                    Some(rn) => Some(parse_lockpack_rename(&rn)),
+                    None => None,
+                },
+            )
+        })
         .collect();
 
+    // todo shim. Use top-level A/R. We discard it temporarily while working other issues.
+    let installed: Vec<(String, Version)> =
+        installed.into_iter().map(|t| (t.0.clone(), t.1)).collect();
+
+    // Filter by not-already-installed.
+    let to_install: Vec<&((String, Version), Option<(u32, String)>)> = packages
+        .iter()
+        // todo: Do we need to compare names with .to_lowercase()?
+        .filter(|(pack, rename)| !installed.contains(pack))
+        .collect();
+
+    // todo: Once you include rename info in installed, you won't need to use the map logic here.
+    let packages_only: Vec<&(String, Version)> = packages.iter().map(|(p, _)| p).collect();
     let to_uninstall: Vec<&(String, Version)> = installed
         .iter()
         // todo: Do we need to compare names with .to_lowercase()?
-        .filter(|pack| !packages.contains(pack))
+        .filter(|inst| !packages_only.contains(inst))
         .collect();
 
-    //    println!("TO install: {:#?}", &to_install);
-    //    println!("TO unin: {:#?}", &to_uninstall);
-
     for (name, version) in to_uninstall.iter() {
+        // todo: Deal with renamed. Currently won't work correctly with them.
         install::uninstall(name, version, lib_path)
     }
 
-    for (name, version) in to_install.iter() {
+    for ((name, version), rename) in to_install.iter() {
         let data = dep_resolution::get_warehouse_release(&name, &version)
             .expect("Problem getting warehouse data");
 
-        // Find which release we should download. Preferably wheels, and if so, for the right OS and
-        // Python version.
-        let mut compatible_releases = vec![];
-        // Store source releases as a fallback, for if no wheels are found.
-        let mut source_releases = vec![];
-
-        for rel in data.iter() {
-            let mut compatible = true;
-            match rel.packagetype.as_ref() {
-                "bdist_wheel" => {
-                    if let Some(py_ver) = &rel.requires_python {
-                        // If a version constraint exists, make sure it's compatible.
-                        let py_constrs = Constraint::from_str_multiple(&py_ver)
-                            .expect("Problem parsing constraint from requires_python");
-
-                        for constr in py_constrs.iter() {
-                            if !constr.is_compatible(&python_vers) {
-                                compatible = false;
-                            }
-                        }
-                    }
-
-                    let wheel_os = os_from_wheel_fname(&rel.filename)
-                        .expect("Problem getting os from wheel name");
-                    if wheel_os != os && wheel_os != Os::Any {
-                        compatible = false;
-                    }
-
-                    // Packages that use C code(eg numpy) may fail to load C extensions if installing
-                    // for the wrong version of python (eg  cp35 when python 3.7 is installed), even
-                    // if `requires_python` doesn't indicate an incompatibility. Check `python_version`.
-                    match Version::from_warehouse_str(&rel.python_version) {
-                        Ok(req_v) => {
-                            if req_v != *python_vers
-                                // todo: Awk place for this logic.
-                                && rel.python_version != "py2.py3"
-                                && rel.python_version != "py3"
-                            {
-                                compatible = false;
-                            }
-                        }
-                        Err(_) => {
-                            (println!(
-                                "Unable to match python version from python_version: {}",
-                                &rel.python_version
-                            ))
-                        }
-                    }
-
-                    if compatible {
-                        compatible_releases.push(rel.clone());
-                    }
-                }
-                "sdist" => source_releases.push(rel.clone()),
-                // todo: handle dist_egg and bdist_wininst?
-                "bdist_egg" => println!("Found bdist_egg... skipping"),
-                "bdist_wininst" => (), // Don't execute Windows installers
-                "bdist_msi" => (),     // Don't execute Windows installers
-                _ => {
-                    println!("Found surprising package type: {}", rel.packagetype);
-                    continue;
-                }
-            }
-        }
-
-        let best_release;
-        let package_type;
-        // todo: Sort further / try to match exact python_version if able.
-        if compatible_releases.is_empty() {
-            if source_releases.is_empty() {
-                abort(&format!(
-                    "Unable to find a compatible release for {}: {}",
-                    name,
-                    version.to_string()
-                ));
-                best_release = &compatible_releases[0]; // todo temp
-                package_type = Wheel // todo temp to satisfy match
-            } else {
-                best_release = &source_releases[0];
-                package_type = Source;
-            }
-        } else {
-            best_release = &compatible_releases[0];
-            package_type = Wheel;
-        }
+        let (best_release, package_type) =
+            find_best_release(&data, &name, &version, os, python_vers);
 
         println!(
-            "Installing {}{}{} {}",
+            "⬇️ Installing {}{}{} {} ...",
             Colored::Fg(Color::Cyan),
             &name,
             Colored::Fg(Color::Reset),
@@ -689,10 +745,30 @@ fn sync_deps(
             lib_path,
             bin_path,
             package_type,
+            rename,
         )
         .is_err()
         {
             abort("Problem downloading packages");
+        }
+
+        if let Some((id, new)) = rename {
+            // Rename in the renamed package
+            install::rename_package_files(&lib_path.join(new), name, &new);
+
+            // Rename in the parent calling the renamed package. // todo: Multiple parents?
+            let parent = lock_packs
+                .iter()
+                .find(|lp| lp.id == *id)
+                .expect("Can't find parent calling renamed package");
+            install::rename_package_files(&lib_path.join(&parent.name), name, &new);
+
+            // todo: Handle this more generally, in case we don't have proper semvar dist-info paths.
+            install::rename_metadata(
+                &lib_path.join(&format!("{}-{}.dist-info", name, version.to_string2())),
+                name,
+                &new,
+            );
         }
     }
 }
@@ -754,7 +830,7 @@ fn sync(
         })
         .collect();
 
-    println!("Resolving dependencies...");
+    println!("🔍 Resolving dependencies...");
 
     let resolved = match dep_resolution::resolve(&reqs, &locked, os, &extras, &py_vers) {
         Ok(r) => r,
@@ -764,7 +840,7 @@ fn sync(
         }
     };
 
-    println!("RESOLVED: {:#?}", &resolved);
+    //    println!("RESOLVED: {:#?}", &resolved);
 
     // Now merge the existing lock packages with new ones from resolved packages.
     // We have a collection of requirements; attempt to merge them with the already-locked ones.
@@ -783,7 +859,8 @@ fn sync(
             continue;
         }
 
-        let deps = package.deps
+        let deps = package
+            .deps
             .iter()
             .map(|(name, version)| {
                 format!(
@@ -806,6 +883,10 @@ fn sync(
                 package.version.to_string()
             )),
             dependencies: Some(deps),
+            rename: match &package.rename {
+                Rename::Yes(parent_id, _, name) => Some(format!("{} {}", parent_id, name)),
+                Rename::No => None,
+            },
         });
     }
 
@@ -818,16 +899,16 @@ fn sync(
         abort("Problem writing lock file");
     }
 
-    let packages: Vec<(String, Version)> = updated_lock_packs
-        .into_iter()
-        .map(|lp| (lp.name, Version::from_str(&lp.version).unwrap()))
-        .collect();
-
     // Now that we've confirmed or modified the lock file, we're ready to sync installed
     // depenencies with it.
     sync_deps(
         //                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
-        &bin_path, &lib_path, &packages, &installed, os, &py_vers,
+        &bin_path,
+        &lib_path,
+        &updated_lock_packs,
+        &installed,
+        os,
+        &py_vers,
     );
 }
 

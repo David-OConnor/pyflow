@@ -14,13 +14,34 @@ pub enum PackageType {
 }
 
 /// Extract the wheel. (It's like a zip)
-fn install_wheel(file: &fs::File, lib_path: &PathBuf) {
+fn install_wheel(file: &fs::File, lib_path: &PathBuf, rename: &Option<(String, String)>) {
     // Separate function, since we use it twice.
     let mut archive = zip::ZipArchive::new(file).unwrap();
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
-        let outpath = lib_path.join(file.sanitized_name());
+        // Change name here instead of after in case we've already installed a non-renamed version.
+        // (which would be overwritten by this one.)
+        let file_str2 = file.sanitized_name();
+        let file_str = file_str2.to_str().expect("Problem converting path to str");
+
+        let extracted_file;
+        if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
+            extracted_file = match rename {
+                Some((old, new)) => file
+                    .sanitized_name()
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+                    .replace(old, new)
+                    .into(),
+                None => file.sanitized_name(),
+            };
+        } else {
+            extracted_file = file.sanitized_name();
+        }
+
+        let outpath = lib_path.join(extracted_file);
 
         if (&*file.name()).ends_with('/') {
             fs::create_dir_all(&outpath).unwrap();
@@ -189,17 +210,22 @@ pub fn download_and_install_package(
     lib_path: &PathBuf,
     bin_path: &PathBuf,
     package_type: PackageType,
+    rename: &Option<(u32, String)>,
 ) -> Result<(), reqwest::Error> {
-    let mut resp = reqwest::get(url)?; // Download the file
-
     if !lib_path.exists() {
         fs::create_dir(lib_path).expect("Problem creating lib directory");
     }
     let archive_path = lib_path.join(filename);
 
-    // Save the file
-    let mut out = fs::File::create(&archive_path).expect("Failed to save downloaded package file");
-    io::copy(&mut resp, &mut out).expect("failed to copy content");
+    // If the archive is already in the lib folder, don't re-download it. Note that this
+    // isn't the usual flow, but may have some uses.
+    if !archive_path.exists() {
+        // Save the file
+        let mut resp = reqwest::get(url)?; // Download the file
+        let mut out = fs::File::create(&archive_path).expect("Failed to save downloaded package file");
+        io::copy(&mut resp, &mut out).expect("failed to copy content");
+    }
+
     let file = fs::File::open(&archive_path).unwrap();
 
     // https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
@@ -217,9 +243,14 @@ pub fn download_and_install_package(
 
     // todo: Setup executable scripts.
 
+    let rename = match rename.as_ref() {
+        Some((_, new)) => Some((name.to_owned(), new.to_owned())),
+        None => None,
+    };
+
     match package_type {
         PackageType::Wheel => {
-            install_wheel(&archive_file, lib_path);
+            install_wheel(&archive_file, lib_path, &rename);
         }
         PackageType::Source => {
             // Extract the tar.gz source code.
@@ -294,7 +325,7 @@ pub fn download_and_install_package(
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");
-            install_wheel(&file_created, lib_path);
+            install_wheel(&file_created, lib_path, &rename);
 
             // Remove the created and moved wheel
             if fs::remove_file(&lib_path.join(built_wheel_filename)).is_err() {
@@ -315,18 +346,22 @@ pub fn download_and_install_package(
     setup_scripts(name, version, lib_path);
 
     // Remove the archive
-    if fs::remove_file(&archive_path).is_err() {
-        util::abort(&format!(
-            "Problem removing this downloaded package: {:?}",
-            &archive_path
-        ));
-    }
+    //    if fs::remove_file(&archive_path).is_err() {
+    //        util::abort(&format!(
+    //            "Problem removing this downloaded package: {:?}",
+    //            &archive_path
+    //        ));
+    //    } // todo
 
     Ok(())
 }
 
 pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
-    println!("Uninstalling {}: {}", name_ins, vers_ins.to_string());
+    println!(
+        "🗑 Uninstalling {}: {}...",
+        name_ins,
+        vers_ins.to_string()
+    );
     // Uninstall the package
     // package folders appear to be lowercase, while metadata keeps the package title's casing.
 
@@ -403,4 +438,57 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
 
     // Remove console scripts.
     remove_scripts(vec![name_ins.into()], &lib_path.join("../bin"));
+}
+
+/// Rename files in a package. Assume we already renamed the folder, ie during installation.
+pub fn rename_package_files(top_path: &PathBuf, old: &str, new: &str) {
+    for entry in fs::read_dir(top_path).expect("Problem reading renamed package path") {
+        let entry = entry.expect("Problem reading file while renaming");
+        let path = entry.path();
+
+        if path.is_dir() {
+            rename_package_files(&path, old, new);
+            continue;
+        }
+
+        if !path.is_file() {
+            continue;
+        }
+        if path.extension().is_none() || path.extension().unwrap() != "py" {
+            continue;
+        }
+
+        let mut data = fs::read_to_string(&path).expect("Problem reading file while renaming");
+
+        // todo: More flexible with regex?
+        data = data.replace(
+            &format!("from {} import", old),
+            &format!("from {} import", new),
+        );
+        data = data.replace(&format!("from {}.", old), &format!("from {}.", new));
+        data = data.replace(&format!("import {}", old), &format!("import {}", new));
+        // Todo: Is this one too general? Supercedes the first. Needed for things like `add_newdoc('numpy.core.multiarray...`
+        data = data.replace(&format!("{}.", old), &format!("{}.", new));
+
+        fs::write(path, data).expect("Problem writing file while renaming");
+    }
+
+    //     if let Ok(entry) = entry {
+    //            if entry.file_type().unwrap().is_dir() {
+    //                package_folders.push(entry.file_name())
+    //            }
+}
+
+/// Rename metadata files.
+pub fn rename_metadata(path: &PathBuf, old: &str, new: &str) {
+    // todo: Handle multiple items in top_level. Figure out how to handle that.
+    let top_file = path.join("top_level.txt");
+    let mut top_data =
+        fs::read_to_string(&top_file).expect("Problem opening top_level.txt");
+
+    top_data = new.to_owned(); // todo fragile.
+
+    fs::write(top_file, top_data).expect("Problem writing file while renaming");
+
+    // todo: Modify other files like entry_points.txt, perhaps.
 }

@@ -218,7 +218,11 @@ fn fetch_req_data(
                         data
                     }
                     Err(_) => {
-                        util::abort(&format!("Can't get version info for the dependency `{}`. Is it spelled correctly?", &req.name));
+                        util::abort(&format!(
+                            "Can't get version info for the dependency `{}`. \
+                             Is it spelled correctly? Is the internet connection ok?",
+                            &req.name
+                        ));
                         ("".to_string(), Version::new(0, 0, 0), vec![]) // match-compatibility placeholder
                     }
                 }
@@ -326,6 +330,9 @@ fn guess_graph(
         }
     }
 
+    println!("NON_LOCKED: {:#?}", &non_locked_reqs);
+    println!("LOCKED: {:#?}", &locked_reqs);
+
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
     let mut query_data = match fetch_req_data(&non_locked_reqs, vers_cache) {
         Ok(d) => d,
@@ -344,7 +351,8 @@ fn guess_graph(
             .find(|p| p.name.to_lowercase() == req.name.to_lowercase())
             .expect("Can't find matching lock package");
 
-        let requires_dist = package.deps
+        let requires_dist = package
+            .deps
             .iter()
             .map(|(name, vers)| format!("{} (=={})", name, vers.to_string()))
             .collect();
@@ -517,7 +525,7 @@ pub fn resolve(
         }
     }
 
-    println!("BY NAME: {:#?}", &by_name);
+    //    println!("BY NAME: {:#?}", &by_name);
 
     // Deal with duplicates, conflicts etc. The code above assumed no conflicts, and that
     // we can pick the newest compatible version for each req. We pass only the info
@@ -597,18 +605,23 @@ pub fn resolve(
                     crate::Rename::No,
                 ));
             } else {
+                println!("DEPS: {:#?}", &deps);
                 // We were unable to resolve using the newest version; add and rename packages.
                 for (i, dep) in deps.iter().enumerate() {
                     // Don't rename the first one.
-                    let rename = if i == 0 {
-                        crate::Rename::Yes(dep.parent, dep.id, format!("{}_renamed_{}", dep.name, i))
+                    let rename = if i != 0 {
+                        crate::Rename::Yes(
+                            dep.parent,
+                            dep.id,
+                            format!("{}_renamed_{}", dep.name, i),
+                        )
                     } else {
                         crate::Rename::No
                     };
 
                     result_cleaned.push(prepare_package(
                         &fmtd_name,
-                        &newest,
+                        &dep,
                         &result,
                         &version_cache,
                         rename,

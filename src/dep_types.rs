@@ -944,6 +944,7 @@ pub struct LockPackage {
     pub version: String,
     pub source: Option<String>,
     pub dependencies: Option<Vec<String>>,
+    pub rename: Option<String>,
 }
 
 /// Modelled after [Cargo.lock](https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html)

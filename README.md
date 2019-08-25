@@ -93,7 +93,7 @@ be the best solution. If not, it requires falling back to `Pip`, which means
 using two separate package managers.
 
 When building and deploying packages, a set of degenerate files are 
-traditionally used: `setup.py`, `setup.cfg`, and `MANIFEST.in`. We use
+traditionally used: `setup.py`, `setup.cfg`, `requirements.txt` and `MANIFEST.in`. We use
 `pyproject.toml` as the single-source of project info required to build
 and publish.
 
@@ -210,10 +210,10 @@ Running `pypackage install` syncs the project's installed dependencies with thos
 package name via the CLI, eg `pypackage install matplotlib` simply adds that requirement before proceeding.
 
 Compatible versions of dependencies are determined using info from 
-the [PyPi Warehosue](https://github.com/pypa/warehouse) (available versions, and hash info), 
+the [PyPi Warehouse](https://github.com/pypa/warehouse) (available versions, and hash info), 
 and the `pydeps` database. We use `pydeps`, which is built specifically for this project,
 due to inconsistent dependency information stored on `pypi`. A dependency graph is built
-using this cached database. We attempt to use the newest compatible version of each package..
+using this cached database. We attempt to use the newest compatible version of each package.
 
 This tool downloads and unpacks wheels from `pypi`, or builds
 wheels from source if none are availabile. It verifies the integrity of the downloaded file
@@ -225,6 +225,9 @@ in `pyproject.toml` and resolved subdependencies are used.
 
 When a dependency is removed from `pyproject.toml`, it, and its subdependencies not
 also required by other packages are removed from the `__pypackages__` folder.
+
+If a dependency is required multiple times with incompatible requirements, multiple
+versions are downloaded as-required, and renamed internally.
 
 
 ## Not-yet-implemented
