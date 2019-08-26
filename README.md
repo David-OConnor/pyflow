@@ -258,8 +258,9 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Topic :: Scientific/Engineering :: Human Machine Interfaces",
 ]
-    [console_scripts]
-    activate = "jeejah::activate"
+console_scripts = [
+    "activate = jeejah:activate",
+]
 
 
 [tool.pypackage.dependencies]

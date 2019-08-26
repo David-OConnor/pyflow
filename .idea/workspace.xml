@@ -6,9 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="8e8ec656-42c1-4de6-aedd-231786fe5c7c" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/dep_resolution.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_resolution.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/build.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/build.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/util.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/util.rs" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -165,7 +165,8 @@
       <workItem from="1566648147547" duration="17210000" />
       <workItem from="1566737306160" duration="22175000" />
       <workItem from="1566782393515" duration="599000" />
-      <workItem from="1566824899895" duration="4373000" />
+      <workItem from="1566824899895" duration="4429000" />
+      <workItem from="1566836570593" duration="2659000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed bugs in python-version checking and package installation">
       <created>1563704289313</created>

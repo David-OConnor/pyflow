@@ -43,6 +43,8 @@ fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
     };
     let cfg = cfg.clone();
 
+    println!("CFG: {:#?}", &cfg);
+
     let data = format!(
         r#"import setuptools
  
@@ -60,8 +62,13 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="{}",
     packages=setuptools.find_packages(),
+
     classifiers={},
-    entry_points={},
+
+    entry_points={{
+        "console_scripts": {},
+    }},
+
     extras_require={},
 )
 "#,
@@ -72,10 +79,12 @@ setuptools.setup(
         cfg.author_email.unwrap_or_else(|| "".into()),
         cfg.license.unwrap_or_else(|| "".into()),
         cfg.description.unwrap_or_else(|| "".into()),
-        cfg.repo_url.unwrap_or_else(|| "".into()),
+        cfg.homepage.unwrap_or_else(|| "".into()),
         serialize_py_list(&cfg.classifiers),
-        serialize_py_dict(&cfg.entry_points),
-        //        serialize_py_dict2(&cfg.console_scripts),
+
+        // todo: For now we only support console_scripts entry points.
+//        serialize_py_dict(&cfg.entry_points),
+        serialize_py_list(&cfg.console_scripts),
         match cfg.extras {
             Some(e) => serialize_py_dict(&e),
             None => "".into(),
@@ -111,20 +120,19 @@ pub(crate) fn build(
         .expect("Problem installing Twine");
 
     create_dummy_setup(cfg, dummy_setup_fname);
-
+    return // todo
     util::set_pythonpath(lib_path);
-    println!("Building the package...");
+    println!("🛠️️ Building the package...");
     Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "python"))
         .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
         .status()
         .expect("Problem building");
 
-    util::print_color("Build complete.", Color::Green)
+    util::print_color("Build complete.", Color::Green);
 
-    // todo: Temporarily removed this for debugging
-    //    if fs::remove_file(dummy_setup_fname).is_err() {
-    //        println!("Problem removing temporary setup file while building ")
-    //    };
+    if fs::remove_file(dummy_setup_fname).is_err() {
+        println!("Problem removing temporary setup file while building ")
+    };
 }
 
 pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {

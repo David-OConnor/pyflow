@@ -110,8 +110,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-        name = "install",
-        help = "
+    name = "install",
+    help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -177,11 +177,13 @@ pub struct Config {
     classifiers: Vec<String>, // https://pypi.org/classifiers/
     keywords: Vec<String>,    // todo: Options for classifiers and keywords?
     homepage: Option<String>,
+    repository: Option<String>,
     repo_url: Option<String>,
     package_url: Option<String>,
     readme_filename: Option<String>,
     entry_points: HashMap<String, Vec<String>>, // todo option?
-    console_scripts: HashMap<String, String>,   // todo option?
+//    console_scripts: HashMap<String, String>,   // todo option?
+    console_scripts: Vec<String>,  // We don't parse these; pass them to `setup.py` as-entered.
 }
 
 fn key_re(key: &str) -> Regex {
@@ -189,6 +191,17 @@ fn key_re(key: &str) -> Regex {
 }
 
 impl Config {
+    /// Helper for `from_file`.
+    fn pull(result: &mut Self, line: &str, key: &str) -> Option<String> {
+        let mut result = None;
+        if let Some(cap) = key_re(key).captures(line) {
+            if let Some(m) = cap.get(1) {
+                result = Some(m.as_str().to_string());
+            }
+        }
+        result
+    }
+
     /// Pull config data from `pyproject.toml`
     fn from_file(filename: &str) -> Option<Self> {
         // We don't use the `toml` crate here because it doesn't appear flexible enough.
@@ -235,33 +248,37 @@ impl Config {
                 }
 
                 if in_metadata {
-                    // todo DRY
-                    if let Some(n2) = key_re("name").captures(&l) {
-                        if let Some(n) = n2.get(1) {
-                            result.name = Some(n.as_str().to_string());
-                        }
+                    if let Some(v) = Self::pull(&mut result, &l, "name") {
+                        result.name = Some(v);
                     }
-                    if let Some(n2) = key_re("description").captures(&l) {
-                        if let Some(n) = n2.get(1) {
-                            result.description = Some(n.as_str().to_string());
-                        }
+                    if let Some(v) = Self::pull(&mut result, &l, "author") {
+                        result.author = Some(v);
                     }
-                    if let Some(n2) = key_re("version").captures(&l) {
-                        if let Some(n) = n2.get(1) {
-                            let n3 = n.as_str();
-                            if !n3.is_empty() {
-                                result.version = Some(Version::from_str(n3).unwrap());
-                            }
-                        }
+                    if let Some(v) = Self::pull(&mut result, &l, "author_email") {
+                        result.author_email = Some(v);
                     }
-                    if let Some(n2) = key_re("py_version").captures(&l) {
-                        if let Some(n) = n2.get(1) {
-                            let n3 = n.as_str();
-                            if !n3.is_empty() {
-                                result.py_version = Some(Constraint::from_str(n.as_str()).unwrap());
-                            }
-                        }
+                    if let Some(v) = Self::pull(&mut result, &l, "license") {
+                        result.license = Some(v);
                     }
+                    if let Some(v) = Self::pull(&mut result, &l, "description") {
+                        result.description = Some(v);
+                    }
+                    if let Some(v) = Self::pull(&mut result, &l, "homepage") {
+                        result.homepage = Some(v);
+                    }
+                    if let Some(v) = Self::pull(&mut result, &l, "repository") {
+                        result.repository = Some(v);
+                    }
+
+                    if let Some(v) = Self::pull(&mut result, &l, "version") {
+                        result.version = Some(Version::from_str(&v).unwrap());
+                    }
+                    if let Some(v) = Self::pull(&mut result, &l, "py_version") {
+                        result.py_version = Some(Constraint::from_str(&v).unwrap());
+                    }
+
+                        // todo: Parse console scripts.
+
                 } else if in_dep && !l.is_empty() {
                     result.reqs.push(Req::from_str(&l, false).unwrap());
                 }
@@ -747,7 +764,7 @@ fn sync_deps(
             package_type,
             rename,
         )
-        .is_err()
+            .is_err()
         {
             abort("Problem downloading packages");
         }
@@ -840,7 +857,7 @@ fn sync(
         }
     };
 
-        println!("RESOLVED: {:#?}", &resolved);
+    println!("RESOLVED: {:#?}", &resolved);
 
     // Now merge the existing lock packages with new ones from resolved packages.
     // We have a collection of requirements; attempt to merge them with the already-locked ones.
@@ -1038,11 +1055,11 @@ py_version = \"3.7\"",
     };
 
     #[cfg(target_os = "windows")]
-    let os = Os::Windows;
+        let os = Os::Windows;
     #[cfg(target_os = "linux")]
-    let os = Os::Linux;
+        let os = Os::Linux;
     #[cfg(target_os = "macos")]
-    let os = Os::Mac;
+        let os = Os::Mac;
 
     let extras = vec![]; // todo temp!!
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
