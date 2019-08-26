@@ -840,7 +840,7 @@ fn sync(
         }
     };
 
-    //    println!("RESOLVED: {:#?}", &resolved);
+        println!("RESOLVED: {:#?}", &resolved);
 
     // Now merge the existing lock packages with new ones from resolved packages.
     // We have a collection of requirements; attempt to merge them with the already-locked ones.

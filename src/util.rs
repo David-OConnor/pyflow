@@ -123,7 +123,7 @@ pub fn show_installed(lib_path: &PathBuf) {
     let installed = find_installed(lib_path);
     let scripts = find_console_scripts(&lib_path.join("../bin"));
 
-    print_color("The following packages are installed:", Color::DarkBlue);
+    print_color("These packages are installed:", Color::DarkBlue);
     for (name, version, tops) in installed {
         //        print_color(&format!("{} == \"{}\"", name, version.to_string()), Color::Magenta);
         println!(
@@ -136,7 +136,7 @@ pub fn show_installed(lib_path: &PathBuf) {
     }
 
     print_color(
-        "\nThe following console scripts are installed:",
+        "\nThese console scripts are installed:",
         Color::DarkBlue,
     );
     for script in scripts {

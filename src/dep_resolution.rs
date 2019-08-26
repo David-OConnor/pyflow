@@ -126,7 +126,7 @@ pub fn get_warehouse_release(
 
 #[derive(Clone, Debug, Deserialize)]
 struct ReqCache {
-    // Name is present from pydeps if getting deps for multiple package names. Otherwise, we ommit
+    // Name is present from pydeps if gestruct packagetting deps for multiple package names. Otherwise, we ommit
     // it since we already know the name when making the request.
     name: Option<String>,
     version: String,
@@ -280,6 +280,7 @@ fn guess_graph(
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
     reqs_searched: &mut Vec<Req>,
 ) -> Result<(), DependencyError> {
+
     let reqs: Vec<&Req> = reqs
         .into_iter()
         // If we've already satisfied this req, don't query it again. Otherwise we'll make extra
@@ -330,8 +331,8 @@ fn guess_graph(
         }
     }
 
-    println!("NON_LOCKED: {:#?}", &non_locked_reqs);
-    println!("LOCKED: {:#?}", &locked_reqs);
+//    println!("NON_LOCKED: {:#?}", &non_locked_reqs);
+//    println!("LOCKED: {:#?}", &locked_reqs);
 
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
     let mut query_data = match fetch_req_data(&non_locked_reqs, vers_cache) {
@@ -454,17 +455,11 @@ fn prepare_package(
     // We need to pass subdeps so we can add them to the lock file. Build them from reqs,
     // they each correspond to a resolved dep we'll loop again for.
     let mut subdeps = vec![];
-    // todo: Iterate over by_name instead?
     for r in dep.reqs.iter() {
-        for package in deps.iter() {
-            // todo: Make sure you've picked the right one if multiple exist!!
-            // todo qc this. This is what we add to the lockfile deps section.
-            let fmtd_name_inner = format_name(&package.name, &version_cache);
-            let fmtd_name_r = format_name(&r.name, &version_cache);
-
-            //                    if formatted_name_r.to_lowercase() == *formatted_name_inner.to_lowercase() {
-            if fmtd_name_r == *fmtd_name_inner {
-                subdeps.push((fmtd_name_inner, package.version));
+        for subdep in deps.iter() {
+            let fmtd_name_inner = format_name(&subdep.name, &version_cache);
+            if subdep.parent == dep.id {
+                subdeps.push((fmtd_name_inner, subdep.version));
                 break;
             }
         }
@@ -605,7 +600,6 @@ pub fn resolve(
                     crate::Rename::No,
                 ));
             } else {
-                println!("DEPS: {:#?}", &deps);
                 // We were unable to resolve using the newest version; add and rename packages.
                 for (i, dep) in deps.iter().enumerate() {
                     // Don't rename the first one.
