@@ -1,4 +1,6 @@
-use crate::dep_types::{Constraint, DependencyError, Lock, LockPackage, Req, ReqType, Version};
+use crate::dep_types::{
+    Constraint, DependencyError, Lock, LockPackage, Package, Rename, Req, ReqType, Version,
+};
 use crate::util::abort;
 use crossterm::{Color, Colored};
 use install::PackageType::{Source, Wheel};
@@ -28,31 +30,7 @@ mod edit_files;
 mod install;
 mod util;
 
-#[derive(Debug)]
-pub enum Rename {
-    No,
-    // todo: May not need to store self id.
-    Yes(u32, u32, String), // parent id, self id, name
-}
-
-//impl Rename {
-//    // todo: Perhaps just have this option instead of a sep enum
-//    pub fn to_opt(&self) -> Option<(u32, String)> {
-//        match self {
-//            Self::No => None,
-//            Self::Yes(parent_id, self_id, name) => Some((parent_id, name))
-//        }
-//    }
-//}
-
-#[derive(Debug)]
-pub struct Package {
-    id: u32,
-    name: String,
-    version: Version,
-    deps: Vec<(String, Version)>,
-    rename: Rename,
-}
+type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
 /// Used to determine which version of a binary package to download. Assume 64-bit.
@@ -110,8 +88,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-    name = "install",
-    help = "
+        name = "install",
+        help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -182,8 +160,8 @@ pub struct Config {
     package_url: Option<String>,
     readme_filename: Option<String>,
     entry_points: HashMap<String, Vec<String>>, // todo option?
-//    console_scripts: HashMap<String, String>,   // todo option?
-    console_scripts: Vec<String>,  // We don't parse these; pass them to `setup.py` as-entered.
+    //    console_scripts: HashMap<String, String>,   // todo option?
+    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
 }
 
 fn key_re(key: &str) -> Regex {
@@ -192,7 +170,7 @@ fn key_re(key: &str) -> Regex {
 
 impl Config {
     /// Helper for `from_file`.
-    fn pull(result: &mut Self, line: &str, key: &str) -> Option<String> {
+    fn pull(line: &str, key: &str) -> Option<String> {
         let mut result = None;
         if let Some(cap) = key_re(key).captures(line) {
             if let Some(m) = cap.get(1) {
@@ -213,7 +191,7 @@ impl Config {
 
         let mut in_metadata = false;
         let mut in_dep = false;
-        let mut in_extras = false;
+        let mut _in_extras = false;
 
         let sect_re = Regex::new(r"\[.*\]").unwrap();
 
@@ -228,57 +206,55 @@ impl Config {
                 if &l == "[tool.pypackage]" {
                     in_metadata = true;
                     in_dep = false;
-                    in_extras = false;
+                    _in_extras = false;
                     continue;
                 } else if &l == "[tool.pypackage.dependencies]" {
                     in_metadata = false;
                     in_dep = true;
-                    in_extras = false;
+                    _in_extras = false;
                     continue;
                 } else if &l == "[tool.pypackage.features]" {
                     in_metadata = false;
                     in_dep = false;
-                    in_extras = true;
+                    _in_extras = true;
                     continue;
                 } else if sect_re.is_match(&l) {
                     in_metadata = false;
                     in_dep = false;
-                    in_extras = false;
+                    _in_extras = false;
                     continue;
                 }
 
                 if in_metadata {
-                    if let Some(v) = Self::pull(&mut result, &l, "name") {
+                    if let Some(v) = Self::pull(&l, "name") {
                         result.name = Some(v);
                     }
-                    if let Some(v) = Self::pull(&mut result, &l, "author") {
+                    if let Some(v) = Self::pull(&l, "author") {
                         result.author = Some(v);
                     }
-                    if let Some(v) = Self::pull(&mut result, &l, "author_email") {
+                    if let Some(v) = Self::pull(&l, "author_email") {
                         result.author_email = Some(v);
                     }
-                    if let Some(v) = Self::pull(&mut result, &l, "license") {
+                    if let Some(v) = Self::pull(&l, "license") {
                         result.license = Some(v);
                     }
-                    if let Some(v) = Self::pull(&mut result, &l, "description") {
+                    if let Some(v) = Self::pull(&l, "description") {
                         result.description = Some(v);
                     }
-                    if let Some(v) = Self::pull(&mut result, &l, "homepage") {
+                    if let Some(v) = Self::pull(&l, "homepage") {
                         result.homepage = Some(v);
                     }
-                    if let Some(v) = Self::pull(&mut result, &l, "repository") {
+                    if let Some(v) = Self::pull(&l, "repository") {
                         result.repository = Some(v);
                     }
-
-                    if let Some(v) = Self::pull(&mut result, &l, "version") {
+                    if let Some(v) = Self::pull(&l, "version") {
                         result.version = Some(Version::from_str(&v).unwrap());
                     }
-                    if let Some(v) = Self::pull(&mut result, &l, "py_version") {
+                    if let Some(v) = Self::pull(&l, "py_version") {
                         result.py_version = Some(Constraint::from_str(&v).unwrap());
                     }
 
-                        // todo: Parse console scripts.
-
+                // todo: Parse console scripts.
                 } else if in_dep && !l.is_empty() {
                     result.reqs.push(Req::from_str(&l, false).unwrap());
                 }
@@ -701,8 +677,8 @@ fn sync_deps(
     python_vers: &Version,
     //    resolved: &Vec<(String, Version, Vec<(String, Version)>)>,
 ) {
-    let packages: Vec<((String, Version), Option<(u32, String)>)> = lock_packs
-        .into_iter()
+    let packages: Vec<PackToInstall> = lock_packs
+        .iter()
         .map(|lp| {
             (
                 (lp.name.clone(), Version::from_str(&lp.version).unwrap()),
@@ -716,14 +692,13 @@ fn sync_deps(
         .collect();
 
     // todo shim. Use top-level A/R. We discard it temporarily while working other issues.
-    let installed: Vec<(String, Version)> =
-        installed.into_iter().map(|t| (t.0.clone(), t.1)).collect();
+    let installed: Vec<(String, Version)> = installed.iter().map(|t| (t.0.clone(), t.1)).collect();
 
     // Filter by not-already-installed.
-    let to_install: Vec<&((String, Version), Option<(u32, String)>)> = packages
+    let to_install: Vec<&PackToInstall> = packages
         .iter()
         // todo: Do we need to compare names with .to_lowercase()?
-        .filter(|(pack, rename)| !installed.contains(pack))
+        .filter(|(pack, _)| !installed.contains(pack))
         .collect();
 
     // todo: Once you include rename info in installed, you won't need to use the map logic here.
@@ -764,7 +739,7 @@ fn sync_deps(
             package_type,
             rename,
         )
-            .is_err()
+        .is_err()
         {
             abort("Problem downloading packages");
         }
@@ -793,15 +768,11 @@ fn sync_deps(
 fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) -> bool {
     let mut result = true;
     for constr in constraints.iter() {
-        let mut constr_passed = false;
-        if locked.iter().any(|p| {
+        if !locked.iter().any(|p| {
             p.name.to_lowercase() == name.to_lowercase() && constr.is_compatible(&p.version)
         }) {
-            constr_passed = true;
-            break;
-        }
-        if !constr_passed {
             result = false;
+            break;
         }
     }
     result
@@ -1055,11 +1026,11 @@ py_version = \"3.7\"",
     };
 
     #[cfg(target_os = "windows")]
-        let os = Os::Windows;
+    let os = Os::Windows;
     #[cfg(target_os = "linux")]
-        let os = Os::Linux;
+    let os = Os::Linux;
     #[cfg(target_os = "macos")]
-        let os = Os::Mac;
+    let os = Os::Mac;
 
     let extras = vec![]; // todo temp!!
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
@@ -1171,7 +1142,7 @@ py_version = \"3.7\"",
         SubCommand::List {} => util::show_installed(&lib_path),
         // We already handled init and new
         SubCommand::Init {} => (),
-        SubCommand::New { name: _ } => (),
+        SubCommand::New { .. } => (),
     }
 }
 

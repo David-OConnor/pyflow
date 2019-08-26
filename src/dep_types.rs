@@ -7,6 +7,18 @@ use std::{cmp, fmt, num, str::FromStr};
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 
+#[derive(Clone, Debug)]
+pub struct Dependency {
+    pub id: u32,
+    pub name: String,
+    pub version: Version,
+    pub reqs: Vec<Req>,
+    // Identify what constraints drove this, and by what package name/version.
+    // The latter is so we know which package to mangle the inputs for, if
+    // we need to rename this one.
+    pub parent: u32, // id
+}
+
 #[derive(Debug, PartialEq)]
 pub struct DependencyError {
     pub details: String,
@@ -87,7 +99,7 @@ impl ToString for VersionModifier {
 }
 
 impl VersionModifier {
-    fn orderval(&self) -> u8 {
+    fn orderval(self) -> u8 {
         match self {
             VersionModifier::Null => 4,
             VersionModifier::ReleaseCandidate => 3,
@@ -908,29 +920,31 @@ impl fmt::Display for Req {
     }
 }
 
-///// Includes information for describing a `Python` dependency.
-//#[derive(Clone, Debug, Deserialize, PartialEq)]
-//pub struct Dependency {
-//    pub name: String,
-//    pub version: Version,
-//
-//    //    pub filename: String,
-//    //    pub hash: String, // todo do you want hash, url, filename here?
-//    //    pub file_url: String,
-//    pub reqs: Vec<Req>,
-////    pub deps: Vec<(String, Version)>,
-//
-//    pub constraints_for_this: Vec<Constraint>, // Ie what constraints drove this node's version?
-//
-//    //    pub dependencies: Vec<DepNode>,
-//    pub extras: Vec<String>,
-//}
+#[derive(Debug)]
+pub enum Rename {
+    No,
+    // todo: May not need to store self id.
+    Yes(u32, u32, String), // parent id, self id, name
+}
 
-//impl Dependency {
-//    pub fn simple_deps(&self) - {
-//
+//impl Rename {
+//    // todo: Perhaps just have this option instead of a sep enum
+//    pub fn to_opt(&self) -> Option<(u32, String)> {
+//        match self {
+//            Self::No => None,
+//            Self::Yes(parent_id, self_id, name) => Some((parent_id, name))
+//        }
 //    }
 //}
+
+#[derive(Debug)]
+pub struct Package {
+    pub id: u32,
+    pub name: String,
+    pub version: Version,
+    pub deps: Vec<(String, Version)>,
+    pub rename: Rename,
+}
 
 /// Similar to that used by Cargo.lock. Represents an exact package to download. // todo(Although
 /// todo the dependencies field isn't part of that/?)

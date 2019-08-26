@@ -184,7 +184,7 @@ pub fn parse_pipfile(cfg: &mut Config) {
 
     let mut in_metadata = false;
     let mut in_dep = false;
-    let mut in_extras = false;
+    let mut _in_extras = false;
 
     let sect_re = Regex::new(r"\[.*\]").unwrap();
 
@@ -199,12 +199,12 @@ pub fn parse_pipfile(cfg: &mut Config) {
             if &l == "[[source]]" {
                 in_metadata = true;
                 in_dep = false;
-                in_extras = false;
+                _in_extras = false;
                 continue;
             } else if &l == "[packages]" {
                 in_metadata = false;
                 in_dep = true;
-                in_extras = false;
+                _in_extras = false;
                 continue;
             } else if &l == "[dev-packages]" {
                 in_metadata = false;
@@ -214,7 +214,7 @@ pub fn parse_pipfile(cfg: &mut Config) {
             } else if sect_re.is_match(&l) {
                 in_metadata = false;
                 in_dep = false;
-                in_extras = false;
+                _in_extras = false;
                 continue;
             }
 
@@ -258,7 +258,8 @@ pub fn parse_poetry(cfg: &mut Config) {
 
     let mut in_metadata = false;
     let mut in_dep = false;
-    let mut in_extras = false;
+    let mut _in_extras = false;
+    let mut _in_dev_packages = false;
 
     let sect_re = Regex::new(r"\[.*\]").unwrap();
 
@@ -273,23 +274,27 @@ pub fn parse_poetry(cfg: &mut Config) {
             if &l == "[tool.poetry]" {
                 in_metadata = true;
                 in_dep = false;
-                in_extras = false;
+                _in_extras = false;
+                _in_dev_packages = false;
                 continue;
             } else if &l == "[tool.poetry.dependencies]" {
                 in_metadata = false;
                 in_dep = true;
-                in_extras = false;
+                _in_extras = false;
+                _in_dev_packages = false;
                 continue;
             } else if &l == "[dev-packages]" {
                 in_metadata = false;
                 in_dep = false;
-                in_extras = false;
+                _in_extras = false;
+                _in_dev_packages = true;
                 // todo
                 continue;
             } else if sect_re.is_match(&l) {
                 in_metadata = false;
                 in_dep = false;
-                in_extras = false;
+                _in_extras = false;
+                _in_dev_packages = false;
                 continue;
             }
 

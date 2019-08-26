@@ -25,9 +25,8 @@ fn install_wheel(file: &fs::File, lib_path: &PathBuf, rename: &Option<(String, S
         let file_str2 = file.sanitized_name();
         let file_str = file_str2.to_str().expect("Problem converting path to str");
 
-        let extracted_file;
-        if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
-            extracted_file = match rename {
+        let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
+            match rename {
                 Some((old, new)) => file
                     .sanitized_name()
                     .to_str()
@@ -36,10 +35,10 @@ fn install_wheel(file: &fs::File, lib_path: &PathBuf, rename: &Option<(String, S
                     .replace(old, new)
                     .into(),
                 None => file.sanitized_name(),
-            };
+            }
         } else {
-            extracted_file = file.sanitized_name();
-        }
+            file.sanitized_name()
+        };
 
         let outpath = lib_path.join(extracted_file);
 
@@ -222,7 +221,8 @@ pub fn download_and_install_package(
     if !archive_path.exists() {
         // Save the file
         let mut resp = reqwest::get(url)?; // Download the file
-        let mut out = fs::File::create(&archive_path).expect("Failed to save downloaded package file");
+        let mut out =
+            fs::File::create(&archive_path).expect("Failed to save downloaded package file");
         io::copy(&mut resp, &mut out).expect("failed to copy content");
     }
 
@@ -309,6 +309,7 @@ pub fn download_and_install_package(
                     .to_owned();
                 break;
             }
+
             let built_wheel_filename = &built_wheel_filename;
             if built_wheel_filename.is_empty() {
                 util::abort("Problem finding built wheel")
@@ -480,13 +481,12 @@ pub fn rename_package_files(top_path: &PathBuf, old: &str, new: &str) {
 }
 
 /// Rename metadata files.
-pub fn rename_metadata(path: &PathBuf, old: &str, new: &str) {
+pub fn rename_metadata(path: &PathBuf, _old: &str, new: &str) {
     // todo: Handle multiple items in top_level. Figure out how to handle that.
     let top_file = path.join("top_level.txt");
-    let mut top_data =
-        fs::read_to_string(&top_file).expect("Problem opening top_level.txt");
+    //    let mut top_data = fs::read_to_string(&top_file).expect("Problem opening top_level.txt");
 
-    top_data = new.to_owned(); // todo fragile.
+    let top_data = new.to_owned(); // todo fragile.
 
     fs::write(top_file, top_data).expect("Problem writing file while renaming");
 

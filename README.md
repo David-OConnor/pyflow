@@ -233,6 +233,7 @@ versions are downloaded as-required, and renamed internally.
 ## Not-yet-implemented
 
 - Installing from sources other than `pypi` (eg repos)
+- Installing multiple versions of a dependency may not work if it uses compiles code.
 - The lock file is missing some info like hashes
 - Windows installer and Mac binaries
 - Adding a dependency via the CLI with a specific version constraint

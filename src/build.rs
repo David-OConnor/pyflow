@@ -16,7 +16,7 @@ fn serialize_py_list(items: &[String]) -> String {
 }
 
 /// Serialize to a Python dics of lists of strings.
-fn serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
+fn _serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
     let mut result = "{\n".to_string();
     for (key, val) in hm.iter() {
         result.push_str(&format!("    \"{}\": {}\n", key, serialize_py_list(val)));
@@ -56,7 +56,7 @@ setuptools.setup(
     version="{}",
     author="{}",
     author_email="{}",
-    license="{}"
+    license="{}",
     description="{}",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -68,8 +68,6 @@ setuptools.setup(
     entry_points={{
         "console_scripts": {},
     }},
-
-    extras_require={},
 )
 "#,
         cfg.readme_filename.unwrap_or_else(|| "README.md".into()),
@@ -81,14 +79,15 @@ setuptools.setup(
         cfg.description.unwrap_or_else(|| "".into()),
         cfg.homepage.unwrap_or_else(|| "".into()),
         serialize_py_list(&cfg.classifiers),
-
         // todo: For now we only support console_scripts entry points.
-//        serialize_py_dict(&cfg.entry_points),
+        //        serialize_py_dict(&cfg.entry_points),
         serialize_py_list(&cfg.console_scripts),
-        match cfg.extras {
-            Some(e) => serialize_py_dict(&e),
-            None => "".into(),
-        }
+        // todo:
+        //            extras_require="{}",
+        //        match cfg.extras {
+        //            Some(e) => serialize_py_dict(&e),
+        //            None => "".into(),
+        //        }
     );
 
     fs::write(filename, data).expect("Problem writing dummy setup.py");
@@ -105,7 +104,7 @@ pub(crate) fn build(
     bin_path: &PathBuf,
     lib_path: &PathBuf,
     cfg: &crate::Config,
-    extras: Vec<String>,
+    _extras: Vec<String>,
 ) {
     // todo: Check if they exist; only install if they don't.
     let dummy_setup_fname = "setup_temp_pypackage.py";
@@ -120,7 +119,7 @@ pub(crate) fn build(
         .expect("Problem installing Twine");
 
     create_dummy_setup(cfg, dummy_setup_fname);
-    return // todo
+
     util::set_pythonpath(lib_path);
     println!("🛠️️ Building the package...");
     Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "python"))
@@ -176,22 +175,23 @@ pub mod test {
         assert_eq!(expected, actual);
     }
 
-    #[test]
-    fn py_dict() {
-        let expected = r#"{
-    "PDF": [
-        "ReportLab>=1.2",
-        "RXP"
-    ],
-    "reST": [
-        "docutils>=0.3"
-    ],
-    }"#;
-
-        let mut data = HashMap::new();
-        data.insert("PDF".into(), vec!["ReportLab>=1.2".into(), "RXP".into()]);
-        data.insert("reST".into(), vec!["docutils>=0.3".into()]);
-
-        assert_eq!(expected, serialize_py_dict(&data));
-    }
+    // todo: Re-impl if you end up using this
+    //    #[test]
+    //    fn py_dict() {
+    //        let expected = r#"{
+    //    "PDF": [
+    //        "ReportLab>=1.2",
+    //        "RXP"
+    //    ],
+    //    "reST": [
+    //        "docutils>=0.3"
+    //    ],
+    //    }"#;
+    //
+    //        let mut data = HashMap::new();
+    //        data.insert("PDF".into(), vec!["ReportLab>=1.2".into(), "RXP".into()]);
+    //        data.insert("reST".into(), vec!["docutils>=0.3".into()]);
+    //
+    //        assert_eq!(expected, serialize_py_dict(&data));
+    //    }
 }
