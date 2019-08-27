@@ -1,9 +1,10 @@
 use crate::{
-    dep_types::{self, Constraint, Dependency, DependencyError, Rename, Req, ReqType, Version},
+    dep_types::{
+        self, Constraint, Dependency, DependencyError, Package, Rename, Req, ReqType, Version,
+    },
     util,
 };
 
-use crate::dep_types::VersionModifier::Dep;
 use crossterm::Color;
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
@@ -343,7 +344,7 @@ fn guess_graph(
         let requires_dist = package
             .deps
             .iter()
-            .map(|(name, vers)| format!("{} (=={})", name, vers.to_string()))
+            .map(|(_, name, vers)| format!("{} (=={})", name, vers.to_string()))
             .collect();
 
         // Note that we convert from normal data types to strings here, for the sake of consistency
@@ -440,12 +441,12 @@ fn prepare_package(
     deps: &[Dependency],
     version_cache: &HashMap<String, (String, Version, Vec<Version>)>,
     rename: Rename,
-) -> crate::Package {
+) -> Package {
     let mut subdeps = vec![];
     for subdep in deps.iter() {
         let fmtd_name_inner = format_name(&subdep.name, &version_cache);
         if subdep.parent == dep.id {
-            subdeps.push((fmtd_name_inner, subdep.version));
+            subdeps.push((subdep.id, fmtd_name_inner, subdep.version));
             break;
         }
     }
@@ -471,7 +472,7 @@ fn find_constraints(
             Some(p) => p.clone(),
             // ie top-level; set up a dummy
             None => Dependency {
-                id: 0,
+                id: 999,
                 name: "top".to_owned(),
                 version: Version::new(0, 0, 0),
                 reqs: all_reqs.to_vec(),
@@ -487,6 +488,37 @@ fn find_constraints(
         {
             result.push(req.constraints.clone())
         }
+    }
+    result
+}
+
+/// We've determined we need to add all the included packages, and renamed all but one.
+fn make_renamed_packs(
+    vers_cache: &HashMap<String, (String, Version, Vec<Version>)>,
+    deps: &[Dependency],
+    all_deps: &[Dependency],
+    name: &str,
+) -> Vec<Package> {
+    util::print_color(
+        &format!(
+            "Attempting to install multiple versions for {}. If this package uses\
+             compiled code, this may fail when importing...",
+            name
+        ),
+        Color::DarkRed,
+    );
+
+    let mut result = vec![];
+    // We were unable to resolve using the newest version; add and rename packages.
+    for (i, dep) in deps.iter().enumerate() {
+        // Don't rename the first one.
+        let rename = if i != 0 {
+            Rename::Yes(dep.parent, dep.id, format!("{}_renamed_{}", dep.name, i))
+        } else {
+            Rename::No
+        };
+
+        result.push(prepare_package(&name, &dep, all_deps, &vers_cache, rename));
     }
     result
 }
@@ -545,6 +577,7 @@ pub fn resolve(
     // we can pick the newest compatible version for each req. We pass only the info
     // needed to build the locked dependencies, and strip intermediary info like ids.
 
+    let mut updated_versions = vec![];
     let mut result_cleaned = vec![];
     for (name, deps) in by_name.into_iter() {
         let fmtd_name = format_name(&name, &version_cache);
@@ -592,17 +625,28 @@ pub fn resolve(
                 .max_by(|a, b| a.version.cmp(&b.version));
 
             match newest_compatible {
-                Some(best) => result_cleaned.push(prepare_package(
-                    &fmtd_name,
-                    &best,
-                    &result,
-                    &version_cache,
-                    Rename::No,
-                )),
+                Some(best) => {
+                    result_cleaned.push(prepare_package(
+                        &fmtd_name,
+                        &best,
+                        &result,
+                        &version_cache,
+                        Rename::No,
+                    ));
+
+                    // Indicate we need to update the parent. We can't do it here, since
+                    // we don't know if we're pr
+                    // ocessed the parent[s] yet. Not doing this will
+                    // result in incorrect dependencies listed in lock packs.
+                    for dep in deps.iter() {
+                        // note that we push the old ids, so we can update the subdeps with the new versions.
+                        updated_versions.push((dep.id, best.version))
+                    }
+                }
 
                 None => {
-                    // todo: We need to consider the possibility there's a compatible version
-                    // todo that wasn't one of the best-per-req we queried.
+                    // We consider the possibility there's a compatible version
+                    // that wasn't one of the best-per-req we queried.
                     println!(
                         "⛏️ Digging deeper to resolve dependencies for {}...",
                         name
@@ -612,8 +656,13 @@ pub fn resolve(
                     let versions = &version_cache.get(&name).unwrap().2;
 
                     if versions.is_empty() {
-                        util::abort(&format!("Can't find any compatible versions for {}", name));
-                        // todo: Invoke rename logic here.
+                        result_cleaned.append(&mut make_renamed_packs(
+                            &version_cache,
+                            &deps,
+                            &result,
+                            &fmtd_name,
+                        ));
+                        continue;
                     }
 
                     // Generate dependencies here for all avail versions.
@@ -621,7 +670,7 @@ pub fn resolve(
                         .into_iter()
                         .filter(|vers| inter.0 <= **vers && **vers <= inter.1)
                         .map(|vers| Dependency {
-                            id: 0, // todo
+                            id: 0, // placeholder; we'll assign an id to the one we pick.
                             name: fmtd_name.clone(),
                             version: *vers,
                             reqs: vec![], // todo
@@ -629,43 +678,70 @@ pub fn resolve(
                         })
                         .collect();
 
-                    let mut newest_unresolved = unresolved_deps.iter()
-                        .max_by(|a, b| a.version.cmp(&b.version)).unwrap();
-
                     println!("Unresolved: {:#?}", &unresolved_deps);
+                    let mut newest_unresolved = unresolved_deps
+                        .into_iter()
+                        .max_by(|a, b| a.version.cmp(&b.version))
+                        .unwrap();
 
-                    continue;
+                    newest_unresolved.id = result.iter().map(|d| d.id).max().unwrap_or(0) + 1;
 
-                    util::print_color(
-                        &format!(
-                            "Attempting to install multiple versions for {}. If this package uses\
-                             compiled code, this may fail when importing...",
-                            name
-                        ),
-                        Color::DarkRed,
-                    );
+                    // todo: test this.
+                    // todo: Unimplemented
+                    //                    let mut result2 = vec![];
+                    //                    if guess_graph(
+                    //                        0, // todo
+                    //                        &vec![Req::new(
+                    //                            fmtd_name,
+                    //                            vec![Constraint::new(ReqTypes::Exact, newest_unresolved.version)],
+                    //                        )],
+                    //                        locked,
+                    //                        os,
+                    //                        extras,
+                    //                        py_vers,
+                    //                        &mut result2,
+                    //                        &mut cache,
+                    //                        &mut version_cache,
+                    //                        &mut reqs_searched,
+                    //                    )
+                    //                    .is_err()
+                    //                    {
+                    //                        util::abort("Problem resolving dependencies");
+                    //                    }
 
-                    // We were unable to resolve using the newest version; add and rename packages.
-                    for (i, dep) in deps.iter().enumerate() {
-                        // Don't rename the first one.
-                        let rename = if i != 0 {
-                            Rename::Yes(dep.parent, dep.id, format!("{}_renamed_{}", dep.name, i))
-                        } else {
-                            Rename::No
-                        };
-
-                        result_cleaned.push(prepare_package(
-                            &fmtd_name,
-                            &dep,
-                            &result,
-                            &version_cache,
-                            rename,
-                        ));
+                    result_cleaned.push(prepare_package(
+                        &fmtd_name,
+                        &newest_unresolved,
+                        &result,
+                        &version_cache,
+                        Rename::No,
+                    ));
+                    for dep in deps {
+                        // note that we push the old ids, so we can update the subdeps with the new versions.
+                        updated_versions.push((dep.id, newest_unresolved.version))
                     }
+
+                    //                    result_cleaned.append(&mut make_renamed_packs(
+                    //                        &version_cache,
+                    //                        &deps,
+                    //                        &result,
+                    //                        &fmtd_name,
+                    //                    ));
                 }
             }
         } else {
             panic!("We shouldn't be seeing this!")
+        }
+    }
+
+    // Update versions of deps if we didn't use the originally-assigned one. This affects locked data.
+    for package in result_cleaned.iter_mut() {
+        for subdep in package.deps.iter_mut() {
+            for (id, vers) in updated_versions.iter() {
+                if *id == subdep.0 {
+                    subdep.2 = *vers
+                }
+            }
         }
     }
 

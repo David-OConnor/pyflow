@@ -2,8 +2,71 @@ use crate::{dep_types::Req, util, Config};
 use crossterm::Color;
 use regex::Regex;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
+
+/// This nested structure is required based on how the `toml` crate handles dots.
+#[derive(Debug, Deserialize)]
+pub struct Pyproject {
+    pub tool: Tool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Tool {
+    pub pypackage: Option<Pypackage>,
+    pub poetry: Option<Poetry>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Pypackage {
+    pub py_version: Option<String>,
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub author: Option<String>,
+    pub author_email: Option<String>,
+    pub license: Option<String>,
+    pub description: Option<String>,
+    pub classifiers: Option<Vec<String>>, // https://pypi.org/classifiers/
+    pub keywords: Option<Vec<String>>,
+    pub homepage: Option<String>,
+    pub repository: Option<String>,
+    pub repo_url: Option<String>,
+    pub package_url: Option<String>,
+    pub readme_filename: Option<Option<String>>,
+    pub entry_points: Option<HashMap<String, Vec<String>>>,
+    pub console_scripts: Option<Vec<String>>,
+
+    pub dependencies: Option<HashMap<String, String>>,
+    pub dev_dependencies: Option<HashMap<String, String>>,
+    pub extras: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Poetry {
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub description: Option<String>,
+    pub license: Option<String>,
+    pub authors: Option<String>,
+    pub readme: Option<String>,
+    pub homepage: Option<String>,
+    pub repository: Option<String>,
+    pub documentation: Option<String>,
+    pub keywords: Option<Vec<String>>,
+    pub classifiers: Option<Vec<String>>,
+    pub packages: Option<Vec<String>>,
+    pub include: Option<Vec<String>>,
+    pub exclude: Option<Vec<String>>,
+
+    pub dependencies: Option<HashMap<String, String>>,
+    // todo: Can't find dets on poetry docs, but apparently exists
+    //    dev_dependencies: Option<HashMap<String, String>>,
+    // todo: Include these
+    //    pub source: Option<HashMap<String, String>>,
+    //    pub scripts: Option<HashMap<String, String>>,
+    //    pub extras: Option<HashMap<String, String>>,
+}
 
 /// Write dependencies to pyproject.toml. If an entry for tha = true;t package already exists, ask if
 /// we should update the version. Assume we've already parsed the config, and are only
@@ -136,40 +199,6 @@ pub fn parse_req_dot_text(cfg: &mut Config) {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct Poetry {
-    // etc
-    name: String,
-    version: Option<String>,
-    description: Option<String>,
-    license: Option<String>,
-    authors: Option<String>,
-    readme: Option<String>,
-    homepage: Option<String>,
-    repository: Option<String>,
-    documentation: Option<String>,
-    keywords: Option<Vec<String>>,
-    classifiers: Option<Vec<String>>,
-    packages: Option<Vec<String>>,
-    include: Option<Vec<String>>,
-    exclude: Option<Vec<String>>,
-}
-
-/// https://poetry.eustace.io/docs/pyproject/
-#[derive(Debug, Deserialize)]
-struct PoetryPyproject {
-    #[serde(alias = "tool.poetry")]
-    poetry: Poetry,
-    #[serde(alias = "tool.poetry.dependencies")]
-    dependencies: Option<Vec<String>>,
-    #[serde(alias = "tool.poetry.source")]
-    source: Option<Vec<String>>,
-    #[serde(alias = "tool.poetry.scripts")]
-    scripts: Option<Vec<String>>,
-    #[serde(alias = "tool.poetry.extras")]
-    extras: Option<Vec<String>>,
-}
-
 fn key_re(key: &str) -> Regex {
     // todo DRY from main
     Regex::new(&format!(r#"^{}\s*=\s*"(.*)"$"#, key)).unwrap()
@@ -215,86 +244,6 @@ pub fn parse_pipfile(cfg: &mut Config) {
                 in_metadata = false;
                 in_dep = false;
                 _in_extras = false;
-                continue;
-            }
-
-            if in_metadata {
-                // todo DRY
-                // Pipfile deliberately only includes minimal metadata.
-                if let Some(n2) = key_re("name").captures(&l) {
-                    if let Some(n) = n2.get(1) {
-                        cfg.name = Some(n.as_str().to_string());
-                    }
-                }
-                if let Some(n2) = key_re("url").captures(&l) {
-                    if let Some(n) = n2.get(1) {
-                        cfg.homepage = Some(n.as_str().to_string());
-                    }
-                }
-            } else if in_dep && !l.is_empty() {
-                match Req::from_str(&l, false) {
-                    Ok(r) => {
-                        cfg.reqs.push(r.clone());
-                        util::print_color(&format!("Added {} from Pipfile", r.name), Color::Green)
-                    }
-                    Err(_) => util::print_color(
-                        &format!("Problem parsing {} from Pipfile", l),
-                        Color::Red,
-                    ),
-                }
-            }
-
-            // todo: [requires] section has python_version.
-        }
-    }
-}
-
-// todo: DRY from parse_pipfile and parsing pyproject.toml!
-pub fn parse_poetry(cfg: &mut Config) {
-    let file = match fs::File::open("pyproject.toml") {
-        Ok(f) => f,
-        Err(_) => return,
-    };
-
-    let mut in_metadata = false;
-    let mut in_dep = false;
-    let mut _in_extras = false;
-    let mut _in_dev_packages = false;
-
-    let sect_re = Regex::new(r"\[.*\]").unwrap();
-
-    for line in BufReader::new(file).lines() {
-        if let Ok(l) = line {
-            // todo replace this with something that clips off
-            // todo post-# part of strings; not just ignores ones starting with #
-            if l.starts_with('#') {
-                continue;
-            }
-
-            if &l == "[tool.poetry]" {
-                in_metadata = true;
-                in_dep = false;
-                _in_extras = false;
-                _in_dev_packages = false;
-                continue;
-            } else if &l == "[tool.poetry.dependencies]" {
-                in_metadata = false;
-                in_dep = true;
-                _in_extras = false;
-                _in_dev_packages = false;
-                continue;
-            } else if &l == "[dev-packages]" {
-                in_metadata = false;
-                in_dep = false;
-                _in_extras = false;
-                _in_dev_packages = true;
-                // todo
-                continue;
-            } else if sect_re.is_match(&l) {
-                in_metadata = false;
-                in_dep = false;
-                _in_extras = false;
-                _in_dev_packages = false;
                 continue;
             }
 

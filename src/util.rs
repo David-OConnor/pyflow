@@ -1,7 +1,7 @@
 use crate::{
     dep_resolution,
     dep_types::{Constraint, Req, ReqType, Version},
-    edit_files,
+    files,
 };
 use crossterm::{Color, Colored};
 use regex::Regex;
@@ -162,39 +162,48 @@ pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version, Vec<String>)>
     for folder in package_folders.iter() {
         let folder_name = folder.to_str().unwrap();
         let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
-        let re_egg = Regex::new(r"^(.*?)-(.*?)\.egg-info$").unwrap();
+        //        let re_egg = Regex::new(r"^(.*?)-(.*?)\.egg-info$").unwrap();
 
         if let Some(caps) = re_dist.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
 
             let top_level = lib_path.join(folder_name).join("top_level.txt");
-            let top_level_f = fs::File::open(top_level).expect("Can't find top_level.txt");
 
             let mut tops = vec![];
-            for line in BufReader::new(top_level_f).lines() {
-                if let Ok(l) = line {
-                    tops.push(l);
+            match fs::File::open(top_level) {
+                Ok(f) => {
+                    for line in BufReader::new(f).lines() {
+                        if let Ok(l) = line {
+                            tops.push(l);
+                        }
+                    }
                 }
+                Err(_) => tops.push(folder_name.to_owned()),
             }
 
             result.push((name.to_owned(), vers, tops));
 
-        // todo dry
-        } else if let Some(caps) = re_egg.captures(&folder_name) {
-            let name = caps.get(1).unwrap().as_str();
-            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
-
-            let top_level = lib_path.join(folder_name).join("top_level.txt");
-            let top_level_f = fs::File::open(top_level).expect("Can't find top_level.txt");
-
-            let mut tops = vec![];
-            for line in BufReader::new(top_level_f).lines() {
-                if let Ok(l) = line {
-                    tops.push(l);
-                }
-            }
-            result.push((name.to_owned(), vers, tops));
+            //        } else if let Some(caps) = re_egg.captures(&folder_name) {
+            //            let name = caps.get(1).unwrap().as_str();
+            //            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
+            //
+            //            let top_level = lib_path.join(folder_name).join("top_level.txt");
+            //            let top_level_f = fs::File::open(top_level).expect("Can't find top_level.txt");
+            //
+            //            let mut tops = vec![];
+            //            match fs::File::open(top_level) {  // todo DRY
+            //                Ok(f) => {
+            //                    for line in BufReader::new(f).lines() {
+            //                        if let Ok(l) = line {
+            //                            tops.push(l);
+            //                        }
+            //                    }
+            //                },
+            //                Err(_)=> tops.push(folder_name.to_owned()),
+            //            }
+            //
+            //            result.push((name.to_owned(), vers, tops));
         }
     }
     result
@@ -282,7 +291,7 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
     }
 
     if !added_reqs_unique.is_empty() {
-        edit_files::add_reqs_to_cfg(cfg_filename, &added_reqs_unique);
+        files::add_reqs_to_cfg(cfg_filename, &added_reqs_unique);
     }
 
     result.append(&mut added_reqs_unique);

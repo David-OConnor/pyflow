@@ -145,7 +145,6 @@ explicit flags to `pypackage install`, or when included in another project with 
 `pip install -e` etc.
 ```toml
 [tool.pypackage.extras]
-[tool.pypackage.extras]
 test = ["pytest", "nose"]
 secure = ["crypto"]
 ```
@@ -155,6 +154,10 @@ how to specify dependencies in this `Cargo.toml`-inspired
 [semvar](https://semver.org) format,
  reference
 [this guide](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html).
+
+We also attempt to parse metadata and dependencies from [tool.poetry](https://poetry.eustace.io/docs/pyproject/)
+sections of `pyproject.toml`, so there's no need to modify the format
+if you're using that.
 
 
 ## What you can do
@@ -183,7 +186,7 @@ as defined in `pyproject.toml`
 - `pypackage new projname` - Create a directory containing the basics for a project: 
 a readme, pyproject.toml, .gitignore, and directory for code
 - `pypackage init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
-`requirements.text`, `Pipfile` etc as required.
+`requirements.text` and `Pipfile` as required.
 
 - `pypackage -V` - Get the current version of this tool
 - `pypackage help` Get help, including a list of available commands

@@ -7,15 +7,8 @@ use install::PackageType::{Source, Wheel};
 use regex::Regex;
 use serde::Deserialize;
 use std::{
-    collections::HashMap,
-    env,
-    error::Error,
-    fmt, fs,
-    io::{self, BufRead, BufReader},
-    path::PathBuf,
-    process::Command,
-    str::FromStr,
-    thread, time,
+    collections::HashMap, env, error::Error, fmt, fs, io, path::PathBuf, process::Command,
+    str::FromStr, thread, time,
 };
 
 use crate::dep_resolution::WarehouseRelease;
@@ -26,7 +19,7 @@ mod build;
 mod commands;
 mod dep_resolution;
 mod dep_types;
-mod edit_files;
+mod files;
 mod install;
 mod util;
 
@@ -164,99 +157,129 @@ pub struct Config {
     console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
 }
 
-fn key_re(key: &str) -> Regex {
-    Regex::new(&format!(r#"^{}\s*=\s*"(.*)"$"#, key)).unwrap()
-}
-
 impl Config {
-    /// Helper for `from_file`.
-    fn pull(line: &str, key: &str) -> Option<String> {
-        let mut result = None;
-        if let Some(cap) = key_re(key).captures(line) {
-            if let Some(m) = cap.get(1) {
-                result = Some(m.as_str().to_string());
-            }
-        }
-        result
-    }
-
-    /// Pull config data from `pyproject.toml`
+    /// Pull config data from `pyproject.toml`. We use this to deserialize things like Versions
+    /// and requirements.
     fn from_file(filename: &str) -> Option<Self> {
-        // We don't use the `toml` crate here because it doesn't appear flexible enough.
-        let mut result = Config::default();
-        let file = match fs::File::open(filename) {
-            Ok(f) => f,
+        // todo: Lots of tweaks and QC could be done re what fields to parse, and how best to
+        // todo parse and store them.
+        let toml_str = match fs::read_to_string(filename) {
+            Ok(d) => d,
             Err(_) => return None,
         };
 
-        let mut in_metadata = false;
-        let mut in_dep = false;
-        let mut _in_extras = false;
+        let decoded: files::Pyproject = toml::from_str(&toml_str).unwrap();
 
-        let sect_re = Regex::new(r"\[.*\]").unwrap();
+        let mut result = Self::default();
 
-        for line in BufReader::new(file).lines() {
-            if let Ok(l) = line {
-                // todo replace this with something that clips off
-                // todo post-# part of strings; not just ignores ones starting with #
-                if l.starts_with('#') {
-                    continue;
-                }
+        // Parse Poetry first, since we'll use PyPackage if there's a conflict.
+        if let Some(po) = decoded.tool.poetry {
+            if let Some(v) = po.name {
+                result.name = Some(v);
+            }
+            if let Some(v) = po.authors {
+                result.author = Some(v);
+            }
+            if let Some(v) = po.license {
+                result.name = Some(v);
+            }
+            if let Some(v) = po.homepage {
+                result.homepage = Some(v);
+            }
+            if let Some(v) = po.description {
+                result.description = Some(v);
+            }
+            if let Some(v) = po.repository {
+                result.repository = Some(v);
+            }
 
-                if &l == "[tool.pypackage]" {
-                    in_metadata = true;
-                    in_dep = false;
-                    _in_extras = false;
-                    continue;
-                } else if &l == "[tool.pypackage.dependencies]" {
-                    in_metadata = false;
-                    in_dep = true;
-                    _in_extras = false;
-                    continue;
-                } else if &l == "[tool.pypackage.features]" {
-                    in_metadata = false;
-                    in_dep = false;
-                    _in_extras = true;
-                    continue;
-                } else if sect_re.is_match(&l) {
-                    in_metadata = false;
-                    in_dep = false;
-                    _in_extras = false;
-                    continue;
-                }
+            // todo: Process entry pts, classifiers etc?
+            if let Some(v) = po.classifiers {
+                result.classifiers = v;
+            }
+            if let Some(v) = po.keywords {
+                result.keywords = v;
+            }
 
-                if in_metadata {
-                    if let Some(v) = Self::pull(&l, "name") {
-                        result.name = Some(v);
-                    }
-                    if let Some(v) = Self::pull(&l, "author") {
-                        result.author = Some(v);
-                    }
-                    if let Some(v) = Self::pull(&l, "author_email") {
-                        result.author_email = Some(v);
-                    }
-                    if let Some(v) = Self::pull(&l, "license") {
-                        result.license = Some(v);
-                    }
-                    if let Some(v) = Self::pull(&l, "description") {
-                        result.description = Some(v);
-                    }
-                    if let Some(v) = Self::pull(&l, "homepage") {
-                        result.homepage = Some(v);
-                    }
-                    if let Some(v) = Self::pull(&l, "repository") {
-                        result.repository = Some(v);
-                    }
-                    if let Some(v) = Self::pull(&l, "version") {
-                        result.version = Some(Version::from_str(&v).unwrap());
-                    }
-                    if let Some(v) = Self::pull(&l, "py_version") {
-                        result.py_version = Some(Constraint::from_str(&v).unwrap());
-                    }
+            //                        if let Some(v) = po.source {
+            //                result.source = v;
+            //            }
+            //            if let Some(v) = po.scripts {
+            //                result.console_scripts = v;
+            //            }
+            //                        if let Some(v) = po.extras {
+            //                result.extras = v;
+            //            }
 
-                // todo: Parse console scripts.
-                } else if in_dep && !l.is_empty() {
-                    result.reqs.push(Req::from_str(&l, false).unwrap());
+            if let Some(v) = po.version {
+                result.version =
+                    Some(Version::from_str(&v).expect("Problem parsing version in `pyproject.toml`"))
+            }
+
+            // todo: Python version
+        }
+
+        if let Some(pp) = decoded.tool.pypackage {
+            if let Some(v) = pp.name {
+                result.name = Some(v);
+            }
+            if let Some(v) = pp.author {
+                result.author = Some(v);
+            }
+            if let Some(v) = pp.author_email {
+                result.author_email = Some(v);
+            }
+            if let Some(v) = pp.license {
+                result.name = Some(v);
+            }
+            if let Some(v) = pp.homepage {
+                result.homepage = Some(v);
+            }
+            if let Some(v) = pp.description {
+                result.description = Some(v);
+            }
+            if let Some(v) = pp.repository {
+                result.repository = Some(v);
+            }
+
+            // todo: Process entry pts, classifiers etc?
+            if let Some(v) = pp.classifiers {
+                result.classifiers = v;
+            }
+            if let Some(v) = pp.keywords {
+                result.keywords = v;
+            }
+            if let Some(v) = pp.entry_points {
+                result.entry_points = v;
+            }
+            if let Some(v) = pp.console_scripts {
+                result.console_scripts = v;
+            }
+
+            if let Some(v) = pp.version {
+                result.version =
+                    Some(Version::from_str(&v).expect("Problem parsing version in `pyproject.toml`"))
+            }
+
+            if let Some(v) = pp.py_version {
+                result.py_version = Some(
+                    Constraint::from_str(&v)
+                        .expect("Problem parsing python version in `pyproject.toml`"),
+                )
+            }
+
+            // todo: Potentially good place to handle parsing extras, github repos etc.
+            if let Some(deps) = pp.dependencies {
+                for (name, constrs) in deps {
+                    let constraints = Constraint::from_str_multiple(&constrs)
+                        .expect("Problem parsing constraints in `pyproject.toml`.");
+                    result.reqs.push(Req {
+                        name,
+                        constraints,
+                        extra: None, // todo see note above about adding theese
+                        sys_platform: None,
+                        python_version: None,
+                    });
                 }
             }
         }
@@ -612,7 +635,7 @@ fn find_best_release(
                 match Version::from_warehouse_str(&rel.python_version) {
                     Ok(req_v) => {
                         if req_v != *python_vers
-                            // todo: Awk place for this logic.
+// todo: Awk place for this logic.
                             && rel.python_version != "py2.py3"
                             && rel.python_version != "py3"
                         {
@@ -805,7 +828,7 @@ fn sync(
                     .expect("Problem reading lock file dependencies");
                 let name = caps.get(1).unwrap().as_str().to_owned();
                 let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
-                deps.push((name, vers));
+                deps.push((999, name, vers)); // dummy id
             }
 
             Package {
@@ -850,7 +873,7 @@ fn sync(
         let deps = package
             .deps
             .iter()
-            .map(|(name, version)| {
+            .map(|(_, name, version)| {
                 format!(
                     "{} {} pypi+https://pypi.org/pypi/{}/{}/json",
                     name,
@@ -907,6 +930,8 @@ fn main() {
 
     let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
 
+    println!("CFG: {:#?}", &cfg);
+
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
@@ -926,11 +951,9 @@ fn main() {
             return;
         }
         SubCommand::Init {} => {
-            edit_files::parse_req_dot_text(&mut cfg);
-            edit_files::parse_pipfile(&mut cfg);
-            edit_files::parse_poetry(&mut cfg);
+            files::parse_req_dot_text(&mut cfg);
+            files::parse_pipfile(&mut cfg);
 
-            // todo: implement so we can parse Poetry's pyproject.toml.
             if PathBuf::from(cfg_filename).exists() {
                 abort("pyproject.toml already exists - not overwriting.")
             }
@@ -1017,9 +1040,10 @@ py_version = \"3.7\"",
     let lib_path = vers_path.join("lib");
     let bin_path = util::find_bin_path(&vers_path);
 
+    let mut found_lock = false;
     let lock = match read_lock(lock_filename) {
         Ok(l) => {
-            println!("Found lockfile");
+            found_lock = true;
             l
         }
         Err(_) => Lock::default(),
@@ -1043,6 +1067,9 @@ py_version = \"3.7\"",
         // the currently-installed packages, found by crawling metadata in the `lib` path.
         // See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages } => {
+            if found_lock {
+                println!("Found lockfile");
+            }
             // Merge reqs added via cli with those in `pyproject.toml`.
             let updated_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
             //            println!("(dbg) to merged {:#?}", &updated_reqs);
@@ -1069,7 +1096,7 @@ py_version = \"3.7\"",
                 .collect();
             println!("(dbg) to remove {:#?}", &removed_reqs);
 
-            edit_files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
+            files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
 
             // Filter reqs here instead of re-reading the config from file.
             let updated_reqs: Vec<Req> = cfg

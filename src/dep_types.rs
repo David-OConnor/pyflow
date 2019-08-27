@@ -189,6 +189,11 @@ impl Version {
             return Ok(Self::new(3, 3, 0));
         }
 
+        // todo: Make this into a flexible regex
+        if s == "cp35.cp36.cp37.cp38" {
+            return Ok(Self::new(3, 5, 0));
+        }
+
         let re_pp = Regex::new(r"^pp(\d)(\d)(\d)$").unwrap();
         if let Some(caps) = re_pp.captures(s) {
             return Ok(Self::new(
@@ -942,7 +947,7 @@ pub struct Package {
     pub id: u32,
     pub name: String,
     pub version: Version,
-    pub deps: Vec<(String, Version)>,
+    pub deps: Vec<(u32, String, Version)>,
     pub rename: Rename,
 }
 
