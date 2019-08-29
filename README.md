@@ -32,7 +32,7 @@ run `cargo install pypackage`.
 
 ## Quickstart
 - Run `pypackage init` in an existing project folder, or `pypackage new projname` 
-to create a new project folder.
+to create a new project folder. `init` will import data from `requirements.txt` or `Pipfile`.
 - Run `pypackage install` to sync dependencies with `pyproject.toml`, or add dependencies to it
 - Run `pypackage python` to run Python
 
@@ -284,6 +284,7 @@ console_scripts = [
 [tool.pypackage.dependencies]
 numpy = "^1.16.4"
 manim = "0.1.8"
+ipython = {version = "^7.7.0", extras=["qtconsole"]}
 ```
 
 ## Building this from source                      

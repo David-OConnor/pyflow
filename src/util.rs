@@ -32,20 +32,41 @@ pub fn abort(message: &str) {
     process::exit(1)
 }
 
-pub fn possible_py_versions() -> Vec<Version> {
-    vec![
-        "2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "3.3", "3.4", "3.5", "3.6", "3.7",
-        "3.8", "3.9", "3.10", "3.11", "3.12",
-    ]
-    .into_iter()
-    .map(|v| Version::from_str(v).unwrap())
-    .collect()
-}
+/// Find which virtual environments exist.
+pub fn find_venvs(pypackages_dir: &PathBuf) -> Vec<(u32, u32)> {
+    let py_versions: &[(u32, u32)] = &[
+        (2, 6),
+        (2, 7),
+        (2, 8),
+        (2, 9),
+        (3, 0),
+        (3, 1),
+        (3, 2),
+        (3, 3),
+        (3, 4),
+        (3, 5),
+        (3, 6),
+        (3, 7),
+        (3, 8),
+        (3, 9),
+        (3, 10),
+        (3, 11),
+        (3, 12),
+    ];
 
-pub fn venv_exists(venv_path: &PathBuf) -> bool {
-    (venv_path.join("bin/python").exists() && venv_path.join("bin/pip").exists())
-        || (venv_path.join("Scripts/python.exe").exists()
-            && venv_path.join("Scripts/pip.exe").exists())
+    let mut result = vec![];
+    for (maj, mi) in py_versions.into_iter() {
+        let venv_path = pypackages_dir.join(&format!("{}.{}/.venv", maj, mi));
+
+        if (venv_path.join("bin/python").exists() && venv_path.join("bin/pip").exists())
+            || (venv_path.join("Scripts/python.exe").exists()
+                && venv_path.join("Scripts/pip.exe").exists())
+        {
+            result.push((*maj, *mi))
+        }
+    }
+
+    result
 }
 
 /// Checks whether the path is under `/bin` (Linux generally) or `/Scripts` (Windows generally)
@@ -149,9 +170,13 @@ pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version, Vec<String>)>
     if !lib_path.exists() {
         return vec![];
     }
-    for entry in lib_path.read_dir().unwrap() {
+    for entry in lib_path.read_dir().expect("Can't open lib path") {
         if let Ok(entry) = entry {
-            if entry.file_type().unwrap().is_dir() {
+            if entry
+                .file_type()
+                .expect("Problem reading lib path file type")
+                .is_dir()
+            {
                 package_folders.push(entry.file_name())
             }
         }
@@ -160,13 +185,19 @@ pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version, Vec<String>)>
     let mut result = vec![];
 
     for folder in package_folders.iter() {
-        let folder_name = folder.to_str().unwrap();
+        let folder_name = folder
+            .to_str()
+            .expect("Problem converting folder name to string");
         let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
-        //        let re_egg = Regex::new(r"^(.*?)-(.*?)\.egg-info$").unwrap();
 
         if let Some(caps) = re_dist.captures(&folder_name) {
             let name = caps.get(1).unwrap().as_str();
-            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
+            let vers = Version::from_str(
+                caps.get(2)
+                    .expect("Problem parsing version in folder name")
+                    .as_str(),
+            )
+            .expect("Problem parsing version in package folder");
 
             let top_level = lib_path.join(folder_name).join("top_level.txt");
 
@@ -183,27 +214,6 @@ pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version, Vec<String>)>
             }
 
             result.push((name.to_owned(), vers, tops));
-
-            //        } else if let Some(caps) = re_egg.captures(&folder_name) {
-            //            let name = caps.get(1).unwrap().as_str();
-            //            let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
-            //
-            //            let top_level = lib_path.join(folder_name).join("top_level.txt");
-            //            let top_level_f = fs::File::open(top_level).expect("Can't find top_level.txt");
-            //
-            //            let mut tops = vec![];
-            //            match fs::File::open(top_level) {  // todo DRY
-            //                Ok(f) => {
-            //                    for line in BufReader::new(f).lines() {
-            //                        if let Ok(l) = line {
-            //                            tops.push(l);
-            //                        }
-            //                    }
-            //                },
-            //                Err(_)=> tops.push(folder_name.to_owned()),
-            //            }
-            //
-            //            result.push((name.to_owned(), vers, tops));
         }
     }
     result
@@ -216,7 +226,7 @@ pub fn find_console_scripts(bin_path: &PathBuf) -> Vec<String> {
         return vec![];
     }
 
-    for entry in bin_path.read_dir().unwrap() {
+    for entry in bin_path.read_dir().expect("Trouble opening bin path") {
         if let Ok(entry) = entry {
             if entry.file_type().unwrap().is_file() {
                 result.push(entry.file_name().to_str().unwrap().to_owned())
@@ -279,7 +289,7 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
     for cr in cfg.reqs.iter() {
         let mut replaced = false;
         for added_req in added_reqs_unique.iter() {
-            if added_req.name == cr.name && added_req.constraints != cr.constraints {
+            if compare_names(&added_req.name, &cr.name) && added_req.constraints != cr.constraints {
                 result.push(added_req.clone());
                 replaced = true;
                 break;
@@ -296,4 +306,13 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
 
     result.append(&mut added_reqs_unique);
     result
+}
+
+pub fn standardize_name(name: &str) -> String {
+    name.to_lowercase().replace('-', "_")
+}
+
+// PyPi naming isn't consistent; it capitalization and _ vs -
+pub fn compare_names(name1: &str, name2: &str) -> bool {
+    standardize_name(name1) == standardize_name(name2)
 }

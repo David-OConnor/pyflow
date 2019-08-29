@@ -1,3 +1,4 @@
+use crate::{dep_resolution, util};
 use crossterm::{Color, Colored};
 use regex::{Match, Regex};
 use serde::{Deserialize, Serialize};
@@ -194,7 +195,7 @@ impl FromStr for Version {
         // Treat wildcards as 0.
         let s = &s.replace("*", "0");
 
-        let re = Regex::new(r"^(\d+)?\.?(\d+)?\.?(\d+)?\.?(\d+)?(?:(a|b|rc|dep)(\d+))?$").unwrap();
+        let re = Regex::new(r"^(\d+)\.?(\d+)?\.?(\d+)?\.?(\d+)?(?:(a|b|rc|dep)(\d+))?$").unwrap();
         if let Some(caps) = re.captures(s) {
             return Ok(Self {
                 major: caps.get(1).unwrap().as_str().parse::<u32>()?,
@@ -782,36 +783,13 @@ impl Req {
     }
 
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
-        // eg some-crate = { version = "1.0", registry = "my-registry" }
-        // todo
-        //        let re_detailed = Regex::new(r#"^(.*?)\s*=\s*\{(.*)\}"#).unwrap();
-        //        if let Some(caps) = re_detailed.captures(s) {
-        //            let name = caps.get(1).unwrap().as_str().to_owned();
-        //
-        //            let re_dets = Regex::new(r#"\s*(.*?)/s*=\s*?(.*)?}"#).unwrap();
-        //            let dets = caps.get(2).unwrap().as_str();
-        //            //            let features: Vec<(String, String)> = re_dets
-        //            let features: Vec<String> = re_dets
-        //                .find_iter(dets)
-        //                .map(|caps| {
-        //                    //                    (
-        //                    caps.as_str().to_owned()
-        //                    //                        caps.get(2).unwrap().as_str().to_owned(),
-        //                    //                    )
-        //                })
-        //                .collect();
-        //        }
-
         let re = if pypi_fmt {
             // eg saturn (>=0.3.4) or argon2-cffi (>=16.1.0) ; extra == 'argon2'
-            //            Regex::new(r"^(.*?)\s+\((.*)\)(?:\s*;\s*extra == '(.*)')?$").unwrap()
             // todo deal with extra etc
             // Note: We specify what chars are acceptable in a name instead of using
             // wildcard, so we don't accidentally match a semicolon here if a
             // set of parens appears later. The non-greedy ? in the version-matching
             // expression's important as well, in some cases of extras.
-            //            Regex::new(r"^([a-zA-Z\-0-9._]+)\s+\((.*?)\)(?:\s*;\s*(.*))?$").unwrap();
-            // Whoah!
             Regex::new(r#"^([a-zA-Z\-0-9._]+)\s+\((.*?)\)(?:(?:\s*;\s*)(.*))?$"#).unwrap()
         } else {
             // eg saturn = ">=0.3.4", as in pyproject.toml
@@ -892,15 +870,21 @@ impl Req {
 
     /// eg `saturn = "^0.3.1"` or `matplotlib = "3.1.1"`
     pub fn to_cfg_string(&self) -> String {
-        // todo suffix?
-        //                let suffix_text = if let Some(suffix) = self.suffix.clone() {
-        //            suffix
-        //        } else {
-        //            "".to_owned()
-        //        };
-
         match self.constraints.len() {
-            0 => self.name.to_owned(),
+            0 => {
+                let (name, latest_version) = match dep_resolution::get_version_info(&self.name) {
+                    Ok((fmtd_name, version, _)) => (fmtd_name, version),
+                    Err(_) => {
+                        util::abort(&format!("Unable to find version info for {:?}", &self.name));
+                        unreachable!()
+                    }
+                };
+                format!(
+                    r#"{} = "{}""#,
+                    name,
+                    Constraint::new(ReqType::Caret, latest_version).to_string(true, false)
+                )
+            }
             _ => format!(
                 r#"{} = "{}""#,
                 self.name,
@@ -1196,9 +1180,10 @@ pub mod tests {
         let expected = Req {
             name: "pyOpenSSL".into(),
             constraints: vec![Constraint::new(Gte, Version::new(0, 14, 0))],
-            extras: Some("security".into()),
+            extra: Some("security".into()),
             sys_platform: None,
             python_version: None,
+            install_with_extras: None,
         };
 
         let actual2 = Req::from_str(
@@ -1210,9 +1195,10 @@ pub mod tests {
         let expected2 = Req {
             name: "pathlib2".into(),
             constraints: vec![],
-            extras: Some("test".into()),
+            extra: Some("test".into()),
             sys_platform: None,
             python_version: Some(Constraint::new(Exact, Version::new(2, 7, 0))),
+            install_with_extras: None,
         };
 
         let actual3 = Req::from_str(
@@ -1224,9 +1210,10 @@ pub mod tests {
         let expected3 = Req {
             name: "win-unicode-console".into(),
             constraints: vec![Constraint::new(Gte, Version::new(0, 5, 0))],
-            extras: None,
+            extra: None,
             sys_platform: Some((Exact, crate::Os::Windows32)),
             python_version: Some(Constraint::new(Lt, Version::new(3, 6, 0))),
+            install_with_extras: None,
         };
 
         assert_eq!(actual, expected);

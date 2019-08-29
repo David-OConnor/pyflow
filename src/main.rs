@@ -168,8 +168,13 @@ impl Config {
             Err(_) => return None,
         };
 
-        let decoded: files::Pyproject = toml::from_str(&toml_str).unwrap();
-
+        let decoded: files::Pyproject = match toml::from_str(&toml_str) {
+            Ok(d) => d,
+            Err(_) => {
+                abort("Problem parsing `pyproject.toml`.");
+                unreachable!()
+            }
+        };
         let mut result = Self::default();
 
         // Parse Poetry first, since we'll use PyPackage if there's a conflict.
@@ -183,6 +188,7 @@ impl Config {
             if let Some(v) = po.license {
                 result.name = Some(v);
             }
+
             if let Some(v) = po.homepage {
                 result.homepage = Some(v);
             }
@@ -329,7 +335,7 @@ impl Config {
 
         let mut result =
             "# See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this \
-             # file's structure."
+             file's structure.\n"
                 .to_string();
 
         result.push_str("\n[tool.pypackage]\n");
@@ -340,16 +346,27 @@ impl Config {
             result.push_str(&("name = \"\"".to_owned() + "\n"));
         }
         if let Some(py_v) = &self.py_version {
-            result.push_str(&("version = \"".to_owned() + &py_v.to_string(false, false) + "\"\n"));
+            result
+                .push_str(&("py_version = \"".to_owned() + &py_v.to_string(false, false) + "\"\n"));
         } else {
-            result.push_str(&("version = \"\"".to_owned() + "\n"));
+            result.push_str(&("py_version = \"^3.4\"".to_owned() + "\n"));
         }
         if let Some(vers) = self.version {
-            result.push_str(&(vers.to_string() + "\n"));
+            result.push_str(&(format!("version = \"{}\"", vers.to_string2()) + "\n"));
         }
         if let Some(author) = &self.author {
-            result.push_str(&(author.to_owned() + "\n"));
+            result.push_str(&(format!("author = \"{}\"", author) + "\n"));
         }
+        if let Some(v) = &self.author_email {
+            result.push_str(&(format!("author_email = \"{}\"", v) + "\n"));
+        }
+        if let Some(v) = &self.description {
+            result.push_str(&(format!("description = \"{}\"", v) + "\n"));
+        }
+        if let Some(v) = &self.homepage {
+            result.push_str(&(format!("homepage = \"{}\"", v) + "\n"));
+        }
+        // todo: more fields.
 
         result.push_str("\n\n");
         result.push_str("[tool.pypackage.dependencies]\n");
@@ -390,7 +407,7 @@ __pypackages__/
 "##;
 
     let pyproject_init = &format!(
-r##"See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
+        r##"See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
 
 [tool.pypackage]
 name = "{}"
@@ -404,8 +421,8 @@ pyackage_url = "https://test.pypi.org"
 
 [tool.pypackage.dependencies]
 "##,
-name
-);
+        name
+    );
 
     // todo: flesh readme out
     let readme_init = &format!("# {}", name);
@@ -512,7 +529,6 @@ fn find_py_alias() -> Result<(String, Version), AliasError> {
 /// Read dependency data from a lock file.
 fn read_lock(filename: &str) -> Result<(Lock), Box<dyn Error>> {
     let data = fs::read_to_string(filename)?;
-    //    let t: Lock = toml::from_str(&data).unwrap();
     Ok(toml::from_str(&data)?)
 }
 
@@ -574,8 +590,8 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
         // into account.
         if !c_v.is_compatible(&py_ver_from_alias) {
             abort(&format!("The Python version you selected ({}) doesn't match the one specified in `pyprojecttoml` ({})",
-py_ver_from_alias.to_string(), c_v.to_string(false, false))
-);
+                           py_ver_from_alias.to_string(), c_v.to_string(false, false))
+            );
         }
     }
 
@@ -584,18 +600,6 @@ py_ver_from_alias.to_string(), c_v.to_string(false, false))
     if commands::create_venv(&alias, &lib_path, ".venv").is_err() {
         util::abort("Problem creating virtual environment");
     }
-
-    //    let bin_path = vers_path.join(".venv/bin"); // todo
-    //
-    //    // Wait until the venv's created before continuing, or we'll get errors
-    //    // when attempting to use it
-    //    let py_venv = bin_path.join("python");
-    //    let pip_venv = bin_path.join("pip");
-    //    util::wait_for_dirs(&[py_venv, pip_venv]).unwrap();
-    //
-    //    // todo: Not sure why we need this extra sleep. Wheel won't install if
-    //    // todo we don't have it.
-    //    thread::sleep(time::Duration::from_millis(200));
 
     // todo: Chicken-egg scenario where we need to wait for the venv to complete before
     // todo installing `wheel` and returning, but don't know what folder
@@ -741,7 +745,10 @@ fn sync_deps(
         .iter()
         .map(|lp| {
             (
-                (lp.name.clone(), Version::from_str(&lp.version).unwrap()),
+                (
+                    util::standardize_name(&lp.name),
+                    Version::from_str(&lp.version).expect("Problem parsing lock version"),
+                ),
                 match &lp.rename {
                     // todo back to our custom type?
                     Some(rn) => Some(parse_lockpack_rename(&rn)),
@@ -752,12 +759,14 @@ fn sync_deps(
         .collect();
 
     // todo shim. Use top-level A/R. We discard it temporarily while working other issues.
-    let installed: Vec<(String, Version)> = installed.iter().map(|t| (t.0.clone(), t.1)).collect();
+    let installed: Vec<(String, Version)> = installed
+        .iter()
+        .map(|t| (util::standardize_name(&t.0), t.1))
+        .collect();
 
     // Filter by not-already-installed.
     let to_install: Vec<&PackToInstall> = packages
         .iter()
-        // todo: Do we need to compare names with .to_lowercase()?
         .filter(|(pack, _)| !installed.contains(pack))
         .collect();
 
@@ -765,8 +774,10 @@ fn sync_deps(
     let packages_only: Vec<&(String, Version)> = packages.iter().map(|(p, _)| p).collect();
     let to_uninstall: Vec<&(String, Version)> = installed
         .iter()
-        // todo: Do we need to compare names with .to_lowercase()?
-        .filter(|inst| !packages_only.contains(inst))
+        .filter(|inst| {
+            let inst = (util::standardize_name(&inst.0), inst.1);
+            !packages_only.contains(&&inst)
+        })
         .collect();
 
     for (name, version) in to_uninstall.iter() {
@@ -828,9 +839,10 @@ fn sync_deps(
 fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) -> bool {
     let mut result = true;
     for constr in constraints.iter() {
-        if !locked.iter().any(|p| {
-            p.name.to_lowercase() == name.to_lowercase() && constr.is_compatible(&p.version)
-        }) {
+        if !locked
+            .iter()
+            .any(|p| util::compare_names(&p.name, name) && constr.is_compatible(&p.version))
+        {
             result = false;
             break;
         }
@@ -846,7 +858,6 @@ fn sync(
     lockpacks: &[LockPackage],
     reqs: &[Req],
     os: Os,
-    extras: &[String],
     py_vers: &Version,
     lock_filename: &str,
 ) {
@@ -864,7 +875,8 @@ fn sync(
                     .captures(&dep)
                     .expect("Problem reading lock file dependencies");
                 let name = caps.get(1).unwrap().as_str().to_owned();
-                let vers = Version::from_str(caps.get(2).unwrap().as_str()).unwrap();
+                let vers = Version::from_str(caps.get(2).unwrap().as_str())
+                    .expect("Problem parsing version from lock");
                 deps.push((999, name, vers)); // dummy id
             }
 
@@ -872,7 +884,7 @@ fn sync(
                 id: lp.id, // todo
                 parent: 0, // todo
                 name: lp.name.clone(),
-                version: Version::from_str(&lp.version).unwrap(),
+                version: Version::from_str(&lp.version).expect("Problem parsing lock version"),
                 deps,
                 rename: Rename::No, // todo
             }
@@ -881,7 +893,7 @@ fn sync(
 
     println!("🔍 Resolving dependencies...");
 
-    let resolved = match dep_resolution::resolve(&reqs, &locked, os, &extras, &py_vers) {
+    let resolved = match dep_resolution::resolve(&reqs, &locked, os, &py_vers) {
         Ok(r) => r,
         Err(_) => {
             abort("Problem resolving dependencies");
@@ -900,7 +912,7 @@ fn sync(
         if already_locked(&locked, &package.name, &dummy_constraints) {
             let existing: Vec<&LockPackage> = lockpacks
                 .iter()
-                .filter(|lp| lp.name.to_lowercase() == package.name.to_lowercase())
+                .filter(|lp| util::compare_names(&lp.name, &package.name))
                 .collect();
             let existing2 = existing[0];
 
@@ -968,8 +980,6 @@ fn main() {
 
     let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
 
-//    println!("CFG: {:#?}", &cfg);
-
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
@@ -1004,75 +1014,59 @@ fn main() {
         .expect("Can't find current path")
         .join("__pypackages__");
 
-    let py_version_cfg = cfg.py_version.clone();
-
     // Check for environments. Create one if none exist. Set `vers_path`.
     let mut vers_path = PathBuf::new();
     let mut py_vers = Version::new(0, 0, 0);
+    let venvs = util::find_venvs(&pypackages_dir);
 
-    match py_version_cfg {
-        // The version's explicitly specified; check if an environment for that version
+    match &cfg.py_version {
+        // The version's explicitly specified; check if an environment for that versionc
         // exists. If not, create one, and make sure it's the right version.
         Some(cfg_constr) => {
-            // The version's specified in the config. Ensure a virtualenv for this
-            // is setup.  // todo: Confirm using --version on the python bin, instead of relying on folder name.
-
-            if !util::venv_exists(&pypackages_dir.join(&format!(
-                "{}.{}/.venv",
-                cfg_constr.version.major, cfg_constr.version.minor,
-            ))) {
-                create_venv(None, &pypackages_dir);
-            }
-
-            // Don't include version patch in the directory name, per PEP 582.
-            vers_path = pypackages_dir.join(&format!(
-                "{}.{}",
-                cfg_constr.version.major, cfg_constr.version.minor
-            ));
-
-            // todo: Take into account type of version! Currently ignores, and just takes the major/minor,
-            // todo, but we're dealing with a constraint.
-            py_vers = cfg_constr.version;
-        }
-        // The version's not specified in the config; Search for existing environments, and create
-        // one if we can't find any.
-        None => {
-            // Note that we rely on the proper folder name, vice inspecting the binary.
-            // ie: could also check `bin/python --version`.
-            let venv_versions_found: Vec<Version> = util::possible_py_versions()
-                .into_iter()
-                .filter(|v| {
-                    util::venv_exists(
-                        &pypackages_dir.join(&format!("{}.{}/.venv", v.major, v.minor)),
-                    )
-                })
+            // The version's explicitly specified; check if an environment for that version
+            let compatible_venvs: Vec<&(u32, u32)> = venvs
+                .iter()
+                .filter(|(ma, mi)| cfg_constr.is_compatible(&Version::new_short(*ma, *mi)))
                 .collect();
 
-            match venv_versions_found.len() {
+            match compatible_venvs.len() {
                 0 => {
-                    let created_vers = create_venv(None, &pypackages_dir);
-                    vers_path = pypackages_dir
-                        .join(&format!("{}.{}", created_vers.major, created_vers.minor));
-                    py_vers = Version::new_short(created_vers.major, created_vers.minor);
+                    let vers = create_venv(Some(cfg_constr), &pypackages_dir);
+                    vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
+                    py_vers = vers;
                 }
                 1 => {
                     vers_path = pypackages_dir.join(&format!(
                         "{}.{}",
-                        venv_versions_found[0].major, venv_versions_found[0].minor
+                        compatible_venvs[0].0, compatible_venvs[0].1
                     ));
-                    py_vers = Version::new_short(
-                        venv_versions_found[0].major,
-                        venv_versions_found[0].minor,
-                    );
+                    py_vers = Version::new_short(compatible_venvs[0].0, compatible_venvs[0].1);
                 }
                 _ => abort(
-                    "Multiple Python environments found
-                for this project; specify the desired one in `pyproject.toml`. Example:
-[tool.pypackage]
-py_version = \"3.7\"",
+                    "Multiple compatible Python environments found
+                for this project;  please tighten the constraints, or remove unecessary ones.",
                 ),
             }
         }
+        // The version's not specified in the config; Search for existing environments, and create
+        // one if we can't find any.
+        None => match venvs.len() {
+            0 => {
+                let vers = create_venv(None, &pypackages_dir);
+                vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
+                py_vers = vers;
+            }
+            1 => {
+                vers_path = pypackages_dir.join(&format!("{}.{}", venvs[0].0, venvs[0].1));
+                py_vers = Version::new_short(venvs[0].0, venvs[0].1);
+            }
+            _ => abort(
+                "Multiple Python environments found
+                for this project; specify the desired one in `pyproject.toml`. Example:
+[tool.pypackage]
+py_version = \"^3.7\"",
+            ),
+        },
     };
 
     let lib_path = vers_path.join("lib");
@@ -1094,7 +1088,6 @@ py_version = \"3.7\"",
     #[cfg(target_os = "macos")]
     let os = Os::Mac;
 
-    let extras = vec![]; // todo temp!!
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
     //    let extras = cfg.extras;
 
@@ -1105,6 +1098,10 @@ py_version = \"3.7\"",
         // the currently-installed packages, found by crawling metadata in the `lib` path.
         // See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages } => {
+            if !PathBuf::from(cfg_filename).exists() {
+                cfg.write_file(cfg_filename);
+            }
+
             if found_lock {
                 println!("Found lockfile");
             }
@@ -1118,7 +1115,6 @@ py_version = \"3.7\"",
                 &lockpacks,
                 &updated_reqs,
                 os,
-                &extras,
                 &py_vers,
                 &lock_filename,
             );
@@ -1130,7 +1126,11 @@ py_version = \"3.7\"",
 
             let removed_reqs: Vec<String> = packages
                 .into_iter()
-                .map(|p| Req::from_str(&p, false).unwrap().name)
+                .map(|p| {
+                    Req::from_str(&p, false)
+                        .expect("Problem parsing req while uninstalling")
+                        .name
+                })
                 .collect();
             println!("(dbg) to remove {:#?}", &removed_reqs);
 
@@ -1149,7 +1149,6 @@ py_version = \"3.7\"",
                 &lockpacks,
                 &updated_reqs,
                 os,
-                &extras,
                 &py_vers,
                 &lock_filename,
             );
@@ -1191,10 +1190,11 @@ py_version = \"3.7\"",
                     abort(abort_msg);
                 }
 
-                let mut args2 = vec![script_path.to_str().unwrap().to_owned()];
-                //                for script in scripts {
-                //                    args2.push(script);
-                //                }
+                let mut args2 = vec![script_path
+                    .to_str()
+                    .expect("Can't find script path")
+                    .to_owned()];
+
                 args2.append(&mut args);
 
                 if commands::run_python(&bin_path, &lib_path, &args2).is_err() {
