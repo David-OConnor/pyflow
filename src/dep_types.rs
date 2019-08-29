@@ -179,51 +179,6 @@ impl Version {
         result
     }
 
-    /// ie cp37, a version from Pypi.
-    pub fn from_warehouse_str(s: &str) -> Result<Self, DependencyError> {
-        if let Ok(v) = Self::from_str(s) {
-            return Ok(v);
-        }
-
-        if s == "py2.py3" {
-            return Ok(Self::new(3, 3, 0));
-        }
-
-        // todo: Make this into a flexible regex
-        if s == "cp35.cp36.cp37.cp38" {
-            return Ok(Self::new(3, 5, 0));
-        }
-
-        let re_pp = Regex::new(r"^pp(\d)(\d)(\d)$").unwrap();
-        if let Some(caps) = re_pp.captures(s) {
-            return Ok(Self::new(
-                caps.get(1).unwrap().as_str().parse::<u32>()?,
-                caps.get(2).unwrap().as_str().parse::<u32>()?,
-                caps.get(3).unwrap().as_str().parse::<u32>()?,
-            ));
-        }
-
-        let re = Regex::new(r"^(?:(?:cp)|(?:py))?(\d)(\d)?$").unwrap();
-
-        if let Some(caps) = re.captures(s) {
-            return Ok(Self {
-                major: caps.get(1).unwrap().as_str().parse::<u32>()?,
-                minor: match caps.get(2) {
-                    Some(m) => m.as_str().parse::<u32>()?,
-                    None => 0,
-                },
-                patch: 0,
-                extra_num: None,
-                modifier: None,
-            });
-        }
-
-        Err(DependencyError::new(&format!(
-            "Problem parsing Python version from {}",
-            s
-        )))
-    }
-
     /// unlike Display, which overwrites to_string, don't add colors.
     pub fn to_string2(&self) -> String {
         let mut result = format!("{}.{}.{}", self.major, self.minor, self.patch);
@@ -454,6 +409,51 @@ impl Constraint {
         Ok(result)
     }
 
+    /// ie cp37, a version from Pypi. Eg: "py3", "cp35.cp36.cp37.cp38", "cp26", "py2.py3",
+    /// "pp36", "any", "2.7",
+    /// Note that we're parsing the `python_version` field, not `requires_python`, since the latter
+    /// May throw false-positives for compatibility.
+    /// Important: The result is intended to be used in an "any" way. Ie "cp35.36" should match
+    /// either Python 3.5 or 3.6.
+    pub fn from_wh_py_vers(s: &str) -> Result<Vec<Self>, DependencyError> {
+        if s == "any" {
+            return Ok(vec![Self::new(ReqType::Gte, Version::new(2, 0, 0))]);
+        }
+
+        if let Ok(parsed) = Version::from_str(s) {
+            return Ok(vec![Self::new(ReqType::Exact, parsed)]);
+        }
+
+        let s_split = s.split('.');
+        let re = Regex::new(r"^(?:cp|py|pp)?([234])(\d)?$").unwrap();
+
+        let mut result = vec![];
+        for part in s_split {
+            if let Some(caps) = re.captures(part) {
+                let major = caps.get(1).unwrap().as_str().parse::<u32>()?;
+                match caps.get(2) {
+                    Some(mi) => {
+                        let minor = mi.as_str().parse::<u32>()?;
+                        result.push(Constraint::new(
+                            ReqType::Exact,
+                            Version::new_short(major, minor),
+                        ));
+                    }
+                    // eg, py2.py3 will add Gte 2.0.0 and Gte 3.0.0
+                    None => {
+                        if major == 2 {
+                            result.push(Constraint::new(ReqType::Lte, Version::new_short(2, 10)));
+                        } else {
+                            result.push(Constraint::new(ReqType::Gte, Version::new_short(3, 0)));
+                        }
+                    }
+                };
+            }
+        }
+
+        Ok(result)
+    }
+
     pub fn to_string(&self, ommit_equals: bool, pip_style: bool) -> String {
         // ommit_equals indicates we dont' want to add any type if it's exact. Eg in config files.
         // pip_style means that ^ is transformed to ^=, and ~ to ~=
@@ -479,20 +479,21 @@ impl Constraint {
         let lowest = Version::new(0, 0, 0);
         let max;
 
-        let safely_subtract = || {
+        let safely_subtract = |major: u32, minor: u32, patch: u32| {
+            let mut major = major;
+            let mut minor = minor;
+            let mut patch = patch;
             // Don't try to make a negative version component.
-            let mut major = self.version.major;
-            let mut minor = self.version.minor;
-            let mut patch = self.version.patch;
             // ie 0.0.0. Return max of 0.0.0
-            if self.version.major == 0 && self.version.minor == 0 && self.version.patch == 0 {}
+            if major == 0 && minor == 0 && patch == 0 {
+            }
             // ie 3.0.0. Return max of 2.999999.999999
-            if self.version.minor == 0 && self.version.patch == 0 {
+            else if minor == 0 && patch == 0 {
                 major -= 1;
                 minor = MAX_VER;
                 patch = MAX_VER;
             // ie 2.9.0. Return max of 2.8.999999
-            } else if self.version.patch == 0 {
+            } else if patch == 0 {
                 minor -= 1;
                 patch = MAX_VER
             } else {
@@ -515,11 +516,13 @@ impl Constraint {
                 highest,
             )],
             ReqType::Lt => {
-                let (major, minor, patch) = safely_subtract();
+                let (major, minor, patch) =
+                    safely_subtract(self.version.major, self.version.minor, self.version.patch);
                 vec![(lowest, Version::new(major, minor, patch))]
             }
             ReqType::Ne => {
-                let (major, minor, patch) = safely_subtract();
+                let (major, minor, patch) =
+                    safely_subtract(self.version.major, self.version.minor, self.version.patch);
                 vec![
                     (lowest, Version::new(major, minor, patch)),
                     (
@@ -541,7 +544,9 @@ impl Constraint {
                 } else {
                     max = Version::new(0, 0, self.version.patch + 2);
                 }
-                vec![(self.version, max)]
+                // We need to use Lt logic for ^ and ~.
+                let (major, minor, patch) = safely_subtract(max.major, max.minor, max.patch);
+                vec![(self.version, Version::new(major, minor, patch))]
             }
             // For tilde, if minor's specified, can only increment patch.
             // If not, can increment minor or patch.
@@ -551,7 +556,8 @@ impl Constraint {
                 } else {
                     max = Version::new(self.version.major + 1, 0, 0);
                 }
-                vec![(self.version, max)]
+                let (major, minor, patch) = safely_subtract(max.major, max.minor, max.patch);
+                vec![(self.version, Version::new(major, minor, patch))]
             }
         }
     }
@@ -757,9 +763,10 @@ fn parse_extras(
 pub struct Req {
     pub name: String,
     pub constraints: Vec<Constraint>,
-    pub extra: Option<String>, // todo:
+    pub extra: Option<String>,
     pub sys_platform: Option<(ReqType, crate::Os)>,
     pub python_version: Option<Constraint>,
+    pub install_with_extras: Option<Vec<String>>,
 }
 
 impl Req {
@@ -770,6 +777,7 @@ impl Req {
             extra: None,
             sys_platform: None,
             python_version: None,
+            install_with_extras: None,
         }
     }
 
@@ -825,6 +833,7 @@ impl Req {
                 extra,
                 sys_platform,
                 python_version,
+                install_with_extras: None,
             });
         };
 
@@ -845,6 +854,7 @@ impl Req {
                 extra,
                 sys_platform,
                 python_version,
+                install_with_extras: None,
             });
         }
         Err(DependencyError::new(&format!(
@@ -925,7 +935,7 @@ impl fmt::Display for Req {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Rename {
     No,
     // todo: May not need to store self id.
@@ -942,9 +952,10 @@ pub enum Rename {
 //    }
 //}
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Package {
     pub id: u32,
+    pub parent: u32,
     pub name: String,
     pub version: Version,
     pub deps: Vec<(u32, String, Version)>,
@@ -1153,7 +1164,6 @@ pub mod tests {
         let d = "==5";
         let e = "<=11.2.3";
         let f = ">=0.0.1";
-        let f = ">=0.0.1";
 
         let req_a = Constraint::new(Ne, Version::new(2, 3, 0));
         let req_b = Constraint::new(Caret, Version::new(1, 3, 32));
@@ -1186,7 +1196,7 @@ pub mod tests {
         let expected = Req {
             name: "pyOpenSSL".into(),
             constraints: vec![Constraint::new(Gte, Version::new(0, 14, 0))],
-            extra: Some("security".into()),
+            extras: Some("security".into()),
             sys_platform: None,
             python_version: None,
         };
@@ -1200,7 +1210,7 @@ pub mod tests {
         let expected2 = Req {
             name: "pathlib2".into(),
             constraints: vec![],
-            extra: Some("test".into()),
+            extras: Some("test".into()),
             sys_platform: None,
             python_version: Some(Constraint::new(Exact, Version::new(2, 7, 0))),
         };
@@ -1214,7 +1224,7 @@ pub mod tests {
         let expected3 = Req {
             name: "win-unicode-console".into(),
             constraints: vec![Constraint::new(Gte, Version::new(0, 5, 0))],
-            extra: None,
+            extras: None,
             sys_platform: Some((Exact, crate::Os::Windows32)),
             python_version: Some(Constraint::new(Lt, Version::new(3, 6, 0))),
         };
@@ -1504,4 +1514,41 @@ pub mod tests {
     //            vec![(Version::new(4, 9, 4), Version::new(5, 5, 4))]
     //        );
     //    }
+
+    #[test]
+    fn python_version_from_warehouse() {
+        let a1 = Constraint::from_wh_py_vers("py3").unwrap();
+        let a2 = Constraint::from_wh_py_vers("cp35.cp36.cp37.cp38").unwrap();
+        let a3 = Constraint::from_wh_py_vers("cp26").unwrap();
+        let a4 = Constraint::from_wh_py_vers("py2.py3").unwrap();
+        let a5 = Constraint::from_wh_py_vers("pp36").unwrap();
+        let a6 = Constraint::from_wh_py_vers("any").unwrap();
+        let a7 = Constraint::from_wh_py_vers("2.7").unwrap();
+
+        assert_eq!(a1, vec![Constraint::new(Gte, Version::new(3, 0, 0))]);
+        assert_eq!(
+            a2,
+            vec![
+                //                Constraint::new(Gte, Version::new(3, 5, 0)),
+                //                Constraint::new(Lte, Version::new(3, 8, 0)),
+                Constraint::new(Exact, Version::new(3, 5, 0)),
+                Constraint::new(Exact, Version::new(3, 6, 0)),
+                Constraint::new(Exact, Version::new(3, 7, 0)),
+                Constraint::new(Exact, Version::new(3, 8, 0)),
+            ]
+        );
+        assert_eq!(a3, vec![Constraint::new(Exact, Version::new(2, 6, 0))]);
+
+        assert_eq!(
+            a4,
+            vec![
+                Constraint::new(Lte, Version::new(2, 10, 0)),
+                Constraint::new(Gte, Version::new(3, 0, 0)),
+            ]
+        );
+
+        assert_eq!(a5, vec![Constraint::new(Exact, Version::new(3, 6, 0))]);
+        assert_eq!(a6, vec![Constraint::new(Gte, Version::new(2, 0, 0))]);
+        assert_eq!(a7, vec![Constraint::new(Exact, Version::new(2, 7, 0))]);
+    }
 }

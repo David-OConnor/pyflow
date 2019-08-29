@@ -18,6 +18,24 @@ pub struct Tool {
     pub poetry: Option<Poetry>,
 }
 
+#[serde(untagged)]
+#[derive(Debug, Deserialize)]
+/// Allows use of both Strings, ie "ipython = "^7.7.0", and maps: "ipython = {version = "^7.7.0", extras=["qtconsole"]}"
+pub enum DepComponentWrapper {
+    A(String),
+    B(DepComponent),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DepComponent {
+    #[serde(rename = "version")]
+    pub constrs: String,
+    pub extras: Option<Vec<String>>,
+    pub repository: Option<String>,
+    pub branch: Option<String>,
+    pub service: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Pypackage {
     pub py_version: Option<String>,
@@ -37,7 +55,9 @@ pub struct Pypackage {
     pub entry_points: Option<HashMap<String, Vec<String>>>,
     pub console_scripts: Option<Vec<String>>,
 
-    pub dependencies: Option<HashMap<String, String>>,
+    pub dependencies: Option<HashMap<String, DepComponentWrapper>>,
+    //    pub dependencies: Option<HashMap<String, String>>,
+    //
     pub dev_dependencies: Option<HashMap<String, String>>,
     pub extras: Option<HashMap<String, String>>,
 }
@@ -58,6 +78,7 @@ pub struct Poetry {
     pub packages: Option<Vec<String>>,
     pub include: Option<Vec<String>>,
     pub exclude: Option<Vec<String>>,
+    pub extras: Option<HashMap<String, String>>,
 
     pub dependencies: Option<HashMap<String, String>>,
     // todo: Can't find dets on poetry docs, but apparently exists

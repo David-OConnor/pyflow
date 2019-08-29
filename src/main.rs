@@ -143,7 +143,7 @@ pub struct Config {
     author: Option<String>,
     author_email: Option<String>,
     license: Option<String>,
-    extras: Option<HashMap<String, Vec<String>>>,
+    extras: HashMap<String, String>,
     description: Option<String>,
     classifiers: Vec<String>, // https://pypi.org/classifiers/
     keywords: Vec<String>,    // todo: Options for classifiers and keywords?
@@ -207,13 +207,29 @@ impl Config {
             //            if let Some(v) = po.scripts {
             //                result.console_scripts = v;
             //            }
-            //                        if let Some(v) = po.extras {
-            //                result.extras = v;
-            //            }
+            if let Some(v) = po.extras {
+                result.extras = v;
+            }
 
             if let Some(v) = po.version {
-                result.version =
-                    Some(Version::from_str(&v).expect("Problem parsing version in `pyproject.toml`"))
+                result.version = Some(
+                    Version::from_str(&v).expect("Problem parsing version in `pyproject.toml`"),
+                )
+            }
+
+            if let Some(deps) = po.dependencies {
+                for (name, constrs) in deps {
+                    let constraints = Constraint::from_str_multiple(&constrs)
+                        .expect("Problem parsing constraints in `pyproject.toml`.");
+                    result.reqs.push(Req {
+                        name,
+                        constraints,
+                        extra: None, // todo see note above about adding theese
+                        sys_platform: None,
+                        python_version: None,
+                        install_with_extras: None,
+                    });
+                }
             }
 
             // todo: Python version
@@ -257,8 +273,9 @@ impl Config {
             }
 
             if let Some(v) = pp.version {
-                result.version =
-                    Some(Version::from_str(&v).expect("Problem parsing version in `pyproject.toml`"))
+                result.version = Some(
+                    Version::from_str(&v).expect("Problem parsing version in `pyproject.toml`"),
+                )
             }
 
             if let Some(v) = pp.py_version {
@@ -268,17 +285,33 @@ impl Config {
                 )
             }
 
-            // todo: Potentially good place to handle parsing extras, github repos etc.
             if let Some(deps) = pp.dependencies {
-                for (name, constrs) in deps {
-                    let constraints = Constraint::from_str_multiple(&constrs)
-                        .expect("Problem parsing constraints in `pyproject.toml`.");
+                for (name, data) in deps {
+                    let constraints;
+                    let mut extras = None;
+                    match data {
+                        files::DepComponentWrapper::A(constrs) => {
+                            constraints = Constraint::from_str_multiple(&constrs)
+                                .expect("Problem parsing constraints in `pyproject.toml`.");
+                        }
+                        files::DepComponentWrapper::B(subdata) => {
+                            constraints = Constraint::from_str_multiple(&subdata.constrs)
+                                .expect("Problem parsing constraints in `pyproject.toml`.");
+                            if let Some(ex) = subdata.extras {
+                                extras = Some(ex);
+                            }
+                            // todo repository etc
+                        }
+                    }
+                    //                    let
+
                     result.reqs.push(Req {
                         name,
                         constraints,
-                        extra: None, // todo see note above about adding theese
+                        extra: None,
                         sys_platform: None,
                         python_version: None,
+                        install_with_extras: extras,
                     });
                 }
             }
@@ -357,7 +390,7 @@ __pypackages__/
 "##;
 
     let pyproject_init = &format!(
-        r##"See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
+r##"See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
 
 [tool.pypackage]
 name = "{}"
@@ -371,8 +404,8 @@ pyackage_url = "https://test.pypi.org"
 
 [tool.pypackage.dependencies]
 "##,
-        name
-    );
+name
+);
 
     // todo: flesh readme out
     let readme_init = &format!("# {}", name);
@@ -541,8 +574,8 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
         // into account.
         if !c_v.is_compatible(&py_ver_from_alias) {
             abort(&format!("The Python version you selected ({}) doesn't match the one specified in `pyprojecttoml` ({})",
-                           py_ver_from_alias.to_string(), c_v.to_string(false, false))
-            );
+py_ver_from_alias.to_string(), c_v.to_string(false, false))
+);
         }
     }
 
@@ -631,14 +664,18 @@ fn find_best_release(
 
                 // Packages that use C code(eg numpy) may fail to load C extensions if installing
                 // for the wrong version of python (eg  cp35 when python 3.7 is installed), even
-                // if `requires_python` doesn't indicate an incompatibility. Check `python_version`.
-                match Version::from_warehouse_str(&rel.python_version) {
-                    Ok(req_v) => {
-                        if req_v != *python_vers
-// todo: Awk place for this logic.
-                            && rel.python_version != "py2.py3"
-                            && rel.python_version != "py3"
-                        {
+                // if `requires_python` doesn't indicate an incompatibility. Check `python_version`
+                // instead of `requires_python`.
+                // Note that the result of this parse is an any match.
+                match Constraint::from_wh_py_vers(&rel.python_version) {
+                    Ok(constrs) => {
+                        let mut compat_py_v = false;
+                        for constr in constrs.iter() {
+                            if constr.is_compatible(python_vers) {
+                                compat_py_v = true;
+                            }
+                        }
+                        if !compat_py_v {
                             compatible = false;
                         }
                     }
@@ -833,6 +870,7 @@ fn sync(
 
             Package {
                 id: lp.id, // todo
+                parent: 0, // todo
                 name: lp.name.clone(),
                 version: Version::from_str(&lp.version).unwrap(),
                 deps,
@@ -851,7 +889,7 @@ fn sync(
         }
     };
 
-    println!("RESOLVED: {:#?}", &resolved);
+    //    println!("RESOLVED: {:#?}", &resolved);
 
     // Now merge the existing lock packages with new ones from resolved packages.
     // We have a collection of requirements; attempt to merge them with the already-locked ones.
@@ -930,7 +968,7 @@ fn main() {
 
     let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
 
-    println!("CFG: {:#?}", &cfg);
+//    println!("CFG: {:#?}", &cfg);
 
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {

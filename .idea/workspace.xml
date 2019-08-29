@@ -9,9 +9,9 @@
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/dep_resolution.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_resolution.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/dep_types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_types.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/edit_files.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/files.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/files.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/files.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/install.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/install.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/util.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/util.rs" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -37,8 +37,8 @@
     <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
-    <property name="last.edited.regexp" value="argon2-cffi (&gt;=16.1.0)" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/../infinitea" />
+    <property name="last.edited.regexp" value="any" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../chem" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
     <property name="node.js.path.for.package.eslint" value="project" />
@@ -172,7 +172,12 @@
       <workItem from="1566836570593" duration="3678000" />
       <workItem from="1566845972080" duration="7754000" />
       <workItem from="1566869794027" duration="6464000" />
-      <workItem from="1566916604671" duration="6794000" />
+      <workItem from="1566916604671" duration="7633000" />
+      <workItem from="1566941935014" duration="4698000" />
+      <workItem from="1566955743873" duration="12997000" />
+      <workItem from="1567001320260" duration="10632000" />
+      <workItem from="1567027742331" duration="2411000" />
+      <workItem from="1567033348687" duration="6241000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed bugs in python-version checking and package installation">
       <created>1563704289313</created>

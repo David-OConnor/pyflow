@@ -14,7 +14,7 @@ pub enum PackageType {
 }
 
 /// Extract the wheel. (It's like a zip)
-fn install_wheel(file: &fs::File, lib_path: &PathBuf, rename: &Option<(String, String)>) {
+fn extract_wheel(file: &fs::File, lib_path: &PathBuf, rename: &Option<(String, String)>) {
     // Separate function, since we use it twice.
     let mut archive = zip::ZipArchive::new(file).unwrap();
 
@@ -250,19 +250,23 @@ pub fn download_and_install_package(
 
     match package_type {
         PackageType::Wheel => {
-            install_wheel(&archive_file, lib_path, &rename);
+            extract_wheel(&archive_file, lib_path, &rename);
         }
         PackageType::Source => {
             // Extract the tar.gz source code.
-            let tar = GzDecoder::new(archive_file);
+            let tar = GzDecoder::new(&archive_file);
             let mut archive = Archive::new(tar);
-            archive
-                .unpack(lib_path)
-                .expect("Problem unpacking tar archive");
+
+            if archive.unpack(lib_path).is_err() {
+                // The extract_wheel function just extracts a zip file, so it's appropriate here.
+                // We'll then continue with this leg, and build/move/cleanup.
+                extract_wheel(&archive_file, lib_path, &None);
+                // Check if we have a zip file instead.
+            }
 
             // The archive is now unpacked into a parent folder from the `tar.gz`. Place
             // its sub-folders directly in the lib folder, and delete the parent.
-            let re = Regex::new(r"^(.*?)\.tar\.gz$").unwrap();
+            let re = Regex::new(r"^(.*?)(?:\.tar\.gz|\.zip)$").unwrap();
             let folder_name = re
                 .captures(&filename)
                 .expect("Problem matching extracted folder name")
@@ -326,7 +330,7 @@ pub fn download_and_install_package(
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");
-            install_wheel(&file_created, lib_path, &rename);
+            extract_wheel(&file_created, lib_path, &rename);
 
             // Remove the created and moved wheel
             if fs::remove_file(&lib_path.join(built_wheel_filename)).is_err() {
