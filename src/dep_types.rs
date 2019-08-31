@@ -821,6 +821,7 @@ impl Req {
         } else {
             // todo extras
             Regex::new(r"^([a-zA-Z\-0-9._]+)$").unwrap()
+            //            Regex::new(r"^([a-zA-Z\-0-9._]+)(?:(a|b|rc|dep)(\d+))?$").unwrap()
         };
 
         if let Some(caps) = novers_re.captures(s) {

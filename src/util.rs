@@ -277,7 +277,8 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
                 .expect("Problem getting latest version of the package you added.");
             added_req.constraints.push(Constraint::new(
                 ReqType::Caret,
-                Version::new(vers.major, vers.minor, vers.patch),
+                //                Version::new(vers.major, vers.minor, vers.patch),
+                vers,
             ));
         }
     }

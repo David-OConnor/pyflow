@@ -31,8 +31,9 @@ or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 run `cargo install pypackage`.
 
 ## Quickstart
-- Run `pypackage init` in an existing project folder, or `pypackage new projname` 
-to create a new project folder. `init` will import data from `requirements.txt` or `Pipfile`.
+- *(Optional)* Run `pypackage init` in an existing project folder, or `pypackage new projname` 
+to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
+creates a folder with the basics
 - Run `pypackage install` to sync dependencies with `pyproject.toml`, or add dependencies to it
 - Run `pypackage python` to run Python
 
@@ -255,7 +256,8 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Windows installer and Mac binaries
 - Adding a dependency via the CLI with a specific version constraint, or extras.
 - Developer requirements
-- Global package cache to avoid downloading the same package for each project??
+- Global package cache to avoid resolving and downloading the same package 
+for each project??
 
 
 ## Building and uploading your project to PyPi.

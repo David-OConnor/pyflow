@@ -60,8 +60,9 @@ impl FromStr for Os {
 }
 
 #[derive(StructOpt, Debug)]
+//#[structopt(raw(setting = "structopt::clap::AppSettings::suggestions"))]
+//#[structopt(name = "Pypackage", about = "Python packaging and publishing", structopt::clap::AppSettings::suggestions = "false")]
 #[structopt(name = "Pypackage", about = "Python packaging and publishing")]
-//#[structopt(raw(setting = "structopt::clap::AppSettings:::AllowExternalSubcommands"))]
 struct Opt {
     #[structopt(subcommand)]
     subcmds: Option<SubCommand>,
@@ -81,8 +82,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-        name = "install",
-        help = "
+    name = "install",
+    help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -171,7 +172,7 @@ impl Config {
         let decoded: files::Pyproject = match toml::from_str(&toml_str) {
             Ok(d) => d,
             Err(_) => {
-                abort("Problem parsing `pyproject.toml`.");
+                abort("Problem parsing `pyproject.toml`");
                 unreachable!()
             }
         };
@@ -183,10 +184,10 @@ impl Config {
                 result.name = Some(v);
             }
             if let Some(v) = po.authors {
-                result.author = Some(v);
+                result.author = Some(v.join(", "));
             }
             if let Some(v) = po.license {
-                result.name = Some(v);
+                result.license = Some(v);
             }
 
             if let Some(v) = po.homepage {
@@ -223,22 +224,52 @@ impl Config {
                 )
             }
 
+            // todo: DRY (c+p) from pypackage dependency parsing, other than parsing python version here,
+            // todo which only poetry does.
             if let Some(deps) = po.dependencies {
-                for (name, constrs) in deps {
-                    let constraints = Constraint::from_str_multiple(&constrs)
-                        .expect("Problem parsing constraints in `pyproject.toml`.");
-                    result.reqs.push(Req {
-                        name,
-                        constraints,
-                        extra: None, // todo see note above about adding theese
-                        sys_platform: None,
-                        python_version: None,
-                        install_with_extras: None,
-                    });
+                for (name, data) in deps {
+                    let constraints;
+                    let mut extras = None;
+                    let mut python_version = None;
+                    match data {
+                        files::DepComponentWrapperPoetry::A(constrs) => {
+                            constraints = Constraint::from_str_multiple(&constrs)
+                                .expect("Problem parsing constraints in `pyproject.toml`.");
+                        }
+                        files::DepComponentWrapperPoetry::B(subdata) => {
+                            constraints = Constraint::from_str_multiple(&subdata.constrs)
+                                .expect("Problem parsing constraints in `pyproject.toml`.");
+                            if let Some(ex) = subdata.extras {
+                                extras = Some(ex);
+                            }
+                            if let Some(v) = subdata.python {
+                                python_version = Some(Constraint::from_str(&v)
+                                    .expect("Problem parsing python version in dependency"));
+                            }
+                            // todo repository etc
+                        }
+                    }
+                    if name.to_lowercase() == "python" {
+                        result.py_version = Some(
+                            constraints
+                                .get(0).clone()
+                                .unwrap_or(
+                                    &Constraint::new(ReqType::Tilde, Version::new(3, 4, 0))
+                                ).clone(),
+
+                        );
+                    } else {
+                        result.reqs.push(Req {
+                            name,
+                            constraints,
+                            extra: None,
+                            sys_platform: None,
+                            python_version,
+                            install_with_extras: extras,
+                        });
+                    }
                 }
             }
-
-            // todo: Python version
         }
 
         if let Some(pp) = decoded.tool.pypackage {
@@ -252,7 +283,7 @@ impl Config {
                 result.author_email = Some(v);
             }
             if let Some(v) = pp.license {
-                result.name = Some(v);
+                result.license = Some(v);
             }
             if let Some(v) = pp.homepage {
                 result.homepage = Some(v);
@@ -295,6 +326,7 @@ impl Config {
                 for (name, data) in deps {
                     let constraints;
                     let mut extras = None;
+                    let mut python_version = None;
                     match data {
                         files::DepComponentWrapper::A(constrs) => {
                             constraints = Constraint::from_str_multiple(&constrs)
@@ -306,6 +338,10 @@ impl Config {
                             if let Some(ex) = subdata.extras {
                                 extras = Some(ex);
                             }
+                            if let Some(v) = subdata.python {
+                                python_version = Some(Constraint::from_str(&v)
+                                    .expect("Problem parsing python version in dependency"));
+                            }
                             // todo repository etc
                         }
                     }
@@ -316,7 +352,7 @@ impl Config {
                         constraints,
                         extra: None,
                         sys_platform: None,
-                        python_version: None,
+                        python_version,
                         install_with_extras: extras,
                     });
                 }
@@ -810,7 +846,7 @@ fn sync_deps(
             package_type,
             rename,
         )
-        .is_err()
+            .is_err()
         {
             abort("Problem downloading packages");
         }
@@ -1082,11 +1118,11 @@ py_version = \"^3.7\"",
     };
 
     #[cfg(target_os = "windows")]
-    let os = Os::Windows;
+        let os = Os::Windows;
     #[cfg(target_os = "linux")]
-    let os = Os::Linux;
+        let os = Os::Linux;
     #[cfg(target_os = "macos")]
-    let os = Os::Mac;
+        let os = Os::Mac;
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
     //    let extras = cfg.extras;
@@ -1107,7 +1143,6 @@ py_version = \"^3.7\"",
             }
             // Merge reqs added via cli with those in `pyproject.toml`.
             let updated_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
-            //            println!("(dbg) to merged {:#?}", &updated_reqs);
 
             sync(
                 &bin_path,

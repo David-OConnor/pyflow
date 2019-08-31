@@ -5,6 +5,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
+use crate::dep_types::Constraint;
 
 /// This nested structure is required based on how the `toml` crate handles dots.
 #[derive(Debug, Deserialize)]
@@ -26,6 +27,13 @@ pub enum DepComponentWrapper {
     B(DepComponent),
 }
 
+#[serde(untagged)]
+#[derive(Debug, Deserialize)]
+pub enum DepComponentWrapperPoetry {
+    A(String),
+    B(DepComponentPoetry),
+}
+
 #[derive(Debug, Deserialize)]
 pub struct DepComponent {
     #[serde(rename = "version")]
@@ -34,6 +42,20 @@ pub struct DepComponent {
     pub repository: Option<String>,
     pub branch: Option<String>,
     pub service: Option<String>,
+    pub python: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DepComponentPoetry {
+    #[serde(rename = "version")]
+    pub constrs: String,
+    pub python: Option<String>,
+    pub extras: Option<Vec<String>>,
+    pub optional: Option<bool>,
+    // todo: more fields
+    //    pub repository: Option<String>,
+    //    pub branch: Option<String>,
+    //    pub service: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,7 +90,7 @@ pub struct Poetry {
     pub version: Option<String>,
     pub description: Option<String>,
     pub license: Option<String>,
-    pub authors: Option<String>,
+    pub authors: Option<Vec<String>>,
     pub readme: Option<String>,
     pub homepage: Option<String>,
     pub repository: Option<String>,
@@ -80,12 +102,12 @@ pub struct Poetry {
     pub exclude: Option<Vec<String>>,
     pub extras: Option<HashMap<String, String>>,
 
-    pub dependencies: Option<HashMap<String, String>>,
+    pub dependencies: Option<HashMap<String, DepComponentWrapperPoetry>>,
     // todo: Can't find dets on poetry docs, but apparently exists
     //    dev_dependencies: Option<HashMap<String, String>>,
     // todo: Include these
     //    pub source: Option<HashMap<String, String>>,
-    //    pub scripts: Option<HashMap<String, String>>,
+    pub scripts: Option<HashMap<String, String>>,
     //    pub extras: Option<HashMap<String, String>>,
 }
 

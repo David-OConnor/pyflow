@@ -7,8 +7,8 @@
     <list default="true" id="8e8ec656-42c1-4de6-aedd-231786fe5c7c" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/dep_resolution.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_resolution.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/dep_types.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/dep_types.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/files.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/files.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/util.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/util.rs" afterDir="false" />
     </list>
@@ -179,7 +179,11 @@
       <workItem from="1567027742331" duration="2411000" />
       <workItem from="1567033348687" duration="16339000" />
       <workItem from="1567062687156" duration="349000" />
-      <workItem from="1567089484444" duration="13946000" />
+      <workItem from="1567089484444" duration="14188000" />
+      <workItem from="1567126454856" duration="1557000" />
+      <workItem from="1567129351878" duration="2437000" />
+      <workItem from="1567175640171" duration="3214000" />
+      <workItem from="1567207532971" duration="736000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed bugs in python-version checking and package installation">
       <created>1563704289313</created>
