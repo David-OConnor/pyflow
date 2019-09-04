@@ -170,17 +170,11 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
     //        fs::read_to_string(scripts_file).expect("Can't find console_scripts.txt");
 
     let script_path = lib_path.join("../bin");
-    if !script_path.exists() {
-        if fs::create_dir(&script_path).is_err() {
-            util::abort("Problem creating script path")
-        };
+    if !script_path.exists() && fs::create_dir(&script_path).is_err() {
+        util::abort("Problem creating script path")
     }
 
     for new_script in scripts {
-        //        if !existing_scripts.contains(&new_script) {
-        //            existing_scripts.push_str(&new_script);
-        //            existing_scripts.push_str("\n");
-        //        }
         let re = Regex::new(r"^(.*?)\s*=\s*(.*?):(.*)$").unwrap();
         if let Some(caps) = re.captures(&new_script) {
             let name = caps.get(1).unwrap().as_str();
@@ -235,7 +229,6 @@ pub fn download_and_install_package(
 
     let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
     if file_digest_str.to_lowercase() != expected_digest.to_lowercase() {
-
         util::print_color(&format!("Hash failed for {}. Expected: {}, Actual: {}. Continue with installation anyway? (yes / no)", filename, expected_digest.to_lowercase(), file_digest_str.to_lowercase()), Color::Red);
 
         let mut input = String::new();
@@ -249,13 +242,11 @@ pub fn download_and_install_package(
             .expect("Problem reading input")
             .to_string();
 
-        if input.to_lowercase().contains("y") {
+        if input.to_lowercase().contains('y') {
             // todo: Anything?
         } else {
             util::abort("Exiting due to failed hash");
         }
-
-
     }
 
     // We must re-open the file after computing the hash.
@@ -322,17 +313,17 @@ pub fn download_and_install_package(
             let mut built_wheel_filename = String::new();
             for entry in
                 fs::read_dir(extracted_parent.join("dist")).expect("Problem reading dist directory")
-                {
-                    let entry = entry.unwrap();
-                    built_wheel_filename = entry
-                        .path()
-                        .file_name()
-                        .expect("Unable to find built wheel filename")
-                        .to_str()
-                        .unwrap()
-                        .to_owned();
-                    break;
-                }
+            {
+                let entry = entry.unwrap();
+                built_wheel_filename = entry
+                    .path()
+                    .file_name()
+                    .expect("Unable to find built wheel filename")
+                    .to_str()
+                    .unwrap()
+                    .to_owned();
+                break;
+            }
 
             let built_wheel_filename = &built_wheel_filename;
             if built_wheel_filename.is_empty() {
@@ -346,7 +337,7 @@ pub fn download_and_install_package(
                 lib_path.join(built_wheel_filename),
                 &options,
             )
-                .expect("Problem copying wheel built from source");
+            .expect("Problem copying wheel built from source");
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");
@@ -383,17 +374,20 @@ pub fn download_and_install_package(
 
 pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
     #[cfg(target_os = "windows")]
-        let text = "Uninstalling {}: {}...";
+    println!("Uninstalling {}: {}...", name_ins, vers_ins.to_string());
     #[cfg(target_os = "linux")]
-        let text = "🗑 Uninstalling {}: {}...";
-    #[cfg(target_os = "macos")]
-        let text = "🗑 Uninstalling {}: {}...";
-
     println!(
-        text,
+        "🗑 Uninstalling {}: {}...",
         name_ins,
         vers_ins.to_string()
     );
+    #[cfg(target_os = "macos")]
+    println!(
+        "🗑 Uninstalling {}: {}...",
+        name_ins,
+        vers_ins.to_string()
+    );
+
     // Uninstall the package
     // package folders appear to be lowercase, while metadata keeps the package title's casing.
 

@@ -25,7 +25,7 @@ There are 2 ways to install:
 On Windows, download and run
 [This installer](https://github.com/David-OConnor/pypackage/releases/download/0.0.1/pypackage-0.0.2-x86_64.msi). 
 
-Alternatively, download the appropriate binary, and place it somewhere
+Alternatively, download the appropriate binary (ie , and place it somewhere
 accessible by the system path. For example, place it under `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 

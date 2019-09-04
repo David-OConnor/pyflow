@@ -1,3 +1,4 @@
+use crate::dep_types::Constraint;
 use crate::{dep_types::Req, util, Config};
 use crossterm::Color;
 use regex::Regex;
@@ -5,7 +6,6 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
-use crate::dep_types::Constraint;
 
 /// This nested structure is required based on how the `toml` crate handles dots.
 #[derive(Debug, Deserialize)]
@@ -73,7 +73,7 @@ pub struct Pypackage {
     pub repository: Option<String>,
     pub repo_url: Option<String>,
     pub package_url: Option<String>,
-    pub readme_filename: Option<Option<String>>,
+    pub readme_filename: Option<String>,
     pub entry_points: Option<HashMap<String, Vec<String>>>,
     pub console_scripts: Option<Vec<String>>,
 

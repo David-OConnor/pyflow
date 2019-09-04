@@ -8,7 +8,7 @@ use regex::Regex;
 use serde::Deserialize;
 use std::{
     collections::HashMap, env, error::Error, fmt, fs, io, path::PathBuf, process::Command,
-    str::FromStr, thread, time,
+    str::FromStr,
 };
 
 use crate::dep_resolution::WarehouseRelease;
@@ -86,8 +86,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-    name = "install",
-    help = "
+        name = "install",
+        help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -247,8 +247,10 @@ impl Config {
                                 extras = Some(ex);
                             }
                             if let Some(v) = subdata.python {
-                                python_version = Some(Constraint::from_str(&v)
-                                    .expect("Problem parsing python version in dependency"));
+                                python_version = Some(
+                                    Constraint::from_str(&v)
+                                        .expect("Problem parsing python version in dependency"),
+                                );
                             }
                             // todo repository etc
                         }
@@ -256,11 +258,9 @@ impl Config {
                     if name.to_lowercase() == "python" {
                         result.py_version = Some(
                             constraints
-                                .get(0).clone()
-                                .unwrap_or(
-                                    &Constraint::new(ReqType::Tilde, Version::new(3, 4, 0))
-                                ).clone(),
-
+                                .get(0)
+                                .unwrap_or(&Constraint::new(ReqType::Tilde, Version::new(3, 4, 0)))
+                                .clone(),
                         );
                     } else {
                         result.reqs.push(Req {
@@ -343,8 +343,10 @@ impl Config {
                                 extras = Some(ex);
                             }
                             if let Some(v) = subdata.python {
-                                python_version = Some(Constraint::from_str(&v)
-                                    .expect("Problem parsing python version in dependency"));
+                                python_version = Some(
+                                    Constraint::from_str(&v)
+                                        .expect("Problem parsing python version in dependency"),
+                                );
                             }
                             // todo repository etc
                         }
@@ -645,15 +647,18 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
 
     let python_name;
     let pip_name;
-    #[cfg(target_os = "windows")] {
+    #[cfg(target_os = "windows")]
+    {
         python_name = "python.exe";
         pip_name = "pip.exe";
     }
-    #[cfg(target_os = "linux")] {
+    #[cfg(target_os = "linux")]
+    {
         python_name = "python";
         pip_name = "pip";
     }
-    #[cfg(target_os = "macos")] {
+    #[cfg(target_os = "macos")]
+    {
         python_name = "python";
         pip_name = "pip";
     }
@@ -844,16 +849,16 @@ fn sync_deps(
         let (best_release, package_type) =
             find_best_release(&data, &name, &version, os, python_vers);
 
-        // Powershell  doesn't like emojis
-        #[cfg(target_os = "windows")]
-            let text = "Installing {}{}{} {} ...";
-        #[cfg(target_os = "linux")]
-            let text = "⬇️ Installing {}{}{} {} ...";
-        #[cfg(target_os = "macos")]
-            let text = "⬇️ Installing {}{}{} {} ...";
+        // Powershell  doesn't like emojis // todo format literal issues
+        //        #[cfg(target_os = "windows")]
+        //            let text = "Installing {}{}{} {} ...";
+        //        #[cfg(target_os = "linux")]
+        //            let text = "⬇️ Installing {}{}{} {} ...";
+        //        #[cfg(target_os = "macos")]
+        //            let text = "⬇️ Installing {}{}{} {} ...";
 
         println!(
-            text,
+            "⬇️ Installing {}{}{} {} ...",
             Colored::Fg(Color::Cyan),
             &name,
             Colored::Fg(Color::Reset),
@@ -870,7 +875,7 @@ fn sync_deps(
             package_type,
             rename,
         )
-            .is_err()
+        .is_err()
         {
             abort("Problem downloading packages");
         }
@@ -1099,7 +1104,7 @@ fn main() {
                 0 => {
                     let vers = create_venv(Some(cfg_constr), &pypackages_dir);
                     vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
-                    py_vers = Version::new_short(vers.major, vers.minor);  // Don't include patch.
+                    py_vers = Version::new_short(vers.major, vers.minor); // Don't include patch.
                 }
                 1 => {
                     vers_path = pypackages_dir.join(&format!(
@@ -1148,11 +1153,11 @@ py_version = \"^3.7\"",
     };
 
     #[cfg(target_os = "windows")]
-        let os = Os::Windows;
+    let os = Os::Windows;
     #[cfg(target_os = "linux")]
-        let os = Os::Linux;
+    let os = Os::Linux;
     #[cfg(target_os = "macos")]
-        let os = Os::Mac;
+    let os = Os::Mac;
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
     //    let extras = cfg.extras;

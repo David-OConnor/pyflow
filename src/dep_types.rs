@@ -493,7 +493,7 @@ impl Constraint {
                 major -= 1;
                 minor = MAX_VER;
                 patch = MAX_VER;
-                // ie 2.9.0. Return max of 2.8.999999
+            // ie 2.9.0. Return max of 2.8.999999
             } else if patch == 0 {
                 minor -= 1;
                 patch = MAX_VER
@@ -623,13 +623,12 @@ pub fn intersection_many(constrs: &[Constraint]) -> Vec<(Version, Version)> {
                 rng2 = (Version::new(0, 0, 0), Version::_max());
                 // We'll remove nes at the end.
                 nes.push(constr.version);
-            },
+            }
             _ => {
-                rng2 = rng[0];  // If not Ne, there will be exactly 1.
+                rng2 = rng[0]; // If not Ne, there will be exactly 1.
             }
         }
         ranges.push(rng2);
-
     }
     // todo: We haven't included nes!
     intersection_many2(&ranges)
@@ -683,7 +682,7 @@ fn parse_extras(
             let ex_re = Regex::new(
                 r#"(extra|sys_platform|python_version)\s*(\^|~|==|<=|>=|<|>|!=)\s*['"](.*?)['"]"#,
             )
-                .unwrap();
+            .unwrap();
 
             for caps in ex_re.captures_iter(extras) {
                 let type_ = caps.get(1).unwrap().as_str();
@@ -697,8 +696,9 @@ fn parse_extras(
                             ReqType::from_str(req_type).unwrap_or_else(|_| {
                                 panic!("Problem parsing reqtype: {}", req_type)
                             }),
-                            crate::Os::from_str(val)
-                                .unwrap_or_else(|_| panic!("Problem parsing Os in extras: {}", val)),
+                            crate::Os::from_str(val).unwrap_or_else(|_| {
+                                panic!("Problem parsing Os in extras: {}", val)
+                            }),
                         ))
                     }
                     "python_version" => {
@@ -1154,7 +1154,7 @@ pub mod tests {
             "pathlib2; extra == \"test\" and ( python_version == \"2.7\")",
             true,
         )
-            .unwrap();
+        .unwrap();
 
         let expected2 = Req {
             name: "pathlib2".into(),
@@ -1169,7 +1169,7 @@ pub mod tests {
             "win-unicode-console (>=0.5) ; sys_platform == \"win32\" and python_version < \"3.6\"",
             true,
         )
-            .unwrap();
+        .unwrap();
 
         let expected3 = Req {
             name: "win-unicode-console".into(),
@@ -1385,12 +1385,11 @@ pub mod tests {
         let reqs1 = vec![
             Constraint::new(Exact, Version::new(4, 9, 4)),
             Constraint::new(Gte, Version::new(4, 9, 7)),
-
         ];
 
-                let reqs2 = vec![
+        let reqs2 = vec![
             Constraint::new(Lte, Version::new(4, 9, 6)),
-            Constraint::new(Gte, Version::new(4, 9, 7))
+            Constraint::new(Gte, Version::new(4, 9, 7)),
         ];
 
         assert!(intersection_many(&reqs1).is_empty());
@@ -1420,11 +1419,11 @@ pub mod tests {
     fn intersections_simple_many() {
         let reqs1 = vec![
             Constraint::new(Gte, Version::new(4, 9, 4)),
-            Constraint::new(Gte, Version::new(4, 3, 1))
+            Constraint::new(Gte, Version::new(4, 3, 1)),
         ];
         let reqs2 = vec![
             Constraint::new(Caret, Version::new(3, 0, 0)),
-            Constraint::new(Exact, Version::new(3, 3, 6))
+            Constraint::new(Exact, Version::new(3, 3, 6)),
         ];
 
         assert_eq!(
@@ -1432,7 +1431,7 @@ pub mod tests {
             vec![(Version::new(4, 9, 4), Version::_max())]
         );
         assert_eq!(
-           intersection_many(&reqs2),
+            intersection_many(&reqs2),
             vec![(Version::new(3, 3, 6), Version::new(3, 3, 6))]
         );
     }
@@ -1469,7 +1468,7 @@ pub mod tests {
             Constraint::new(Ne, Version::new(2, 1, 2)),
             Constraint::new(Ne, Version::new(2, 1, 6)),
             Constraint::new(Gte, Version::new(2, 0, 1)),
-            Constraint::new(Gte, Version::new(2, 0, 2))
+            Constraint::new(Gte, Version::new(2, 0, 2)),
         ];
 
         assert_eq!(

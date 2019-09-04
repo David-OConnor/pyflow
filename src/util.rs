@@ -55,7 +55,7 @@ pub fn find_venvs(pypackages_dir: &PathBuf) -> Vec<(u32, u32)> {
     ];
 
     let mut result = vec![];
-    for (maj, mi) in py_versions.into_iter() {
+    for (maj, mi) in py_versions.iter() {
         let venv_path = pypackages_dir.join(&format!("{}.{}/.venv", maj, mi));
 
         if (venv_path.join("bin/python").exists() && venv_path.join("bin/pip").exists())
