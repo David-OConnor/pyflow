@@ -303,7 +303,7 @@ pub fn download_and_install_package(
             replace_distutils(&extracted_parent.join("setup.py"));
 
             // Build a wheel from source.
-            Command::new(format!("{}/python", bin_path.to_str().unwrap()))
+            Command::new(bin_path.join("python"))
                 .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])
                 .output()

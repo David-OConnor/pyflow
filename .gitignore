@@ -3,7 +3,7 @@
 
 #PyCharm
 *.iws
-workspace.xml
+*.workspace.xml
 
 # Prevent generated and test files from being committed
 setup.py

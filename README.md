@@ -20,10 +20,12 @@ Python ≥ 3.4 is required.
 ## Installation
 There are 2 ways to install:
 - Download a binary from the [releases](https://github.com/David-OConnor/pypackage/releases)
- page. On Debian or Ubuntu, download and run
-[This deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.1/pypackage_0.0.1_amd64.deb). 
+ page. Installers are available for Debian/Ubuntu, and Windows. On Debian or Ubuntu, download and run
+[This deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.1/pypackage_0.0.2_amd64.deb). 
+On Windows, download and run
+[This installer](https://github.com/David-OConnor/pypackage/releases/download/0.0.1/pypackage-0.0.2-x86_64.msi). 
 
-On other Operating systems, download the appropriate binary, and place it somewhere
+Alternatively, download the appropriate binary, and place it somewhere
 accessible by the system path. For example, place it under `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 
@@ -253,7 +255,6 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Installing from sources other than `pypi` (eg repos)
 - Installing multiple versions of a dependency may not work if it uses compiles code.
 - The lock file is missing some info like hashes
-- Windows installer and Mac binaries
 - Adding a dependency via the CLI with a specific version constraint, or extras.
 - Developer requirements
 - Global package cache to avoid resolving and downloading the same package 
