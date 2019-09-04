@@ -586,14 +586,9 @@ pub fn resolve(
 
             let names: Vec<String> = deps.iter().map(|d| d.version.to_string()).collect();
             //            println!("(dbg): Multiple versions found for {}: {:#?}", &name, names);
-
             let inter = dep_types::intersection_many(&constraints);
-            //            // todo: Fix intersection logic for input and output. For now, take the first inter item.
-            //            // todo: Why's it even a vec?
-
 
             if inter.is_empty() {
-                println!("constrs for {}: {:#?}", &deps[0].name, &constraints);
                 result_cleaned.append(&mut make_renamed_packs(
                     &version_cache,
                     &deps,
@@ -678,7 +673,7 @@ pub fn resolve(
                         })
                         .collect();
 
-                    println!("Unresolved: {:#?}", &unresolved_deps);
+//                    println!("Unresolved: {:#?}", &unresolved_deps);
                     let mut newest_unresolved = unresolved_deps
                         .into_iter()
                         .max_by(|a, b| a.version.cmp(&b.version))

@@ -409,7 +409,7 @@ impl Config {
         // todo: more fields.
 
         result.push_str("\n\n");
-        result.push_str("[tool.pypackage.dependencies]\n");
+        result.push_str("[tool.pypackage.dependencies]\n\n");
         for dep in self.reqs.iter() {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
@@ -459,7 +459,9 @@ author = ""
 pyackage_url = "https://test.pypi.org"
 # pyackage_url = "https://pypi.org"
 
+
 [tool.pypackage.dependencies]
+
 "##,
         name
     );
@@ -774,12 +776,10 @@ fn find_best_release(
 fn sync_deps(
     bin_path: &PathBuf,
     lib_path: &PathBuf,
-    //    packages: &[(String, Version)], // name, version
     lock_packs: &[LockPackage],
     installed: &[(String, Version, Vec<String>)],
     os: Os,
     python_vers: &Version,
-    //    resolved: &Vec<(String, Version, Vec<(String, Version)>)>,
 ) {
     let packages: Vec<PackToInstall> = lock_packs
         .iter()
@@ -1073,7 +1073,7 @@ fn main() {
                 0 => {
                     let vers = create_venv(Some(cfg_constr), &pypackages_dir);
                     vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
-                    py_vers = vers;
+                    py_vers = Version::new_short(vers.major, vers.minor);  // Don't include patch.
                 }
                 1 => {
                     vers_path = pypackages_dir.join(&format!(
