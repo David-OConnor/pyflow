@@ -21,10 +21,9 @@ Python ≥ 3.4 is required.
 There are 2 ways to install:
 - Download a binary from the [releases](https://github.com/David-OConnor/pypackage/releases)
  page. Installers are available for Debian/Ubuntu, and Windows. On Debian or Ubuntu, download and run
-[This deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.2/pypackage_0.0.2_amd64.deb). 
+[this deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.2/pypackage_0.0.2_amd64.deb). 
 On Windows, download and run
-[This installer](https://github.com/David-OConnor/pypackage/releases/download/0.0.2/pypackage-0.0.2-x86_64.msi). 
-
+[this installer](https://github.com/David-OConnor/pypackage/releases/download/0.0.2/pypackage-0.0.2-x86_64.msi). 
 Alternatively, download the appropriate binary (ie `pypackage.exe` or `pypackage`) and place it somewhere
 accessible by the system path. For example, `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
@@ -113,7 +112,7 @@ These tools have different scopes and purposes:
 | **Included with Python** | ✓ | | | | | | |
 | **Stores packages with project** | | | | | ✓ | | ✓|
 | **Locks dependencies** |  | ✓ | ✓ | | | ✓ | ✓|
-| **Requires changing session state** | ✓ | | | | | | |
+| **Requires changing session state** | ✓ | | | ✓ | | | |
 | **Slow** |  | ✓ | | | | | |
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Buggy** | | | | | | | ✓ |
@@ -121,8 +120,8 @@ These tools have different scopes and purposes:
 
 
 ## Use
-- Create a `pyproject.toml` file in your project directory. If you can
- `init` or `new`, this will already exist. See
+- Create a `pyproject.toml` file in your project directory. Note that running
+ `init`, `new`, or `install` creates this file automatically. See
 [PEP 518](https://www.python.org/dev/peps/pep-0518/) for details.
 
 Example contents:
