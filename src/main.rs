@@ -643,18 +643,30 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
         util::abort("Problem creating virtual environment");
     }
 
-    // todo: Chicken-egg scenario where we need to wait for the venv to complete before
-    // todo installing `wheel` and returning, but don't know what folder
-    // todo to look for in wait_for_dirs. Blanket sleep for now.
-    thread::sleep(time::Duration::from_millis(2000));
+    let python_name;
+    let pip_name;
+    #[cfg(target_os = "windows")] {
+        python_name = "python.exe";
+        pip_name = "pip.exe";
+    }
+    #[cfg(target_os = "linux")] {
+        python_name = "python";
+        pip_name = "pip";
+    }
+    #[cfg(target_os = "macos")] {
+        python_name = "python";
+        pip_name = "pip";
+    }
+
     let bin_path = util::find_bin_path(&vers_path);
+
+    util::wait_for_dirs(&[bin_path.join(python_name), bin_path.join(pip_name)]);
 
     // We need `wheel` installed to build wheels from source.
     // Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
-    Command::new("./python")
-        .current_dir(bin_path)
+    Command::new(bin_path.join("python"))
         .args(&["-m", "pip", "install", "--quiet", "wheel"])
-        .spawn()
+        .status()
         .expect("Problem installing `wheel`");
 
     py_ver_from_alias

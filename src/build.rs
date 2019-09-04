@@ -109,8 +109,7 @@ pub(crate) fn build(
     // todo: Check if they exist; only install if they don't.
     let dummy_setup_fname = "setup_temp_pypackage.py";
 
-    Command::new("./python")
-        .current_dir(bin_path)
+    Command::new(bin_path.join("python"))
         .args(&[
             "-m", "pip", "install", //            "--upgrade",
             "twine", "wheel",
@@ -122,7 +121,7 @@ pub(crate) fn build(
 
     util::set_pythonpath(lib_path);
     println!("🛠️️ Building the package...");
-    Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "python"))
+    Command::new(bin_path.join("python"))
         .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
         .status()
         .expect("Problem building");
@@ -141,10 +140,8 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
         .unwrap_or_else(|| "https://test.pypi.org/legacy".to_string());
 
     println!("Uploading to {}", repo_url);
-    Command::new(format!("{}/{}", bin_path.to_str().unwrap(), "twine"))
+    Command::new(bin_path.join("twine"))
         .args(&[
-            //            "-m",
-            //            "twine upload",
             "upload",
             // todo - test repo / setting repos not working.
             //            &format!("--repository-url {}/", repo_url),

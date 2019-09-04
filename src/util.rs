@@ -72,32 +72,6 @@ pub fn find_venvs(pypackages_dir: &PathBuf) -> Vec<(u32, u32)> {
 /// Checks whether the path is under `/bin` (Linux generally) or `/Scripts` (Windows generally)
 /// Returns the bin path (ie under the venv)
 pub fn find_bin_path(vers_path: &PathBuf) -> PathBuf {
-    // The bin name should be `bin` on Linux, and `Scripts` on Windows. Check both.
-    // Locate bin name after ensuring we have a virtual environment.
-    // It appears that 'binary' scripts are installed in the `lib` directory's bin folder when
-    // using the --target arg, instead of the one directly in the env.
-
-    //    if vers_path.join(".venv/bin").exists() {
-    //        (vers_path.join(".venv/bin"), vers_path.join("lib/bin"))
-    //    } else if vers_path.join(".venv/Scripts").exists() {
-    //        // todo: Perhaps the lib path may not be the same.
-    //        (
-    //            vers_path.join(".venv/Scripts"),
-    //            vers_path.join("lib/Scripts"),
-    //        )
-    //    } else {
-    //        // todo: This logic is perhaps sufficient for all cases.
-    //        #[cfg(target_os = "windows")]
-    //        return (
-    //            vers_path.join(".venv/Scripts"),
-    //            vers_path.join("lib/Scripts"),
-    //        );
-    //        #[cfg(target_os = "linux")]
-    //        return (vers_path.join(".venv/bin"), vers_path.join("lib/bin"));
-    //        #[cfg(target_os = "macos")]
-    //        return (vers_path.join(".venv/bin"), vers_path.join("lib/bin"));
-    //    }
-
     #[cfg(target_os = "windows")]
     return vers_path.join(".venv/Scripts");
     #[cfg(target_os = "linux")]

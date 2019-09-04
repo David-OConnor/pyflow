@@ -63,7 +63,7 @@ pub(crate) fn create_venv(
     Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))
-        .spawn()?;
+        .status()?;
 
     Ok(())
 }
@@ -76,7 +76,7 @@ pub(crate) fn run_python(
     util::set_pythonpath(lib_path);
 
     // Run this way instead of setting current_dir, so we can load files from the right place.
-    Command::new(format!("{}/python", bin_path.to_str().unwrap()))
+    Command::new(bin_path.join("python"))
         .args(args)
         .status()?;
 
