@@ -21,12 +21,12 @@ Python ≥ 3.4 is required.
 There are 2 ways to install:
 - Download a binary from the [releases](https://github.com/David-OConnor/pypackage/releases)
  page. Installers are available for Debian/Ubuntu, and Windows. On Debian or Ubuntu, download and run
-[This deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.1/pypackage_0.0.2_amd64.deb). 
+[This deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.2/pypackage_0.0.2_amd64.deb). 
 On Windows, download and run
-[This installer](https://github.com/David-OConnor/pypackage/releases/download/0.0.1/pypackage-0.0.2-x86_64.msi). 
+[This installer](https://github.com/David-OConnor/pypackage/releases/download/0.0.2/pypackage-0.0.2-x86_64.msi). 
 
-Alternatively, download the appropriate binary, and place it somewhere
-accessible by the system path. For example, place it under `/usr/bin` in linux, 
+Alternatively, download the appropriate binary (ie `pypackage.exe` or `pypackage`) and place it somewhere
+accessible by the system path. For example, `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 
 - If you have [Rust](https://www.rust-lang.org) installed, the most convenient way is to 
