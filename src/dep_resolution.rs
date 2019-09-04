@@ -241,10 +241,10 @@ fn fetch_req_data(
             .into_iter()
             .filter(|v| *v <= max_v_to_query)
             .max()
-        {
-            Some(v) => vec![v],
-            None => vec![],
-        };
+            {
+                Some(v) => vec![v],
+                None => vec![],
+            };
 
         query_data.insert(req.name.to_owned(), best_version);
     }
@@ -418,7 +418,7 @@ fn find_constraints(
     all_reqs: &[Req],
     all_deps: &[Dependency],
     relevant_deps: &[Dependency],
-) -> Vec<Vec<Constraint>> {
+) -> Vec<Constraint> {
     let mut result = vec![];
 
     for dep in relevant_deps.iter() {
@@ -439,9 +439,9 @@ fn find_constraints(
             .reqs
             .iter()
             .filter(|r| util::compare_names(&r.name, &dep.name))
-        {
-            result.push(req.constraints.clone())
-        }
+            {
+                result.append(&mut req.constraints.clone())
+            }
     }
     result
 }
@@ -453,6 +453,8 @@ fn make_renamed_packs(
     all_deps: &[Dependency],
     name: &str,
 ) -> Vec<Package> {
+//    println!("DEBUG TEMP: {:#?}", &deps);
+
     util::print_color(
         &format!(
             "Attempting to install multiple versions for {}. If this package uses\
@@ -461,6 +463,8 @@ fn make_renamed_packs(
         ),
         Color::DarkRed,
     );
+
+    println!("DEPS to install all of: {:#?}", &deps);
 
     let mut result = vec![];
     // We were unable to resolve using the newest version; add and rename packages.
@@ -534,7 +538,7 @@ pub fn resolve(
         &mut version_cache,
         &mut reqs_searched,
     )
-    .is_err()
+        .is_err()
     {
         util::abort("Problem resolving dependencies");
     }
@@ -552,8 +556,6 @@ pub fn resolve(
             }
         }
     }
-
-    //    println!("BY NAME: {:#?}", &by_name);
 
     // Deal with duplicates, conflicts etc. The code above assumed no conflicts, and that
     // we can pick the newest compatible version for each req. We pass only the info
@@ -588,7 +590,10 @@ pub fn resolve(
             let inter = dep_types::intersection_many(&constraints);
             //            // todo: Fix intersection logic for input and output. For now, take the first inter item.
             //            // todo: Why's it even a vec?
+
+
             if inter.is_empty() {
+                println!("constrs for {}: {:#?}", &deps[0].name, &constraints);
                 result_cleaned.append(&mut make_renamed_packs(
                     &version_cache,
                     &deps,
@@ -597,8 +602,6 @@ pub fn resolve(
                 ));
                 continue;
             }
-
-            let inter = inter[0];
 
             //            println!("inter: {}, {:?}", &name, &inter);
 
@@ -616,8 +619,8 @@ pub fn resolve(
 
             let newest_compatible = deps
                 .iter()
-                .filter(|dep| inter.0 <= dep.version && dep.version <= inter.1)
-                .max_by(|a, b| a.version.cmp(&b.version));
+                .filter(|dep|inter.iter().any(|i| i.0 <= dep.version && dep.version <= i.1))
+                    .max_by(|a, b| a.version.cmp(&b.version));
 
             match newest_compatible {
                 Some(best) => {
@@ -665,7 +668,7 @@ pub fn resolve(
                     // Generate dependencies here for all avail versions.
                     let unresolved_deps: Vec<Dependency> = versions
                         .into_iter()
-                        .filter(|vers| inter.0 <= **vers && **vers <= inter.1)
+                        .filter(|vers|inter.iter().any(|i| i.0 <= **vers && **vers <= i.1))
                         .map(|vers| Dependency {
                             id: 0, // placeholder; we'll assign an id to the one we pick.
                             name: fmtd_name.clone(),
@@ -705,7 +708,7 @@ pub fn resolve(
         }
     }
 
-    // Now, assign subdeps, so we can store them in the lock.
+// Now, assign subdeps, so we can store them in the lock.
     assign_subdeps(&mut result_cleaned, &updated_ids);
 
     let mut a = result.clone();
@@ -722,8 +725,8 @@ pub mod tests {
 
     #[test]
     fn warehouse_versions() {
-        // Makes API call
-        // Assume no new releases since writing this test.
+// Makes API call
+// Assume no new releases since writing this test.
         assert_eq!(
             get_version_info("scinot").unwrap().2.sort(),
             vec![
@@ -739,51 +742,51 @@ pub mod tests {
                 Version::new(0, 0, 10),
                 Version::new(0, 0, 11),
             ]
-            .sort()
+                .sort()
         );
     }
 
-    //    #[test]
-    //    fn warehouse_deps() {
-    //        // Makes API call
-    //        let req_part = |name: &str, reqs| {
-    //            // To reduce repetition
-    //            Req::new(name.to_owned(), version_reqs)
-    //        };
-    //        let vrnew = |t, ma, mi, p| Constraint::new(t, ma, mi, p);
-    //        let vrnew_short = |t, ma, mi| Constraint {
-    //            type_: t,
-    //            major: ma,
-    //            minor: Some(mi),
-    //            patch: None,
-    //        };
-    //        use crate::dep_types::ReqType::{Gte, Lt, Ne};
+//    #[test]
+//    fn warehouse_deps() {
+//        // Makes API call
+//        let req_part = |name: &str, reqs| {
+//            // To reduce repetition
+//            Req::new(name.to_owned(), version_reqs)
+//        };
+//        let vrnew = |t, ma, mi, p| Constraint::new(t, ma, mi, p);
+//        let vrnew_short = |t, ma, mi| Constraint {
+//            type_: t,
+//            major: ma,
+//            minor: Some(mi),
+//            patch: None,
+//        };
+//        use crate::dep_types::ReqType::{Gte, Lt, Ne};
 
-    //        assert_eq!(
-    //            _get_warehouse_dep_data("requests", &Version::new(2, 22, 0)).unwrap(),
-    //            vec![
-    //                req_part("chardet", vec![vrnew(Lt, 3, 1, 0), vrnew(Gte, 3, 0, 2)]),
-    //                req_part("idna", vec![vrnew_short(Lt, 2, 9), vrnew_short(Gte, 2, 5)]),
-    //                req_part(
-    //                    "urllib3",
-    //                    vec![
-    //                        vrnew(Ne, 1, 25, 0),
-    //                        vrnew(Ne, 1, 25, 1),
-    //                        vrnew_short(Lt, 1, 26),
-    //                        vrnew(Gte, 1, 21, 1)
-    //                    ]
-    //                ),
-    //                req_part("certifi", vec![vrnew(Gte, 2017, 4, 17)]),
-    //                req_part("pyOpenSSL", vec![vrnew_short(Gte, 0, 14)]),
-    //                req_part("cryptography", vec![vrnew(Gte, 1, 3, 4)]),
-    //                req_part("idna", vec![vrnew(Gte, 2, 0, 0)]),
-    //                req_part("PySocks", vec![vrnew(Ne, 1, 5, 7), vrnew(Gte, 1, 5, 6)]),
-    //                req_part("win-inet-pton", vec![]),
-    //            ]
-    //        )
+//        assert_eq!(
+//            _get_warehouse_dep_data("requests", &Version::new(2, 22, 0)).unwrap(),
+//            vec![
+//                req_part("chardet", vec![vrnew(Lt, 3, 1, 0), vrnew(Gte, 3, 0, 2)]),
+//                req_part("idna", vec![vrnew_short(Lt, 2, 9), vrnew_short(Gte, 2, 5)]),
+//                req_part(
+//                    "urllib3",
+//                    vec![
+//                        vrnew(Ne, 1, 25, 0),
+//                        vrnew(Ne, 1, 25, 1),
+//                        vrnew_short(Lt, 1, 26),
+//                        vrnew(Gte, 1, 21, 1)
+//                    ]
+//                ),
+//                req_part("certifi", vec![vrnew(Gte, 2017, 4, 17)]),
+//                req_part("pyOpenSSL", vec![vrnew_short(Gte, 0, 14)]),
+//                req_part("cryptography", vec![vrnew(Gte, 1, 3, 4)]),
+//                req_part("idna", vec![vrnew(Gte, 2, 0, 0)]),
+//                req_part("PySocks", vec![vrnew(Ne, 1, 5, 7), vrnew(Gte, 1, 5, 6)]),
+//                req_part("win-inet-pton", vec![]),
+//            ]
+//        )
 
-    // todo Add more of these, for variety.
-    //    }
+// todo Add more of these, for variety.
+//    }
 
-    // todo: Make dep-resolver tests, including both simple, conflicting/resolvable, and confliction/unresolvable.
+// todo: Make dep-resolver tests, including both simple, conflicting/resolvable, and confliction/unresolvable.
 }

@@ -493,7 +493,7 @@ impl Constraint {
                 major -= 1;
                 minor = MAX_VER;
                 patch = MAX_VER;
-            // ie 2.9.0. Return max of 2.8.999999
+                // ie 2.9.0. Return max of 2.8.999999
             } else if patch == 0 {
                 minor -= 1;
                 patch = MAX_VER
@@ -605,49 +605,34 @@ impl fmt::Display for Constraint {
     }
 }
 
-//pub fn to_ranges(reqs: &[Constraint]) -> Vec<(Version, Version)> {
-//    // If no requirement specified, return the full range.
-//    if reqs.is_empty() {
-//        vec![(Version::new(0, 0, 0), Version::new(MAX_VER, 0, 0))]
-//    } else {
-//        reqs.iter()
-//            .map(|r| r.compatible_range())
-//            .flatten()
-//            .collect()
-//    }
-//}
+pub fn intersection_many(constrs: &[Constraint]) -> Vec<(Version, Version)> {
+    // And logic between constraints. We use a range to account for Ne logic, which
+    // may result in more than one compatible range.
+    // Result is or logic.
 
-//fn intersection_convert_one(
-//    constrs1: &[Constraint],
-//    ranges2: &[(Version, Version)],
-//) -> Vec<(Version, Version)> {
-//    let mut ranges1 = vec![];
-//
-//    for constr in constrs1 {
-//        for range in constr.compatible_range() {
-//            ranges1.push(range);
-//        }
-//    }
-//
-//    intersection(&ranges1, ranges2)
-//}
+    // We must take into account that a `Ne` constraint has two ranges joined with `or` logic.
+    let mut nes = vec![];
 
-pub fn intersection_many(reqs: &[Vec<Constraint>]) -> Vec<(Version, Version)> {
-    // todo: Broken for notequals, which involves joining two ranges with OR logic.
-    let mut flattened = vec![];
-    for req in reqs {
-        for constr in req.iter() {
-            flattened.push(constr);
+    let mut ranges = vec![];
+    for constr in constrs.iter() {
+        // rngs will be len 2 for Ne, else 1. Or logic within rngs.
+        let rng = &constr.compatible_range();
+        let rng2;
+        match constr.type_ {
+            ReqType::Ne => {
+                rng2 = (Version::new(0, 0, 0), Version::_max());
+                // We'll remove nes at the end.
+                nes.push(constr.version);
+            },
+            _ => {
+                rng2 = rng[0];  // If not Ne, there will be exactly 1.
+            }
         }
-    }
+        ranges.push(rng2);
 
-    let mut tuples = vec![];
-    for r in flattened.into_iter() {
-        tuples.append(&mut r.compatible_range());
     }
-
-    //    let tuples: Vec<(Version, Version)> = flattened.iter().map(|r| r.compatible_range()).collect();
-    intersection_many2(&tuples)
+    // todo: We haven't included nes!
+    intersection_many2(&ranges)
 }
 
 /// Interface an arbitrary number of constraint sets into the intersection fn(s), which
@@ -660,34 +645,12 @@ fn intersection_many2(reqs: &[(Version, Version)]) -> Vec<(Version, Version)> {
     })
 }
 
-///// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
-//pub fn intersection_convert_both(
-//    reqs1: &[Constraint],
-//    reqs2: &[Constraint],
-//) -> Vec<(Version, Version)> {
-//    let mut ranges1 = vec![];
-//    for req in reqs1 {
-//        for range in req.compatible_range() {
-//            ranges1.push(range);
-//        }
-//    }
-//
-//    let mut ranges2 = vec![];
-//    for req in reqs2 {
-//        for range in req.compatible_range() {
-//            ranges2.push(range);
-//        }
-//    }
-//
-//    intersection(&ranges1, &ranges2)
-//}
-
-/// Find the intersection of two sets of version requirements. Result is a Vec of (min, max) tuples.
+/// Find the intersection of two sets of version requirements. Uses `and` logic for everything.
+/// Result is a Vec of (min, max) tuples.
 pub fn intersection(
     ranges1: &[(Version, Version)],
     ranges2: &[(Version, Version)],
 ) -> Vec<(Version, Version)> {
-    // todo: Should we use and all the way, and pass a net iterator?
     let mut result = vec![];
     // Each range imposes an additonal constraint.
     for rng1 in ranges1 {
@@ -720,7 +683,7 @@ fn parse_extras(
             let ex_re = Regex::new(
                 r#"(extra|sys_platform|python_version)\s*(\^|~|==|<=|>=|<|>|!=)\s*['"](.*?)['"]"#,
             )
-            .unwrap();
+                .unwrap();
 
             for caps in ex_re.captures_iter(extras) {
                 let type_ = caps.get(1).unwrap().as_str();
@@ -735,7 +698,7 @@ fn parse_extras(
                                 panic!("Problem parsing reqtype: {}", req_type)
                             }),
                             crate::Os::from_str(val)
-                                .unwrap_or_else(|_| panic!("Problem parsing Os: {}", val)),
+                                .unwrap_or_else(|_| panic!("Problem parsing Os in extras: {}", val)),
                         ))
                     }
                     "python_version" => {
@@ -1191,7 +1154,7 @@ pub mod tests {
             "pathlib2; extra == \"test\" and ( python_version == \"2.7\")",
             true,
         )
-        .unwrap();
+            .unwrap();
 
         let expected2 = Req {
             name: "pathlib2".into(),
@@ -1206,7 +1169,7 @@ pub mod tests {
             "win-unicode-console (>=0.5) ; sys_platform == \"win32\" and python_version < \"3.6\"",
             true,
         )
-        .unwrap();
+            .unwrap();
 
         let expected3 = Req {
             name: "win-unicode-console".into(),
@@ -1419,14 +1382,19 @@ pub mod tests {
 
     #[test]
     fn intersections_empty() {
-        let reqs1 = vec![Constraint::new(Exact, Version::new(4, 9, 4))];
-        let reqs2 = vec![Constraint::new(Gte, Version::new(4, 9, 7))];
+        let reqs1 = vec![
+            Constraint::new(Exact, Version::new(4, 9, 4)),
+            Constraint::new(Gte, Version::new(4, 9, 7)),
 
-        let reqs3 = vec![Constraint::new(Lte, Version::new(4, 9, 6))];
-        let reqs4 = vec![Constraint::new(Gte, Version::new(4, 9, 7))];
+        ];
 
-        assert!(intersection_many(&[reqs1, reqs2]).is_empty());
-        assert!(intersection_many(&[reqs3, reqs4]).is_empty());
+                let reqs2 = vec![
+            Constraint::new(Lte, Version::new(4, 9, 6)),
+            Constraint::new(Gte, Version::new(4, 9, 7))
+        ];
+
+        assert!(intersection_many(&reqs1).is_empty());
+        assert!(intersection_many(&reqs2).is_empty());
     }
 
     #[test]
@@ -1450,18 +1418,21 @@ pub mod tests {
     #[test]
     // todo: Test many with more than 2 sets.
     fn intersections_simple_many() {
-        let reqs1 = vec![Constraint::new(Gte, Version::new(4, 9, 4))];
-        let reqs2 = vec![Constraint::new(Gte, Version::new(4, 3, 1))];
-
-        let reqs3 = vec![Constraint::new(Caret, Version::new(3, 0, 0))];
-        let reqs4 = vec![Constraint::new(Exact, Version::new(3, 3, 6))];
+        let reqs1 = vec![
+            Constraint::new(Gte, Version::new(4, 9, 4)),
+            Constraint::new(Gte, Version::new(4, 3, 1))
+        ];
+        let reqs2 = vec![
+            Constraint::new(Caret, Version::new(3, 0, 0)),
+            Constraint::new(Exact, Version::new(3, 3, 6))
+        ];
 
         assert_eq!(
-            intersection_many(&[reqs1, reqs2]),
+            intersection_many(&reqs1),
             vec![(Version::new(4, 9, 4), Version::_max())]
         );
         assert_eq!(
-            intersection_many(&[reqs3, reqs4]),
+           intersection_many(&reqs2),
             vec![(Version::new(3, 3, 6), Version::new(3, 3, 6))]
         );
     }
@@ -1479,15 +1450,31 @@ pub mod tests {
 
     #[test]
     fn intersection_contained_many() {
-        let reqs1 = vec![Constraint::new(Gte, Version::new(4, 9, 2))];
-        let reqs2 = vec![
+        let reqs = vec![
+            Constraint::new(Gte, Version::new(4, 9, 2)),
             Constraint::new(Gte, Version::new(4, 9, 4)),
             Constraint::new(Lt, Version::new(5, 5, 5)),
         ];
 
         assert_eq!(
-            intersection_many(&[reqs1, reqs2]),
+            intersection_many(&reqs),
             vec![(Version::new(4, 9, 4), Version::new(5, 5, 4))]
+        );
+    }
+
+    #[test]
+    fn intersection_contained_many_w_ne() {
+        let reqs1 = vec![
+            Constraint::new(Ne, Version::new(2, 0, 4)),
+            Constraint::new(Ne, Version::new(2, 1, 2)),
+            Constraint::new(Ne, Version::new(2, 1, 6)),
+            Constraint::new(Gte, Version::new(2, 0, 1)),
+            Constraint::new(Gte, Version::new(2, 0, 2))
+        ];
+
+        assert_eq!(
+            intersection_many(&reqs1),
+            vec![(Version::new(2, 0, 2), Version::_max())]
         );
     }
 

@@ -44,6 +44,10 @@ impl FromStr for Os {
         Ok(match s {
             "manylinux1_i686" => Os::Linux32,
             "manylinux1_x86_64" => Os::Linux,
+            "linux" => Os::Linux,
+            "linux2" => Os::Linux,
+            "windows" => Os::Windows,
+            "win" => Os::Windows,
             "win32" => Os::Windows32,
             "win_amd64" => Os::Windows,
             "darwin" => Os::Mac,
@@ -443,7 +447,7 @@ __pypackages__/
 "##;
 
     let pyproject_init = &format!(
-        r##"See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
+        r##"#See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
 
 [tool.pypackage]
 name = "{}"
@@ -655,7 +659,7 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
 }
 
 fn parse_lockpack_rename(rename: &str) -> (u32, String) {
-    let re = Regex::new(r"^(\d)\s(.*)$").unwrap();
+    let re = Regex::new(r"^(\d+)\s(.*)$").unwrap();
     let caps = re
         .captures(&rename)
         .expect("Problem reading lock file rename");

@@ -235,7 +235,27 @@ pub fn download_and_install_package(
 
     let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
     if file_digest_str.to_lowercase() != expected_digest.to_lowercase() {
-        util::abort(&format!("Hash failed for {}", filename))
+
+        util::print_color(&format!("Hash failed for {}. Expected: {}, Actual: {}. Continue with installation anyway? (yes / no)", filename, expected_digest.to_lowercase(), file_digest_str.to_lowercase()), Color::Red);
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Unable to read user input Hash fail decision");
+
+        let input = input
+            .chars()
+            .next()
+            .expect("Problem reading input")
+            .to_string();
+
+        if input.to_lowercase().contains("y") {
+            // todo: Anything?
+        } else {
+            util::abort("Exiting due to failed hash");
+        }
+
+
     }
 
     // We must re-open the file after computing the hash.
@@ -302,17 +322,17 @@ pub fn download_and_install_package(
             let mut built_wheel_filename = String::new();
             for entry in
                 fs::read_dir(extracted_parent.join("dist")).expect("Problem reading dist directory")
-            {
-                let entry = entry.unwrap();
-                built_wheel_filename = entry
-                    .path()
-                    .file_name()
-                    .expect("Unable to find built wheel filename")
-                    .to_str()
-                    .unwrap()
-                    .to_owned();
-                break;
-            }
+                {
+                    let entry = entry.unwrap();
+                    built_wheel_filename = entry
+                        .path()
+                        .file_name()
+                        .expect("Unable to find built wheel filename")
+                        .to_str()
+                        .unwrap()
+                        .to_owned();
+                    break;
+                }
 
             let built_wheel_filename = &built_wheel_filename;
             if built_wheel_filename.is_empty() {
@@ -326,7 +346,7 @@ pub fn download_and_install_package(
                 lib_path.join(built_wheel_filename),
                 &options,
             )
-            .expect("Problem copying wheel built from source");
+                .expect("Problem copying wheel built from source");
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");
