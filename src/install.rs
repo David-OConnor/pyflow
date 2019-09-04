@@ -382,8 +382,15 @@ pub fn download_and_install_package(
 }
 
 pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
+    #[cfg(target_os = "windows")]
+        let text = "Uninstalling {}: {}...";
+    #[cfg(target_os = "linux")]
+        let text = "🗑 Uninstalling {}: {}...";
+    #[cfg(target_os = "macos")]
+        let text = "🗑 Uninstalling {}: {}...";
+
     println!(
-        "🗑 Uninstalling {}: {}...",
+        text,
         name_ins,
         vers_ins.to_string()
     );

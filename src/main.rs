@@ -832,8 +832,16 @@ fn sync_deps(
         let (best_release, package_type) =
             find_best_release(&data, &name, &version, os, python_vers);
 
+        // Powershell  doesn't like emojis
+        #[cfg(target_os = "windows")]
+            let text = "Installing {}{}{} {} ...";
+        #[cfg(target_os = "linux")]
+            let text = "⬇️ Installing {}{}{} {} ...";
+        #[cfg(target_os = "macos")]
+            let text = "⬇️ Installing {}{}{} {} ...";
+
         println!(
-            "⬇️ Installing {}{}{} {} ...",
+            text,
             Colored::Fg(Color::Cyan),
             &name,
             Colored::Fg(Color::Reset),
@@ -931,6 +939,12 @@ fn sync(
         })
         .collect();
 
+    // Powershell  doesn't like emojis
+    #[cfg(target_os = "windows")]
+    println!("Resolving dependencies...");
+    #[cfg(target_os = "linux")]
+    println!("🔍 Resolving dependencies...");
+    #[cfg(target_os = "macos")]
     println!("🔍 Resolving dependencies...");
 
     let resolved = match dep_resolution::resolve(&reqs, &locked, os, &py_vers) {
