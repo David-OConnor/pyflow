@@ -142,7 +142,7 @@ contains all dependencies, and is an analog to `requirements.txt`.
 
 You can specify `extra` dependencies, which will only be installed when passing
 explicit flags to `pypackage install`, or when included in another project with the appropriate
- flag enabled. Ie packages requirng this one can enable with 
+ flag enabled. Ie packages requiring this one can enable with 
 `pip install -e` etc.
 ```toml
 [tool.pypackage.extras]
