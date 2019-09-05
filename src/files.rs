@@ -1,4 +1,3 @@
-use crate::dep_types::Constraint;
 use crate::{dep_types::Req, util, Config};
 use crossterm::Color;
 use regex::Regex;
@@ -74,12 +73,11 @@ pub struct Pypackage {
     pub repo_url: Option<String>,
     pub package_url: Option<String>,
     pub readme_filename: Option<String>,
-    pub entry_points: Option<HashMap<String, Vec<String>>>,
-    pub console_scripts: Option<Vec<String>>,
+    //    pub entry_points: Option<HashMap<String, Vec<String>>>,
+    pub scripts: Option<HashMap<String, String>>, // todo. Maybe [tool.pypackage.scripts] , ie a standalone table?
 
     pub dependencies: Option<HashMap<String, DepComponentWrapper>>,
-    //    pub dependencies: Option<HashMap<String, String>>,
-    //
+
     pub dev_dependencies: Option<HashMap<String, String>>,
     pub extras: Option<HashMap<String, String>>,
 }

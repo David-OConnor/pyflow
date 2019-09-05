@@ -63,8 +63,7 @@ one to use for each project. This is a notable problem with `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
 
 - Multiple versions of a dependency can be installed, allowing resolution
-of conflicting sub-dependencies, and using the highest version allowed for
-each requirement.
+of conflicting sub-dependencies.
 
 
 ## Virtual environments are easy. What's the point of this?
@@ -180,7 +179,9 @@ be added to `pyproject.toml` and installed.
 ### Running REPL and Python files in the environment:
 - `pypackage python` - Run a Python REPL
 - `pypackage python main.py` - Run a python file
-- `pypackage ipython`, `pypackage black` etc - Run a CLI script like `ipython`. 
+- `pypackage ipython`, `pypackage black` etc - Run a CLI script like `ipython`. This can either
+have been installed by a dependency, or specified under `[tool.pypackage]`, `scripts`
+- `pypackage run ipython` - alternate syntax
 
 ### Building and publishing:
 - `pypackage package` - Package for distribution (uses setuptools internally, and 
@@ -195,7 +196,7 @@ as defined in `pyproject.toml`
 a readme, pyproject.toml, .gitignore, and directory for code
 - `pypackage init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
 `requirements.text` and `Pipfile` as required.
-
+- `pypackage reset` - Remove the environment, and uninstall all packages
 - `pypackage -V` - Get the current version of this tool
 - `pypackage help` Get help, including a list of available commands
 
@@ -252,12 +253,13 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 ## Not-yet-implemented
 
 - Installing from sources other than `pypi` (eg repos)
-- Installing multiple versions of a dependency may not work if it uses compiles code.
+- Installing multiple versions of a dependency may not work if it uses compiles code
 - The lock file is missing some info like hashes
 - Adding a dependency via the CLI with a specific version constraint, or extras.
 - Developer requirements
+- Packaging and publishing projects that use compiled extensions
 - Global package cache to avoid resolving and downloading the same package 
-for each project??
+for each project?
 
 
 ## Building and uploading your project to PyPi.
@@ -278,9 +280,7 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Topic :: Scientific/Engineering :: Human Machine Interfaces",
 ]
-console_scripts = [
-    "activate = jeejah:activate",
-]
+scripts = { activate = "jeejah:activate" }
 
 
 [tool.pypackage.dependencies]
@@ -323,7 +323,7 @@ on the server to properly determine dependencies, due to unreliable information
 
 ## Gotchas
 - Make sure the `pypackage` binary is accessible in your path. If installing
-via a `deb` or `Cargo`, this should be set up automatically.
+via a `deb`, `msi`, or `Cargo`, this should be set up automatically.
 - Make sure `__pypackages__` and `.venv` are in your `.gitignore` file.
 
 # References

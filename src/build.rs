@@ -15,7 +15,7 @@ fn serialize_py_list(items: &[String]) -> String {
     result
 }
 
-/// Serialize to a Python dics of lists of strings.
+/// Serialize to a Python dict of lists of strings.
 fn _serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
     let mut result = "{\n".to_string();
     for (key, val) in hm.iter() {
@@ -24,6 +24,17 @@ fn _serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
     result.push('}');
     result
 }
+
+/// Serialize to a Python dict of strings.
+//fn serialize_scripts(hm: &HashMap<String, String>) -> String {
+//    let mut result = "{\n".to_string();
+//
+//    for (key, val) in hm.iter() {
+//        result.push_str(&format!("    \"{}\": {}\n", key, serialize_py_list(val)));
+//    }
+//    result.push('}');
+//    result
+//}
 
 ///// A different format, as used in console_scripts
 //fn serialize_py_dict2(hm: &HashMap<String, String>) -> String {
@@ -66,7 +77,7 @@ setuptools.setup(
     classifiers={},
 
     entry_points={{
-        "console_scripts": {},
+        "console_scripts": ,
     }},
 )
 "#,
@@ -79,9 +90,8 @@ setuptools.setup(
         cfg.description.unwrap_or_else(|| "".into()),
         cfg.homepage.unwrap_or_else(|| "".into()),
         serialize_py_list(&cfg.classifiers),
-        // todo: For now we only support console_scripts entry points.
-        //        serialize_py_dict(&cfg.entry_points),
-        serialize_py_list(&cfg.console_scripts),
+        //        serialize_py_list(&cfg.console_scripts),
+
         // todo:
         //            extras_require="{}",
         //        match cfg.extras {

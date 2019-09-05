@@ -167,17 +167,6 @@ fn get_req_cache_multiple(
         .json()?)
 }
 
-//fn flatten(result: &mut Vec<Dependency>, tree: &Dependency) {
-//    for node in tree.dependencies.iter() {
-//        // We don't need sub-deps in the result; they're extraneous info. We only really care about
-//        // the name and version requirements.
-//        let mut result_dep = node.clone();
-//        result_dep.dependencies = vec![];
-//        result.push(result_dep);
-//        flatten(result, &node);
-//    }
-//}
-
 /// Helper fn for `guess_graph`.
 fn is_compat(constraints: &[Constraint], vers: &Version) -> bool {
     for constraint in constraints.iter() {

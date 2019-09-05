@@ -151,15 +151,15 @@ pub struct Config {
     extras: HashMap<String, String>,
     description: Option<String>,
     classifiers: Vec<String>, // https://pypi.org/classifiers/
-    keywords: Vec<String>,    // todo: Options for classifiers and keywords?
+    keywords: Vec<String>,
     homepage: Option<String>,
     repository: Option<String>,
     repo_url: Option<String>,
     package_url: Option<String>,
     readme_filename: Option<String>,
-    entry_points: HashMap<String, Vec<String>>, // todo option?
-    //    console_scripts: HashMap<String, String>,   // todo option?
-    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
+    //    entry_points: HashMap<String, Vec<String>>, // todo option?
+    scripts: HashMap<String, String>, //todo: put under [tool.pypackage.scripts] ?
+                                      //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
 }
 
 impl Config {
@@ -306,11 +306,11 @@ impl Config {
             if let Some(v) = pp.keywords {
                 result.keywords = v;
             }
-            if let Some(v) = pp.entry_points {
-                result.entry_points = v;
-            }
-            if let Some(v) = pp.console_scripts {
-                result.console_scripts = v;
+            //            if let Some(v) = pp.entry_points {
+            //                result.entry_points = v;
+            //            } // todo
+            if let Some(v) = pp.scripts {
+                result.scripts = v;
             }
 
             if let Some(v) = pp.version {
@@ -665,7 +665,8 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
 
     let bin_path = util::find_bin_path(&vers_path);
 
-    util::wait_for_dirs(&[bin_path.join(python_name), bin_path.join(pip_name)]);
+    util::wait_for_dirs(&[bin_path.join(python_name), bin_path.join(pip_name)])
+        .expect("Timed out waiting for venv to be created.");
 
     // We need `wheel` installed to build wheels from source.
     // Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
@@ -1045,12 +1046,10 @@ fn sync(
 }
 
 fn main() {
-    // todo perhaps much of this setup code should only be in certain match branches.
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pypackage.lock";
 
     let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
-
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
@@ -1160,7 +1159,6 @@ py_version = \"^3.7\"",
     let os = Os::Mac;
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
-    //    let extras = cfg.extras;
 
     match subcmd {
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
@@ -1242,33 +1240,64 @@ py_version = \"^3.7\"",
         SubCommand::Run { args } => {
             // Allow both `pypackage run ipython` (args), and `pypackage ipython` (opt.script)
             if !args.is_empty() {
-                // todo better handling, eg abort
-                let name = args.get(0).expect("Missing first arg").clone();
-                let mut args: Vec<String> = args.into_iter().skip(1).collect();
+                let name = match args.get(0) {
+                    Some(a) => a.clone(),
+                    None => {
+                        abort(
+                            "`run` must be followed by the script to run, eg `pypackage run black`",
+                        );
+                        unreachable!()
+                    }
+                };
+                let mut specified_args: Vec<String> = args.into_iter().skip(1).collect();
+                let mut args_to_pass;
+                let abort_msg;
 
-                //                let scripts = vec![];
-                let script_path = vers_path.join(format!("bin/{}", name));
+                // If a script name is specified by by this project and a dependency, favor
+                // this project.
+                match cfg.scripts.get(&name) {
+                    Some(s) => {
+                        abort_msg = format!(
+                            "Problem running the script {}, specified in `pyproject.toml`",
+                            name,
+                        );
 
-                let abort_msg = &format!(
-                    "Problem running the script {}. Is it installed? \
-                     Try running `pypackage install {}`",
-                    name, name
-                );
-                // Handle the error here, instead of letting Python handle it, so we can
-                // display a more nicer message.
-                if !script_path.exists() {
-                    abort(abort_msg);
+                        let re = Regex::new(r"(.*?):(.*)").unwrap();
+                        match re.captures(s) {
+                            Some(caps) => {
+                                let module = caps.get(1).unwrap().as_str();
+                                let function = caps.get(2).unwrap().as_str();
+                                args_to_pass = vec![
+                                    "-c".to_owned(),
+                                    format!("\"import {}; {}.{}()\"", module, module, function),
+                                ];
+                            }
+                            None => {
+                                abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", s));
+                                unreachable!()
+                            }
+                        }
+                    }
+                    None => {
+                        abort_msg = format!(
+                            "Problem running the script {}. Is it installed? \
+                             Try running `pypackage install {}`",
+                            name, name
+                        );
+                        let script_path = vers_path.join("bin").join(name);
+                        if !script_path.exists() {
+                            abort(&abort_msg);
+                        }
+
+                        args_to_pass = vec![script_path
+                            .to_str()
+                            .expect("Can't find script path")
+                            .to_owned()];
+                    }
                 }
-
-                let mut args2 = vec![script_path
-                    .to_str()
-                    .expect("Can't find script path")
-                    .to_owned()];
-
-                args2.append(&mut args);
-
-                if commands::run_python(&bin_path, &lib_path, &args2).is_err() {
-                    abort(abort_msg);
+                args_to_pass.append(&mut specified_args);
+                if commands::run_python(&bin_path, &lib_path, &args_to_pass).is_err() {
+                    abort(&abort_msg);
                 }
 
                 return;
