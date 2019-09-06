@@ -64,12 +64,13 @@ one to use for each project. This is a notable problem with `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
 
 - Multiple versions of a dependency can be installed, allowing resolution
-of conflicting sub-dependencies. (ie: Your package requres Dep A>=1.0 and Dep B.
-Dep B requires Dep A==0.9) There are many cases where `Poetry` and `Pipenv` will fail
+of conflicting sub-dependencies. (ie: Your package requires `Dep A>=1.0` and `Dep B`.
+`Dep B` requires Dep `A==0.9`) There are many cases where `Poetry` and `Pipenv` will fail
 to resolve dependencies, but we're able to by doing this. Try it for yourself with a few
  random dependencies from [pypi](https://pypi.org/); there's a good change you'll
  hit this problem using `Poetry` or `Pipenv`. Limitations: This will not work for
-some compiled dependencies, and isn't allowed for packages we upload to PyPi.
+some compiled dependencies, and attempting to package something using this will
+trigger an error.
 
 
 ## Virtual environments are easy. What's the point of this?
@@ -266,9 +267,10 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Packaging and publishing projects that use compiled extensions
 - Global package cache to avoid resolving and downloading the same package 
 for each project?
+- Download and install a Python version you specify, if not already installed
 
 
-## Building and uploading your project to PyPi.
+## Building and uploading your project to PyPi
 In order to build and publish your project, additional info is needed in
 `pyproject.toml`, that mimics what would be in `setup.py`. Example:
 ```toml
@@ -319,8 +321,11 @@ not install correctly.
 
 ## Dependency cache repo:
 - [Github](https://github.com/David-OConnor/pydeps)
-Example API call: `https://pydeps.herokuapp.com/numpy`. This pulls all top-level
-dependencies for the `numpy` package. The first time this command is run
+Example API calls: `https://pydeps.herokuapp.com/requests`, 
+`https://pydeps.herokuapp.com/requests/2.21.0`. 
+This pulls all top-level
+dependencies for the `requests` package, and the dependencies for version `2.21.0` respectively.
+ The first time this command is run
 for a package/version combo, it may be slow. Subsequent calls, by anyone,
 should be fast. This is due to having to download and install each package
 on the server to properly determine dependencies, due to unreliable information

@@ -79,6 +79,9 @@ pub(crate) fn run_python(
     // Running with .output() prevents the REPL from running, and .spawn() causes
     // permission errors when importing modules.
     Command::new(bin_path.join("python")).args(args).status()?;
+    //    Command::new(bin_path.join("python")).args(args).spawn()?;
+    //    let output = Command::new(bin_path.join("python")).args(args).output()?;
+    //    println!("Output: {:?}", &output);
 
     Ok(())
 }

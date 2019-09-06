@@ -111,11 +111,24 @@ setuptools.setup(
 }
 
 pub(crate) fn build(
+    lockpacks: &[crate::dep_types::LockPackage],
     bin_path: &PathBuf,
     lib_path: &PathBuf,
     cfg: &crate::Config,
     _extras: Vec<String>,
 ) {
+    for lp in lockpacks.iter() {
+        if lp.rename.is_some() {
+            //    if lockpacks.iter().any(|lp| lp.rename.is_some()) {
+            util::abort(&format!(
+                "{} is installed with multiple versions. We can't create a package that \
+                 relies on multiple versions of a dependency - \
+                 this would cause this package not work work correctly if not used with Pypackage.",
+                lp.name
+            ))
+        }
+    }
+
     // todo: Check if they exist; only install if they don't.
     let dummy_setup_fname = "setup_temp_pypackage.py";
 

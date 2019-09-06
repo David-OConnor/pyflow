@@ -105,7 +105,7 @@ fn remove_scripts(scripts: Vec<String>, scripts_path: &PathBuf) {
     }
 }
 
-fn make_script(path: &PathBuf, name: &str, module: &str, func: &str) {
+pub fn make_script(path: &PathBuf, name: &str, module: &str, func: &str) {
     let contents = format!(
         r"import re
 import sys
@@ -118,8 +118,9 @@ if __name__ == '__main__':
         module, func, func
     );
 
+    println!("PATH: {:?}", &path);
     fs::write(path, contents)
-        .unwrap_or_else(|_| panic!("Problem creating CLI script file for {}", name));
+        .unwrap_or_else(|_| panic!("Problem creating script file for {}", name));
 }
 
 /// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.

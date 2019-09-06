@@ -13,8 +13,8 @@ use std::{
 
 use crate::dep_resolution::WarehouseRelease;
 use crate::install::PackageType;
-use structopt::StructOpt;
 use std::path::Path;
+use structopt::StructOpt;
 
 mod build;
 mod commands;
@@ -894,7 +894,11 @@ fn sync_deps(
                 .iter()
                 .find(|lp| lp.id == *id)
                 .expect("Can't find parent calling renamed package");
-            install::rename_package_files(&lib_path.join(util::standardize_name(&parent.name)), name, &new);
+            install::rename_package_files(
+                &lib_path.join(util::standardize_name(&parent.name)),
+                name,
+                &new,
+            );
 
             // todo: Handle this more generally, in case we don't have proper semvar dist-info paths.
             install::rename_metadata(
@@ -918,6 +922,114 @@ fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) ->
         }
     }
     result
+}
+
+/// Execute a python CLI script, either specified in `pyproject.toml`, or in a dependency.
+fn run_script(
+    lib_path: &PathBuf,
+    bin_path: &PathBuf,
+    vers_path: &PathBuf,
+    cfg: &Config,
+    args: Vec<String>,
+) {
+    // Allow both `pypackage run ipython` (args), and `pypackage ipython` (opt.script)
+    if args.is_empty() {
+        return;
+    }
+
+    let name = match args.get(0) {
+        Some(a) => a.clone(),
+        None => {
+            abort("`run` must be followed by the script to run, eg `pypackage run black`");
+            unreachable!()
+        }
+    };
+
+    // If the script we're calling is specified in `pyproject.toml`, ensure it exists.
+
+    // todo: Delete these scripts as required to sync with pyproject.toml.
+    let re = Regex::new(r"(.*?):(.*)").unwrap();
+    for (name, command) in cfg.scripts.iter() {
+        continue;
+        if let Some(script) = cfg.scripts.get(name) {
+            let file_name = &vers_path.join("bin").join(name);
+
+            // todo: We shouldn't need to re-write to disk every time. Check that it's current.
+            if file_name.exists() {
+                fs::remove_file(file_name).expect("Problem removing existing script file");
+            }
+
+            match re.captures(command) {
+                Some(caps) => {
+                    let module = caps.get(1).unwrap().as_str();
+                    let function = caps.get(2).unwrap().as_str();
+
+                    install::make_script(
+                        &vers_path.join("bin").join(&name),
+//                        &lib_path.join("bin").join(&name),
+                        &name,
+                        &format!(".{}", module),  // ie a relative import
+                        function,
+                    );
+                }
+                None => {
+                    abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", command));
+                    unreachable!()
+                }
+            }
+        }
+    }
+
+    let mut specified_args: Vec<String> = args.into_iter().skip(1).collect();
+    //        let mut args_to_pass;
+
+    // todo: Unable to get it to work by running -c; instead, create a script file, as if one
+    // todo for a dependency.
+
+    // If a script name is specified by by this project and a dependency, favor
+    // this project.
+    //        match cfg.scripts.get(&name) {
+    //            Some(s) => {
+    //                abort_msg = format!(
+    //                    "Problem running the script {}, specified in `pyproject.toml`",
+    //                    name,
+    //                );
+    //
+    //                match re.captures(s) {
+    //                    Some(caps) => {
+    //                        let module = caps.get(1).unwrap().as_str();
+    //                        let function = caps.get(2).unwrap().as_str();
+    //                        args_to_pass = vec![
+    //                            "-c".to_owned(),
+    //                            format!("\"import {}; {}.{}()\"", module, module, function),
+    //                        ];
+    //                    }
+    //                    None => {
+    //                        abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", s));
+    //                        unreachable!()
+    //                    }
+    //                }
+    //            }
+    //            None => {
+    let abort_msg = format!(
+        "Problem running the script {}. Is it installed? \
+         Try running `pypackage install {}`",
+        name, name
+    );
+    let script_path = vers_path.join("bin").join(name);
+    if !script_path.exists() {
+        abort(&abort_msg);
+    }
+
+    let mut args_to_pass = vec![script_path
+        .to_str()
+        .expect("Can't find script path")
+        .to_owned()];
+
+    args_to_pass.append(&mut specified_args);
+    if commands::run_python(&bin_path, &lib_path, &args_to_pass).is_err() {
+        abort(&abort_msg);
+    }
 }
 
 /// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
@@ -1063,7 +1175,6 @@ fn main() {
     let pypackages_dir = env::current_dir()
         .expect("Can't find current path")
         .join("__pypackages__");
-
 
     // New doesn't execute any other logic. Init must execute befor the rest of the logic,
     // since it sets up a new (or modified) `pyproject.toml`. The rest of the commands rely
@@ -1248,73 +1359,13 @@ py_version = \"^3.7\"",
                 abort("Problem running Python");
             }
         }
-        SubCommand::Package { extras } => build::build(&bin_path, &lib_path, &cfg, extras),
+        SubCommand::Package { extras } => {
+            build::build(&lockpacks, &bin_path, &lib_path, &cfg, extras)
+        }
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
         SubCommand::Run { args } => {
-            // Allow both `pypackage run ipython` (args), and `pypackage ipython` (opt.script)
-            if !args.is_empty() {
-                let name = match args.get(0) {
-                    Some(a) => a.clone(),
-                    None => {
-                        abort(
-                            "`run` must be followed by the script to run, eg `pypackage run black`",
-                        );
-                        unreachable!()
-                    }
-                };
-                let mut specified_args: Vec<String> = args.into_iter().skip(1).collect();
-                let mut args_to_pass;
-                let abort_msg;
-
-                // If a script name is specified by by this project and a dependency, favor
-                // this project.
-                match cfg.scripts.get(&name) {
-                    Some(s) => {
-                        abort_msg = format!(
-                            "Problem running the script {}, specified in `pyproject.toml`",
-                            name,
-                        );
-
-                        let re = Regex::new(r"(.*?):(.*)").unwrap();
-                        match re.captures(s) {
-                            Some(caps) => {
-                                let module = caps.get(1).unwrap().as_str();
-                                let function = caps.get(2).unwrap().as_str();
-                                args_to_pass = vec![
-                                    "-c".to_owned(),
-                                    format!("\"import {}; {}.{}()\"", module, module, function),
-                                ];
-                            }
-                            None => {
-                                abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", s));
-                                unreachable!()
-                            }
-                        }
-                    }
-                    None => {
-                        abort_msg = format!(
-                            "Problem running the script {}. Is it installed? \
-                             Try running `pypackage install {}`",
-                            name, name
-                        );
-                        let script_path = vers_path.join("bin").join(name);
-                        if !script_path.exists() {
-                            abort(&abort_msg);
-                        }
-
-                        args_to_pass = vec![script_path
-                            .to_str()
-                            .expect("Can't find script path")
-                            .to_owned()];
-                    }
-                }
-                args_to_pass.append(&mut specified_args);
-                if commands::run_python(&bin_path, &lib_path, &args_to_pass).is_err() {
-                    abort(&abort_msg);
-                }
-
-                return;
-            }
+            run_script(&lib_path, &bin_path, &vers_path, &cfg, args);
+            return;
         }
         SubCommand::List {} => util::show_installed(&lib_path),
         // We already handled init, and new, and reset
