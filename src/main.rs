@@ -14,6 +14,7 @@ use std::{
 use crate::dep_resolution::WarehouseRelease;
 use crate::install::PackageType;
 use structopt::StructOpt;
+use std::path::Path;
 
 mod build;
 mod commands;
@@ -86,8 +87,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-        name = "install",
-        help = "
+    name = "install",
+    help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -159,7 +160,7 @@ pub struct Config {
     readme_filename: Option<String>,
     //    entry_points: HashMap<String, Vec<String>>, // todo option?
     scripts: HashMap<String, String>, //todo: put under [tool.pypackage.scripts] ?
-                                      //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
+    //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
 }
 
 impl Config {
@@ -648,20 +649,20 @@ fn create_venv(cfg_v: Option<&Constraint>, pyypackages_dir: &PathBuf) -> Version
     let python_name;
     let pip_name;
     #[cfg(target_os = "windows")]
-    {
-        python_name = "python.exe";
-        pip_name = "pip.exe";
-    }
+        {
+            python_name = "python.exe";
+            pip_name = "pip.exe";
+        }
     #[cfg(target_os = "linux")]
-    {
-        python_name = "python";
-        pip_name = "pip";
-    }
+        {
+            python_name = "python";
+            pip_name = "pip";
+        }
     #[cfg(target_os = "macos")]
-    {
-        python_name = "python";
-        pip_name = "pip";
-    }
+        {
+            python_name = "python";
+            pip_name = "pip";
+        }
 
     let bin_path = util::find_bin_path(&vers_path);
 
@@ -876,21 +877,24 @@ fn sync_deps(
             package_type,
             rename,
         )
-        .is_err()
+            .is_err()
         {
             abort("Problem downloading packages");
         }
-
+    }
+    // Perform renames after all packages are installed, or we may attempt to rename a package
+    // we haven't yet installed.
+    for ((name, version), rename) in to_install.iter() {
         if let Some((id, new)) = rename {
             // Rename in the renamed package
-            install::rename_package_files(&lib_path.join(new), name, &new);
+            install::rename_package_files(&lib_path.join(util::standardize_name(new)), name, &new);
 
             // Rename in the parent calling the renamed package. // todo: Multiple parents?
             let parent = lock_packs
                 .iter()
                 .find(|lp| lp.id == *id)
                 .expect("Can't find parent calling renamed package");
-            install::rename_package_files(&lib_path.join(&parent.name), name, &new);
+            install::rename_package_files(&lib_path.join(util::standardize_name(&parent.name)), name, &new);
 
             // todo: Handle this more generally, in case we don't have proper semvar dist-info paths.
             install::rename_metadata(
@@ -1056,6 +1060,11 @@ fn main() {
         None => SubCommand::Run { args: opt.script },
     };
 
+    let pypackages_dir = env::current_dir()
+        .expect("Can't find current path")
+        .join("__pypackages__");
+
+
     // New doesn't execute any other logic. Init must execute befor the rest of the logic,
     // since it sets up a new (or modified) `pyproject.toml`. The rest of the commands rely
     // on the virtualenv and `pyproject.toml`, so make sure those are set up before processing them.
@@ -1076,13 +1085,24 @@ fn main() {
                 abort("pyproject.toml already exists - not overwriting.")
             }
             cfg.write_file(cfg_filename);
+            // Don't return here; let the normal logic create the venv now.
+        }
+        SubCommand::Reset {} => {
+            if pypackages_dir.exists() {
+                if fs::remove_dir_all(&pypackages_dir).is_err() {
+                    abort("Problem removing `__pypackages__` directory")
+                }
+            }
+            if Path::new(lock_filename).exists() {
+                if fs::remove_file(lock_filename).is_err() {
+                    abort("Problem removing `pypackage.lock`")
+                }
+            }
+            util::print_color("Reset complete", Color::Green);
+            return;
         }
         _ => (),
     }
-
-    let pypackages_dir = env::current_dir()
-        .expect("Can't find current path")
-        .join("__pypackages__");
 
     // Check for environments. Create one if none exist. Set `vers_path`.
     let mut vers_path = PathBuf::new();
@@ -1152,11 +1172,11 @@ py_version = \"^3.7\"",
     };
 
     #[cfg(target_os = "windows")]
-    let os = Os::Windows;
+        let os = Os::Windows;
     #[cfg(target_os = "linux")]
-    let os = Os::Linux;
+        let os = Os::Linux;
     #[cfg(target_os = "macos")]
-    let os = Os::Mac;
+        let os = Os::Mac;
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
 
@@ -1230,13 +1250,6 @@ py_version = \"^3.7\"",
         }
         SubCommand::Package { extras } => build::build(&bin_path, &lib_path, &cfg, extras),
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
-        SubCommand::Reset {} => {
-            if fs::remove_dir_all(&pypackages_dir).is_err() {
-                abort("Problem removing `__pypackages__` directory")
-            }
-            util::print_color("Reset complete", Color::Green);
-        }
-
         SubCommand::Run { args } => {
             // Allow both `pypackage run ipython` (args), and `pypackage ipython` (opt.script)
             if !args.is_empty() {
@@ -1304,9 +1317,10 @@ py_version = \"^3.7\"",
             }
         }
         SubCommand::List {} => util::show_installed(&lib_path),
-        // We already handled init and new
+        // We already handled init, and new, and reset
         SubCommand::Init {} => (),
         SubCommand::New { .. } => (),
+        SubCommand::Reset {} => (),
     }
 }
 

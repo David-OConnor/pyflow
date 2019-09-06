@@ -310,7 +310,7 @@ fn guess_graph(
         }
     }
 
-    //            println!("NON_LOCKED: {:#?}", &non_locked_reqs);
+    //                println!("NON_LOCKED: {:#?}", &non_locked_reqs);
     //            println!("LOCKED: {:#?}", &locked_reqs);
 
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
@@ -358,6 +358,8 @@ fn guess_graph(
             .iter()
             .filter(|d| util::compare_names(d.name.as_ref().unwrap(), &req.name))
             .collect();
+
+        //        println!("DBG result: {:#?}", &query_result);
 
         let deps: Vec<Dependency> = query_result
             .into_iter()
@@ -445,14 +447,23 @@ fn make_renamed_packs(
 
     util::print_color(
         &format!(
-            "Attempting to install multiple versions for {}. If this package uses\
+            "Installing multiple versions for {}. If this package uses \
              compiled code, this may fail when importing...",
             name
         ),
         Color::DarkRed,
     );
 
-    println!("DEPS to install all of: {:#?}", &deps);
+    let dep_display: Vec<String> = deps
+        .iter()
+        .map(|d| {
+            format!(
+                "name: {}, version: {}, parent: {:?}",
+                d.name, d.version, d.parent
+            )
+        })
+        .collect();
+    println!("Installing these versions: {:#?}", &dep_display);
 
     let mut result = vec![];
     // We were unable to resolve using the newest version; add and rename packages.
@@ -577,6 +588,8 @@ pub fn resolve(
             let inter = dep_types::intersection_many(&constraints);
 
             if inter.is_empty() {
+                //                println!("Can't find an intersection for these constraints: {:#}");
+
                 result_cleaned.append(&mut make_renamed_packs(
                     &version_cache,
                     &deps,

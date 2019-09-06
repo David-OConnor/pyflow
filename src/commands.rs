@@ -76,7 +76,9 @@ pub(crate) fn run_python(
     util::set_pythonpath(lib_path);
 
     // Run this way instead of setting current_dir, so we can load files from the right place.
-    Command::new(bin_path.join("python")).args(args).spawn()?;
+    // Running with .output() prevents the REPL from running, and .spawn() causes
+    // permission errors when importing modules.
+    Command::new(bin_path.join("python")).args(args).status()?;
 
     Ok(())
 }

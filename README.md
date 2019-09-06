@@ -56,14 +56,20 @@ to not run properly when installed from `pip` due to the `PATH`
 not being configured in the expected way.
 
 - It keeps dependencies in the project directory, in `__pypackages__`, and
-doesn't modify outside files.
+doesn't modify outside files. This is subtle, but reinforces the idea that there's
+no hidden state to be concerned with.
 
 - If multiple Python installations are found, it allows the user to select the desired 
 one to use for each project. This is a notable problem with `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
 
 - Multiple versions of a dependency can be installed, allowing resolution
-of conflicting sub-dependencies.
+of conflicting sub-dependencies. (ie: Your package requres Dep A>=1.0 and Dep B.
+Dep B requires Dep A==0.9) There are many cases where `Poetry` and `Pipenv` will fail
+to resolve dependencies, but we're able to by doing this. Try it for yourself with a few
+ random dependencies from [pypi](https://pypi.org/); there's a good change you'll
+ hit this problem using `Poetry` or `Pipenv`. Limitations: This will not work for
+some compiled dependencies, and isn't allowed for packages we upload to PyPi.
 
 
 ## Virtual environments are easy. What's the point of this?
