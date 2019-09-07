@@ -7,14 +7,15 @@
 
 This tool implements
 [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/). 
-It manages dependencies, keeping them isolated in the project directory, and runs
+It manages Python installations and dependencies, keeping the latter isolated in the project 
+directory, and runs
 python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
 
 **Goal**: Make using and publishing Python projects as simple as possible. Understanding
 Python environments shoudn't be required to use dependencies safely.
 
-Python ≥ 3.4 is required.
+Only works with Python ≥ 3.4. You don't need Python installed to start.
 
 
 ## Installation
@@ -39,7 +40,7 @@ creates a folder with the basics
 - Run `pypackage python` to run Python
 
 
-## Why add another Python dependency manager?
+## Why add another Python manager?
 `Pipenv` and `Poetry` both address this problem. Goal: Faster and less finicky.
  Some reasons why this tool is different:
 
@@ -47,7 +48,7 @@ creates a folder with the basics
 database of dependencies, vice downloading and checking each package, or relying
 on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
 
-- By not requiring Python to install or run, it remains intallation-agnostic and 
+- By not using Python to install or run, it remains intallation-agnostic and 
 environment-agnostic. This is important for making setup and use as simple and decison-free as
  possible. It's especially important on Linux, where there may be several versions
 of Python installed, with different versions and access levels. This avoids
@@ -55,8 +56,12 @@ complications, especially for new users. It's common for Python-based CLI tools
 to not run properly when installed from `pip` due to the `PATH` 
 not being configured in the expected way.
 
+- It manages Python installations - lets you choose which Python version (≥ 3.4) 
+to use. If one's installed, it uses that. If not, it downloads a binary, stores it
+in `~/python-installs`, and uses that.
+
 - It keeps dependencies in the project directory, in `__pypackages__`, and
-doesn't modify outside files. This is subtle, but reinforces the idea that there's
+doesn't modify outside files (Other than new Python installs). This is subtle, but reinforces the idea that there's
 no hidden state to be concerned with.
 
 - If multiple Python installations are found, it allows the user to select the desired 
@@ -114,6 +119,7 @@ These tools have different scopes and purposes:
 | Name | [Pip + venv](https://docs.python.org/3/library/venv.html) | [Pipenv](https://docs.pipenv.org) | [Poetry](https://poetry.eustace.io) | [pyenv](https://github.com/pyenv/pyenv) | [pythonloc](https://github.com/cs01/pythonloc) | [Conda](https://docs.conda.io/en/latest/) |this |
 |------|------------|--------|--------|-------|-----------|-------|-----|
 | **Manages dependencies** | ✓ | ✓ | ✓ | | | ✓ | ✓|
+| **Manages Python installations** | | | | ✓ | | | ✓ |
 | **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
 | **Included with Python** | ✓ | | | | | | |
 | **Stores packages with project** | | | | | ✓ | | ✓|
