@@ -5,17 +5,20 @@
 
 # Py Packages
 
-This tool implements
-[PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/). 
-It manages Python installations and dependencies, keeping the latter isolated in the project 
+This tool manages Python installations and dependencies. It implements
+[PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
+and [Pep 518 -- Specifying Minimum Build System Requirements for Python Projects](https://www.python.org/dev/peps/pep-0518/)
+
+It keeps the latter isolated in the project 
 directory, and runs
-python in an environment which uses this directory. Per PEP 582, dependencies
+Python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
 
 **Goal**: Make using and publishing Python projects as simple as possible. Understanding
 Python environments shoudn't be required to use dependencies safely.
 
-Only works with Python ≥ 3.4. You don't need Python installed to start.
+Only works with Python ≥ 3.4. You don't need Python installed to use it; it will
+install the specified version of Python if not already installed.
 
 
 ## Installation
@@ -36,12 +39,12 @@ run `cargo install pypackage`.
 - *(Optional)* Run `pypackage init` in an existing project folder, or `pypackage new projname` 
 to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
 creates a folder with the basics
-- Run `pypackage install` to sync dependencies with `pyproject.toml`, or add dependencies to it
+- Run `pypackage install` to set up Python, and sync dependencies with `pyproject.toml`, or add dependencies to it
 - Run `pypackage python` to run Python
 
 
 ## Why add another Python manager?
-`Pipenv` and `Poetry` both address this problem. Goal: Faster and less finicky.
+`Pipenv` and `Poetry` both address part of this problem. Goal: Faster and less finicky.
  Some reasons why this tool is different:
 
 - Its dependency resolution and locking is faster due to using a cached
@@ -58,14 +61,15 @@ not being configured in the expected way.
 
 - It manages Python installations - lets you choose which Python version (≥ 3.4) 
 to use. If one's installed, it uses that. If not, it downloads a binary, stores it
-in `~/python-installs`, and uses that.
+in `~/python-installs`, and uses that. It lets the user select which Python
+version to use in `pyproject.toml`, then automatically uses that version, installing
+as required.
 
 - It keeps dependencies in the project directory, in `__pypackages__`, and
 doesn't modify outside files (Other than new Python installs). This is subtle, but reinforces the idea that there's
 no hidden state to be concerned with.
 
-- If multiple Python installations are found, it allows the user to select the desired 
-one to use for each project. This is a notable problem with `Poetry`; it
+- It will always use the specified version of Python. This is a notable problem with `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
 
 - Multiple versions of a dependency can be installed, allowing resolution

@@ -13,49 +13,6 @@ pub enum PackageType {
     Source,
 }
 
-/// Extract the wheel. (It's like a zip)
-fn extract_wheel(file: &fs::File, lib_path: &PathBuf, rename: &Option<(String, String)>) {
-    // Separate function, since we use it twice.
-    let mut archive = zip::ZipArchive::new(file).unwrap();
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i).unwrap();
-        // Change name here instead of after in case we've already installed a non-renamed version.
-        // (which would be overwritten by this one.)
-        let file_str2 = file.sanitized_name();
-        let file_str = file_str2.to_str().expect("Problem converting path to str");
-
-        let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
-            match rename {
-                Some((old, new)) => file
-                    .sanitized_name()
-                    .to_str()
-                    .unwrap()
-                    .to_owned()
-                    .replace(old, new)
-                    .into(),
-                None => file.sanitized_name(),
-            }
-        } else {
-            file.sanitized_name()
-        };
-
-        let outpath = lib_path.join(extracted_file);
-
-        if (&*file.name()).ends_with('/') {
-            fs::create_dir_all(&outpath).unwrap();
-        } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    fs::create_dir_all(&p).unwrap();
-                }
-            }
-            let mut outfile = fs::File::create(&outpath).unwrap();
-            io::copy(&mut file, &mut outfile).unwrap();
-        }
-    }
-}
-
 /// https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
 fn sha256_digest<R: io::Read>(mut reader: R) -> Result<digest::Digest, std::io::Error> {
     let mut context = digest::Context::new(&digest::SHA256);
@@ -262,7 +219,7 @@ pub fn download_and_install_package(
 
     match package_type {
         PackageType::Wheel => {
-            extract_wheel(&archive_file, lib_path, &rename);
+            util::extract_zip(&archive_file, lib_path, &rename);
         }
         PackageType::Source => {
             // Extract the tar.gz source code.
@@ -272,7 +229,7 @@ pub fn download_and_install_package(
             if archive.unpack(lib_path).is_err() {
                 // The extract_wheel function just extracts a zip file, so it's appropriate here.
                 // We'll then continue with this leg, and build/move/cleanup.
-                extract_wheel(&archive_file, lib_path, &None);
+                util::extract_zip(&archive_file, lib_path, &None);
                 // Check if we have a zip file instead.
             }
 
@@ -342,7 +299,7 @@ pub fn download_and_install_package(
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");
-            extract_wheel(&file_created, lib_path, &rename);
+            util::extract_zip(&file_created, lib_path, &rename);
 
             // Remove the created and moved wheel
             if fs::remove_file(&lib_path.join(built_wheel_filename)).is_err() {

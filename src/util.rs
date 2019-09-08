@@ -5,7 +5,7 @@ use crate::{
 };
 use crossterm::{Color, Colored};
 use regex::Regex;
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader};
 use std::str::FromStr;
 use std::{env, fs, path::PathBuf, process, thread, time};
 
@@ -82,7 +82,7 @@ pub fn find_bin_path(vers_path: &PathBuf) -> PathBuf {
 
 /// Wait for directories to be created; required between modifying the filesystem,
 /// and running code that depends on the new files.
-pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::AliasError> {
+pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::py_versions::AliasError> {
     // todo: AliasError is a quick fix to avoid creating new error type.
     let timeout = 1000; // ms
     for _ in 0..timeout {
@@ -97,7 +97,7 @@ pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::AliasError> {
         }
         thread::sleep(time::Duration::from_millis(10));
     }
-    Err(crate::AliasError {
+    Err(crate::py_versions::AliasError {
         details: "Timed out attempting to create a directory".to_string(),
     })
 }
@@ -290,4 +290,47 @@ pub fn standardize_name(name: &str) -> String {
 // PyPi naming isn't consistent; it capitalization and _ vs -
 pub fn compare_names(name1: &str, name2: &str) -> bool {
     standardize_name(name1) == standardize_name(name2)
+}
+
+/// Extract the wheel. (It's like a zip)
+pub fn extract_zip(file: &fs::File, out_path: &PathBuf, rename: &Option<(String, String)>) {
+    // Separate function, since we use it twice.
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        // Change name here instead of after in case we've already installed a non-renamed version.
+        // (which would be overwritten by this one.)
+        let file_str2 = file.sanitized_name();
+        let file_str = file_str2.to_str().expect("Problem converting path to str");
+
+        let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
+            match rename {
+                Some((old, new)) => file
+                    .sanitized_name()
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+                    .replace(old, new)
+                    .into(),
+                None => file.sanitized_name(),
+            }
+        } else {
+            file.sanitized_name()
+        };
+
+        let outpath = out_path.join(extracted_file);
+
+        if (&*file.name()).ends_with('/') {
+            fs::create_dir_all(&outpath).unwrap();
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(&p).unwrap();
+                }
+            }
+            let mut outfile = fs::File::create(&outpath).unwrap();
+            io::copy(&mut file, &mut outfile).unwrap();
+        }
+    }
 }
