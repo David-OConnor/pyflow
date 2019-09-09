@@ -44,7 +44,7 @@ creates a folder with the basics
 
 
 ## Why add another Python manager?
-`Pipenv` and `Poetry` both address part of this problem. Goal: Faster and less finicky.
+`Pipenv` and `Poetry` both address part of this problem.
  Some reasons why this tool is different:
 
 - Its dependency resolution and locking is faster due to using a cached
@@ -214,6 +214,7 @@ a readme, pyproject.toml, .gitignore, and directory for code
 - `pypackage init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
 `requirements.text` and `Pipfile` as required.
 - `pypackage reset` - Remove the environment, and uninstall all packages
+- `pypackage clear` - Clear the global cache of downloaded packages, in `~/python-installs/dependency-cache`
 - `pypackage -V` - Get the current version of this tool
 - `pypackage help` Get help, including a list of available commands
 
@@ -275,8 +276,6 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Adding a dependency via the CLI with a specific version constraint, or extras.
 - Developer requirements
 - Packaging and publishing projects that use compiled extensions
-- Global package cache to avoid resolving and downloading the same package 
-for each project?
 - Download and install a Python version you specify, if not already installed
 
 
@@ -349,8 +348,9 @@ via a `deb`, `msi`, or `Cargo`, this should be set up automatically.
 
 # References
 - [PEP 582 - Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
-- [Pep 518 - pyproject.toml](https://www.python.org/dev/peps/pep-518/)
+- [PEP 518 - pyproject.toml](https://www.python.org/dev/peps/pep-518/)
 - [Semantic versioning](https://semver.org/)
+- [PEP 440 -- Version Identification and Dependency Specification](https://www.python.org/dev/peps/pep-0440/)
 - [Specifying dependencies in Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
 - [Predictable dependency management blog entry](https://blog.rust-lang.org/2016/05/05/cargo-pillars.html)
 - [Blog on why Pyhon dependencies are hard to determine](https://dustingram.com/articles/2018/03/05/why-pypi-doesnt-know-dependencies/)

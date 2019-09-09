@@ -127,6 +127,9 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     /// Remove the environment, and uninstall all packages
     #[structopt(name = "reset")]
     Reset,
+    /// Remove all cached packages.  Eg to free up hard drive space.
+    #[structopt(name = "clear")]
+    Clear,
     /// Run a CLI script like `ipython` or `black`. Note that you can simply run `pypackage black`
     /// as a shortcut.
     #[structopt(name = "run")] // We don't need to invoke this directly, but the option exists
@@ -629,6 +632,7 @@ fn find_best_release(
 fn sync_deps(
     bin_path: &PathBuf,
     lib_path: &PathBuf,
+    cache_path: &PathBuf,
     lock_packs: &[LockPackage],
     installed: &[(String, Version, Vec<String>)],
     os: Os,
@@ -708,6 +712,7 @@ fn sync_deps(
             &best_release.digests.sha256,
             lib_path,
             bin_path,
+            cache_path,
             package_type,
             rename,
         )
@@ -877,6 +882,7 @@ fn run_script(
 fn sync(
     bin_path: &PathBuf,
     lib_path: &PathBuf,
+    cache_path: &PathBuf,
     lockpacks: &[LockPackage],
     reqs: &[Req],
     os: Os,
@@ -994,6 +1000,7 @@ fn sync(
         //                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
         &bin_path,
         &lib_path,
+        &cache_path,
         &updated_lock_packs,
         &installed,
         os,
@@ -1004,9 +1011,10 @@ fn sync(
 fn main() {
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pypackage.lock";
-    //    let python_installs_dir = env::home_dir()
-    //        .expect("Problem finding home directory")
-    //        .join(".python-installs");
+    let python_installs_dir = dirs::home_dir()
+        .expect("Problem finding home directory")
+        .join(".python-installs");
+    let cache_path = python_installs_dir.join("dependency-cache");
 
     let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
     let opt = Opt::from_args();
@@ -1055,6 +1063,24 @@ fn main() {
             util::print_color("Reset complete", Color::Green);
             return;
         }
+        SubCommand::Switch { .. } => {
+            // Updates `pyproject.toml` with a new python version
+        }
+        SubCommand::Clear {} => {
+            if !cache_path.exists() {
+                fs::create_dir(&cache_path).expect("Problem creating cache directory");
+            }
+
+            for entry in fs::read_dir(&cache_path).expect("Problem reading cache path") {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+
+                    if path.is_file() {
+                        fs::remove_file(path).expect("Problem removing a cached file");
+                    }
+                };
+            }
+        }
         _ => (),
     }
 
@@ -1068,7 +1094,7 @@ fn main() {
         None => {
             // Ask the user, and write it to `pyproject.toml`.
             util::print_color(
-                "Please enter a Python version for this project:",
+                "Please enter the Python version for this project:",
                 Color::Magenta,
             );
             // todo: Utility fn for this type promp? Shared with prompt_alias.
@@ -1077,11 +1103,7 @@ fn main() {
                 .read_line(&mut input)
                 .expect("Unable to read user input for version");
 
-            let input = input
-                .chars()
-                .next()
-                .expect("Problem reading input")
-                .to_string();
+            input.pop(); // Remove trailing newline.
 
             let specified = match Version::from_str(&input) {
                 Ok(v) => v,
@@ -1126,28 +1148,6 @@ fn main() {
                 for this project.",
         ),
     }
-    // The version's not specified in the config - Ask the user which version.
-    //        None => {
-
-    //            match venvs.len() {
-
-    //            0 => {
-    //                let vers = create_venv(None, &pypackages_dir);
-    //                vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
-    //                py_vers = vers;
-    //            }
-    //            1 => {
-    //                vers_path = pypackages_dir.join(&format!("{}.{}", venvs[0].0, venvs[0].1));
-    //                py_vers = Version::new_short(venvs[0].0, venvs[0].1);
-    //            }
-    //            _ => abort(
-    //                "Multiple Python environments found
-    //                for this project; specify the desired one in `pyproject.toml`. Example:
-    //[tool.pypackage]
-    //py_version = \"3.7\"",
-    //            ),
-    //        },
-    //    };
 
     let lib_path = vers_path.join("lib");
     let bin_path = util::find_bin_path(&vers_path);
@@ -1190,6 +1190,7 @@ fn main() {
             sync(
                 &bin_path,
                 &lib_path,
+                &cache_path,
                 &lockpacks,
                 &updated_reqs,
                 os,
@@ -1224,6 +1225,7 @@ fn main() {
             sync(
                 &bin_path,
                 &lib_path,
+                &cache_path,
                 &lockpacks,
                 &updated_reqs,
                 os,
@@ -1247,11 +1249,12 @@ fn main() {
             return;
         }
         SubCommand::List {} => util::show_installed(&lib_path),
-        // We already handled init, and new, and reset
+        // We already handled these
         SubCommand::Init {} => (),
         SubCommand::New { .. } => (),
         SubCommand::Switch { .. } => (),
         SubCommand::Reset {} => (),
+        SubCommand::Clear {} => (),
     }
 }
 

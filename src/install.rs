@@ -160,13 +160,17 @@ pub fn download_and_install_package(
     expected_digest: &str,
     lib_path: &PathBuf,
     bin_path: &PathBuf,
+    cache_path: &PathBuf,
     package_type: PackageType,
     rename: &Option<(u32, String)>,
 ) -> Result<(), reqwest::Error> {
     if !lib_path.exists() {
         fs::create_dir(lib_path).expect("Problem creating lib directory");
     }
-    let archive_path = lib_path.join(filename);
+    if !cache_path.exists() {
+        fs::create_dir(cache_path).expect("Problem creating cache directory");
+    }
+    let archive_path = cache_path.join(filename);
 
     // If the archive is already in the lib folder, don't re-download it. Note that this
     // isn't the usual flow, but may have some uses.
@@ -318,14 +322,6 @@ pub fn download_and_install_package(
         }
     }
     setup_scripts(name, version, lib_path);
-
-    // Remove the archive
-    //    if fs::remove_file(&archive_path).is_err() {
-    //        util::abort(&format!(
-    //            "Problem removing this downloaded package: {:?}",
-    //            &archive_path
-    //        ));
-    //    } // todo
 
     Ok(())
 }

@@ -8,6 +8,7 @@ use regex::Regex;
 use std::io::{self, BufRead, BufReader};
 use std::str::FromStr;
 use std::{env, fs, path::PathBuf, process, thread, time};
+use tar::Archive;
 
 /// Print in a color, then reset formatting.
 pub fn print_color(message: &str, color: Color) {
@@ -292,7 +293,8 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
     standardize_name(name1) == standardize_name(name2)
 }
 
-/// Extract the wheel. (It's like a zip)
+/// Extract the wheel or zip.
+/// From this example: https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32
 pub fn extract_zip(file: &fs::File, out_path: &PathBuf, rename: &Option<(String, String)>) {
     // Separate function, since we use it twice.
     let mut archive = zip::ZipArchive::new(file).unwrap();
@@ -332,5 +334,64 @@ pub fn extract_zip(file: &fs::File, out_path: &PathBuf, rename: &Option<(String,
             let mut outfile = fs::File::create(&outpath).unwrap();
             io::copy(&mut file, &mut outfile).unwrap();
         }
+
+        // Get and Set permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            if let Some(mode) = file.unix_mode() {
+                fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
+            }
+        }
+    }
+}
+
+//// todo: temp TS, without the rename.
+//pub fn extract_zip2(file: &fs::File, out_path: &PathBuf) {
+//    // Separate function, since we use it twice.
+//    let mut archive = zip::ZipArchive::new(file).unwrap();
+//
+//    for i in 0..archive.len() {
+//        let mut file = archive.by_index(i).unwrap();
+//        // Change name here instead of after in case we've already installed a non-renamed version.
+//        // (which would be overwritten by this one.)
+//        let outpath = out_path.join(file.sanitized_name());
+//
+//        if (&*file.name()).ends_with('/') {
+//            fs::create_dir_all(&outpath).unwrap();
+//        } else {
+//            if let Some(p) = outpath.parent() {
+//                if !p.exists() {
+//                    fs::create_dir_all(&p).unwrap();
+//                }
+//            }
+//            let mut outfile = fs::File::create(&outpath).unwrap();
+//            io::copy(&mut file, &mut outfile).unwrap();
+//        }
+//
+//        // Get and Set permissions
+//        #[cfg(unix)]
+//        {
+//            use std::os::unix::fs::PermissionsExt;
+//
+//            if let Some(mode) = file.unix_mode() {
+//                fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
+//            }
+//        }
+//    }
+//}
+
+pub fn unpack_tar_xz(archive_path: &PathBuf, dest: &PathBuf) {
+    let archive_bytes = fs::read(archive_path).expect("Problem reading Python archive as bytes");
+    let tar = lzma::decompress(&archive_bytes).expect("Problem decompressing Python .xz file");
+
+    // We've decompressed the .xz; now unpack the tar.
+    let mut archive = Archive::new(&tar[..]);
+    if archive.unpack(dest).is_err() {
+        abort(&format!(
+            "Problem unpacking Python archive: {}",
+            archive_path.to_str().unwrap()
+        ))
     }
 }

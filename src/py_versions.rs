@@ -4,11 +4,8 @@ use crate::commands;
 use crate::dep_types::Version;
 use crate::util;
 use crossterm::Color;
-//use flate2::read::GzDecoder;
-//use lzma;
 use std::error::Error;
 use std::{collections::HashMap, fmt, fs, io, path::PathBuf, process};
-//use tar::Archive;
 
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
@@ -49,6 +46,17 @@ impl ToString for PyVers {
     }
 }
 
+impl PyVers {
+    fn to_vers(self) -> Version {
+        match self {
+            Self::V3_7_4 => Version::new(3, 7, 4),
+            Self::V3_6_9 => Version::new(3, 6, 9),
+            Self::V3_5_6 => Version::new(3, 5, 6),
+            Self::V3_4_10 => Version::new(3, 4, 10),
+        }
+    }
+}
+
 /// Only Oses we've built and hosted
 /// todo: How cross-compat are these? Eg work across diff versions of Ubuntu?
 /// todo Ubuntu/Debian? Ubuntu/all linux??
@@ -61,11 +69,11 @@ enum Os {
     Mac,
 }
 
-#[derive(Debug)]
-struct Variant {
-    version: PyVers,
-    os: Os,
-}
+//#[derive(Debug)]
+//struct Variant {
+//    version: PyVers,
+//    os: Os,
+//}
 
 //impl ToString for Variant {
 //    fn to_string(&self) -> String {}
@@ -73,7 +81,12 @@ struct Variant {
 
 fn download(py_install_path: &PathBuf, version: &Version) {
     // We use the `.xz` format due to its small size compared to `.zip`. On order half the size.
-    let os = "ubuntu"; // todo temp!
+    #[cfg(target_os = "windows")]
+    let os = "windows";
+    #[cfg(target_os = "linux")]
+    let os = "ubuntu";
+    #[cfg(target_os = "macos")]
+    let os = "mac";
 
     // Match up our version to the closest match (major+minor will match) we've built.
     let vers_to_dl2: PyVers = (*version).into();
@@ -85,11 +98,8 @@ fn download(py_install_path: &PathBuf, version: &Version) {
         vers_to_dl, vers_to_dl, os
     );
 
-    // eg `3.7.4.tar.xz`
-    // todo: .tar.xz produces files about half the size of zip, but I can't figure out
-    // todo how to extract them with Rust.
-    //    let archive_path = py_install_path.join(vers_to_dl + ".tar.xz");
-    let archive_path = py_install_path.join(&format!("python-{}-{}.zip", vers_to_dl, os));
+    // eg `python-3.7.4-ubuntu.tar.xz`
+    let archive_path = py_install_path.join(&format!("python-{}-{}.tar.xz", vers_to_dl, os));
     if !archive_path.exists() {
         // Save the file
         util::print_color(
@@ -101,44 +111,18 @@ fn download(py_install_path: &PathBuf, version: &Version) {
             fs::File::create(&archive_path).expect("Failed to save downloaded package file");
         io::copy(&mut resp, &mut out).expect("failed to copy content");
     }
-    util::print_color(
-        &format!("Installing Python {}...", vers_to_dl),
-        Color::Cyan,
-    );
+    util::print_color(&format!("Installing Python {}...", vers_to_dl), Color::Cyan);
 
-    let file = fs::File::open(&archive_path).unwrap();
-    let archive_file = fs::File::open(&archive_path).unwrap();
+    util::unpack_tar_xz(&archive_path, &py_install_path);
 
-    //    let tar = GzDecoder::new(&archive_file);
-    //    let tar = lzma::decompress(&archive_file);
-    //    let mut archive = Archive::new(tar);
-    //    if archive.unpack(py_install_path).is_err() {
-    //        util::abort(&format!("Problem unpacking Python archive: {}", archive_path.to_str().unwrap()))
-    //    }
-
-    util::extract_zip(&archive_file, py_install_path, &None);
     // Strip the OS tag from the extracted Python folder name
     let extracted_path = py_install_path.join(&format!("python-{}", vers_to_dl));
 
-//    fs::rename(
-//        py_install_path.join(&format!("python-{}-{}", vers_to_dl, os)),
-//        &extracted_path,
-//    )
-//        .expect("Problem renaming extracted Python folder");
-
-    // The archive process removed execution permissions. Add them back.
-    // todo: Is this os-specific behavior?
-//    for entry in
-//        fs::read_dir(&extracted_path.join("bin")).expect("Problem reading extracted Python path")
-//        {
-//            let entry = entry.expect("Problem reading a Python executble while setting permissions");
-//            let path = entry.path();
-//            let mut perms = fs::metadata(path).expect("Problem reading permissions")
-//                .permissions();
-//            // todo: Make executable.
-//        perms.set_ex
-//        fs::set_permissions(path, perms);
-//        }
+    fs::rename(
+        py_install_path.join(&format!("python-{}-{}", vers_to_dl, os)),
+        &extracted_path,
+    )
+    .expect("Problem renaming extracted Python folder");
 }
 
 #[derive(Debug)]
@@ -161,7 +145,7 @@ impl fmt::Display for AliasError {
 /// Prompt which Python alias to use, if multiple are found.
 fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
     // Todo: Overall, the API here is inelegant.
-    println!("Found multiple compatible Python aliases. Please enter the number associated with the one you'd like to use for this project:");
+    util::print_color("Found multiple compatible Python aliases. Please enter the number associated with the one you'd like to use for this project:", Color::Magenta);
     for (i, (alias, version)) in aliases.iter().enumerate() {
         println!("{}: {} version: {}", i + 1, alias, version.to_string())
     }
@@ -230,6 +214,13 @@ pub fn find_py_aliases(version: &Version) -> Vec<(String, Version)> {
 
 // Find versions installed with this tool.
 fn find_installed_versions() -> Vec<Version> {
+    #[cfg(target_os = "windows")]
+    let py_name = "python";
+    #[cfg(target_os = "linux")]
+    let py_name = "python3";
+    #[cfg(target_os = "macos")]
+    let py_name = "python3";
+
     let python_installs_dir = dirs::home_dir()
         .expect("Problem finding home directory")
         .join(".python-installs");
@@ -244,34 +235,35 @@ fn find_installed_versions() -> Vec<Version> {
     for entry in python_installs_dir
         .read_dir()
         .expect("Can't open python installs path")
-        {
-            if let Ok(entry) = entry {
-                if !entry.path().is_dir() {
-                    continue;
-                }
+    {
+        if let Ok(entry) = entry {
+            if !entry.path().is_dir() {
+                continue;
+            }
 
-                if let Some(v) = commands::find_py_version(
-                    entry.path().join("bin").join("python3").to_str().unwrap(),
-                ) {
-                    result.push(v);
-                }
+            if let Some(v) =
+                commands::find_py_version(entry.path().join("bin").join(py_name).to_str().unwrap())
+            {
+                result.push(v);
             }
         }
+    }
     result
 }
-
-//enum PyInstall {
-//    External(String), // ie one installed through something other than this tool. PATH Alias
-//    Internal(PathBuf),  // Path to bin dir.
-//}
 
 /// Create a new virtual environment, and install Wheel.
 //fn create_venv(cfg_v: &Version, py_install: PyInstall, pyypackages_dir: &PathBuf) -> Version {
 pub fn create_venv(cfg_v: &Version, pyypackages_dir: &PathBuf) -> Version {
-    // todo: This function is very messy and repetative; fix.
     let python_installs_dir = dirs::home_dir()
         .expect("Problem finding home directory")
         .join(".python-installs"); // todo dry
+
+    #[cfg(target_os = "windows")]
+    let py_name = "python";
+    #[cfg(target_os = "linux")]
+    let py_name = "python3";
+    #[cfg(target_os = "macos")]
+    let py_name = "python3";
 
     let mut alias = None;
     let mut alias_path = None;
@@ -287,8 +279,7 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &PathBuf) -> Version {
                 python_installs_dir
                     .join(folder_name)
                     .join("bin")
-                    .join("python3")
-
+                    .join(py_name),
             );
             py_ver = Some(*iv);
             break;
@@ -298,7 +289,7 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &PathBuf) -> Version {
     // todo perhaps move alias finding back into create_venv, or make a
     // todo create_venv_if_doesnt_exist fn.
     // Only search for a system Python if we don't have an internal one.
-    if alias.is_none() {
+    if py_ver.is_none() {
         let aliases = find_py_aliases(cfg_v);
         match aliases.len() {
             0 => (),
@@ -319,42 +310,19 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &PathBuf) -> Version {
         // Download and install the appropriate Python binary, if we can't find either a
         // custom install, or on the Path.
         download(&python_installs_dir, cfg_v);
+        let py_ver2: PyVers = (*cfg_v).into();
+        py_ver = Some(py_ver2.to_vers());
 
-        // Attempt again to find a compatible installed Python version, now that we've downloaded one.
-        let mut py_ver = None; // todo DRY from above!
-        let installed_versions = find_installed_versions();
-        for iv in installed_versions.iter() {
-            if iv.major == cfg_v.major && iv.minor == cfg_v.minor {
-                let folder_name = format!("python-{}", iv.to_string2());
-                alias_path = Some(
-                    python_installs_dir
-                        .join(folder_name)
-                        .join("bin")
-                        .join("python3")
-                );
-                py_ver = Some(*iv);
-                break;
-            }
-        }
-        let installed_vers = match py_ver {
-            Some(v) => v,
-            None => {
-                util::abort("Problem installing a compatible Python version");
-                unreachable!()
-            }
-        };
-
-        let folder_name = format!("python-{}", &installed_vers.to_string2());
+        let folder_name = format!("python-{}", py_ver2.to_string());
         alias_path = Some(
             python_installs_dir
                 .join(folder_name)
                 .join("bin")
-                .join("python3")
+                .join(py_name),
         );
-        py_ver = Some(installed_vers);
     }
 
-    let py_ver = py_ver.unwrap();
+    let py_ver = py_ver.expect("missing Python version");
 
     let vers_path = pyypackages_dir.join(format!("{}.{}", py_ver.major, py_ver.minor));
 
@@ -376,24 +344,23 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &PathBuf) -> Version {
         }
     }
 
-
     let python_name;
     let pip_name;
     #[cfg(target_os = "windows")]
-        {
-            python_name = "python.exe";
-            pip_name = "pip.exe";
-        }
+    {
+        python_name = "python.exe";
+        pip_name = "pip.exe";
+    }
     #[cfg(target_os = "linux")]
-        {
-            python_name = "python";
-            pip_name = "pip";
-        }
+    {
+        python_name = "python";
+        pip_name = "pip";
+    }
     #[cfg(target_os = "macos")]
-        {
-            python_name = "python";
-            pip_name = "pip";
-        }
+    {
+        python_name = "python";
+        pip_name = "pip";
+    }
 
     let bin_path = util::find_bin_path(&vers_path);
 
