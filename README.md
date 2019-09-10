@@ -25,9 +25,9 @@ install the specified version of Python if not already installed.
 There are 2 ways to install:
 - Download a binary from the [releases](https://github.com/David-OConnor/pypackage/releases)
  page. Installers are available for Debian/Ubuntu, and Windows. On Debian or Ubuntu, download and run
-[this deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.2/pypackage_0.0.2_amd64.deb). 
+[this deb](https://github.com/David-OConnor/pypackage/releases/download/0.0.3/pypackage_0.0.3_amd64.deb). 
 On Windows, download and run
-[this installer](https://github.com/David-OConnor/pypackage/releases/download/0.0.2/pypackage-0.0.2-x86_64.msi). 
+[this installer](https://github.com/David-OConnor/pypackage/releases/download/0.0.3/pypackage-0.0.3-x86_64.msi). 
 Alternatively, download the appropriate binary (ie `pypackage.exe` or `pypackage`) and place it somewhere
 accessible by the system path. For example, `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
@@ -46,10 +46,12 @@ creates a folder with the basics
 ## Why add another Python manager?
 `Pipenv` and `Poetry` both address part of this problem.
  Some reasons why this tool is different:
-
-- Its dependency resolution and locking is faster due to using a cached
-database of dependencies, vice downloading and checking each package, or relying
-on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
+ 
+ - It manages Python installations - lets you choose which Python version (≥ 3.4) 
+to use. If one's installed, it uses that. If not, it downloads a binary, stores it
+in `~/python-installs`, and uses that. It lets the user select which Python
+version to use in `pyproject.toml`, then uses that version, installing
+as required.
 
 - By not using Python to install or run, it remains intallation-agnostic and 
 environment-agnostic. This is important for making setup and use as simple and decison-free as
@@ -59,17 +61,16 @@ complications, especially for new users. It's common for Python-based CLI tools
 to not run properly when installed from `pip` due to the `PATH` 
 not being configured in the expected way.
 
-- It manages Python installations - lets you choose which Python version (≥ 3.4) 
-to use. If one's installed, it uses that. If not, it downloads a binary, stores it
-in `~/python-installs`, and uses that. It lets the user select which Python
-version to use in `pyproject.toml`, then automatically uses that version, installing
-as required.
+- Its dependency resolution and locking is faster due to using a cached
+database of dependencies, vice downloading and checking each package, or relying
+on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
 
-- It keeps dependencies in the project directory, in `__pypackages__`, and
-doesn't modify outside files (Other than new Python installs). This is subtle, but reinforces the idea that there's
+- It keeps dependencies in the project directory, in `__pypackages__`. This is subtle, 
+but reinforces the idea that there's
 no hidden state to be concerned with.
 
-- It will always use the specified version of Python. This is a notable problem with `Poetry`; it
+- It will always use the specified version of Python. This is a notable issue, for example,
+ with `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
 
 - Multiple versions of a dependency can be installed, allowing resolution
@@ -82,7 +83,7 @@ some compiled dependencies, and attempting to package something using this will
 trigger an error.
 
 
-## Virtual environments are easy. What's the point of this?
+## My OS comes with Python, and Virtual environments are easy. What's the point of this?
 Hopefully we're not replacing [one problem](https://xkcd.com/1987/) with [another](https://xkcd.com/927/).
 
 Some people like the virtual-environment workflow - it requires only tools included 
@@ -116,14 +117,12 @@ and publish.
 
 
 ## A thoroughly biased feature table
-(Please PR anything here that's innacurate, incomplete, or misleading)
-
 These tools have different scopes and purposes:
 
 | Name | [Pip + venv](https://docs.python.org/3/library/venv.html) | [Pipenv](https://docs.pipenv.org) | [Poetry](https://poetry.eustace.io) | [pyenv](https://github.com/pyenv/pyenv) | [pythonloc](https://github.com/cs01/pythonloc) | [Conda](https://docs.conda.io/en/latest/) |this |
 |------|------------|--------|--------|-------|-----------|-------|-----|
 | **Manages dependencies** | ✓ | ✓ | ✓ | | | ✓ | ✓|
-| **Manages Python installations** | | | | ✓ | | | ✓ |
+| **Manages Python installations** | | | | ✓ | | ✓ | ✓ |
 | **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
 | **Included with Python** | ✓ | | | | | | |
 | **Stores packages with project** | | | | | ✓ | | ✓|
@@ -153,7 +152,8 @@ author = "John Hackworth"
 numpy = "^1.16.4"
 diffeqpy = "1.1.0"
 ```
-The `[tool.pypackage]` section is used for metadata, and isn't required unless
+The `[tool.pypackage]` section is used for metadata. The only required item in it is
+ `py_version`, unless unless
 building and distributing a package. The `[tool.pypyackage.dependencies]` section
 contains all dependencies, and is an analog to `requirements.txt`. 
 
@@ -276,7 +276,6 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Adding a dependency via the CLI with a specific version constraint, or extras.
 - Developer requirements
 - Packaging and publishing projects that use compiled extensions
-- Download and install a Python version you specify, if not already installed
 
 
 ## Building and uploading your project to PyPi
@@ -334,6 +333,7 @@ Example API calls: `https://pydeps.herokuapp.com/requests`,
 `https://pydeps.herokuapp.com/requests/2.21.0`. 
 This pulls all top-level
 dependencies for the `requests` package, and the dependencies for version `2.21.0` respectively.
+There is also a `POST` API for pulling info on specified versions.
  The first time this command is run
 for a package/version combo, it may be slow. Subsequent calls, by anyone,
 should be fast. This is due to having to download and install each package

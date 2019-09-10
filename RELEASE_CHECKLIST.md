@@ -4,7 +4,8 @@ This is a list of steps to complete when making a new release.
 
 1. Review the commit and PR history since last release. Ensure that all relevant
 changes are included in `CHANGELOG.md`
-1. Ensure  the readme and homepage website reflects API changes.
+1. Ensure  the readme and homepage website reflects API changes. This includes changing the download
+links to reflect the latest version.
 1. Ensure the version listed in `Cargo.toml` is updated
 1. Update Rust tools: `rustup update`
 1. Run `cargo test`, `cargo fmt` and `cargo clippy`

@@ -10,6 +10,7 @@ use std::{collections::HashMap, env, error::Error, fs, io, path::PathBuf, str::F
 
 use crate::dep_resolution::WarehouseRelease;
 use crate::install::PackageType;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use structopt::StructOpt;
 
@@ -134,6 +135,12 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     /// as a shortcut.
     #[structopt(name = "run")] // We don't need to invoke this directly, but the option exists
     Run {
+        #[structopt(name = "args")]
+        args: Vec<String>,
+    },
+    /// Run a standalone script not associated with a project
+    #[structopt(name = "script")]
+    Script {
         #[structopt(name = "args")]
         args: Vec<String>,
     },
@@ -1027,9 +1034,7 @@ fn main() {
         .expect("Can't find current path")
         .join("__pypackages__");
 
-    // New doesn't execute any other logic. Init must execute befor the rest of the logic,
-    // since it sets up a new (or modified) `pyproject.toml`. The rest of the commands rely
-    // on the virtualenv and `pyproject.toml`, so make sure those are set up before processing them.
+    // Run subcommands that don't require info about the environment.
     match subcmd {
         SubCommand::New { name } => {
             new(&name).expect("Problem creating project");
@@ -1113,7 +1118,22 @@ fn main() {
                 }
             };
 
-            // todo: Write the specified version to pyproject.toml here.
+            let f = fs::File::open(&cfg_filename)
+                .expect("Unable to read pyproject.toml while adding Python version");
+            let mut new_data = String::new();
+            for line in BufReader::new(f).lines() {
+                if let Ok(l) = line {
+                    if l.starts_with("py_version") {
+                        new_data
+                            .push_str(&format!("py_version = \"{}\"\n", specified.to_string2()));
+                    } else {
+                        new_data.push_str(&l);
+                    }
+                }
+            }
+
+            fs::write(cfg_filename, new_data)
+                .expect("Unable to write pyproject.toml while adding Python version");
 
             specified
         }
@@ -1170,6 +1190,7 @@ fn main() {
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
 
+    // Now handle subcommands that require info about the environment
     match subcmd {
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
@@ -1249,12 +1270,7 @@ fn main() {
             return;
         }
         SubCommand::List {} => util::show_installed(&lib_path),
-        // We already handled these
-        SubCommand::Init {} => (),
-        SubCommand::New { .. } => (),
-        SubCommand::Switch { .. } => (),
-        SubCommand::Reset {} => (),
-        SubCommand::Clear {} => (),
+        _ => (),
     }
 }
 

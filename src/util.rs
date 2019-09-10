@@ -5,10 +5,11 @@ use crate::{
 };
 use crossterm::{Color, Colored};
 use regex::Regex;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
 use std::str::FromStr;
 use std::{env, fs, path::PathBuf, process, thread, time};
 use tar::Archive;
+use xz2::read::XzDecoder;
 
 /// Print in a color, then reset formatting.
 pub fn print_color(message: &str, color: Color) {
@@ -384,7 +385,10 @@ pub fn extract_zip(file: &fs::File, out_path: &PathBuf, rename: &Option<(String,
 
 pub fn unpack_tar_xz(archive_path: &PathBuf, dest: &PathBuf) {
     let archive_bytes = fs::read(archive_path).expect("Problem reading Python archive as bytes");
-    let tar = lzma::decompress(&archive_bytes).expect("Problem decompressing Python .xz file");
+
+    let mut tar: Vec<u8> = Vec::new();
+    let mut decompressor = XzDecoder::new(&archive_bytes[..]);
+    decompressor.read_to_end(&mut tar).expect("Problem reading archive bytes");
 
     // We've decompressed the .xz; now unpack the tar.
     let mut archive = Archive::new(&tar[..]);

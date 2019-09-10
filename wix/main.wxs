@@ -68,13 +68,13 @@
                       2. Comment out or remove the `ComponentRef` tag with the "License" Id
                          attribute value further down in this file.
                     -->
-                    <Component Id='License' Guid='*' Win64='$(var.Win64)'>
+                    <!-- <Component Id='License' Guid='*' Win64='$(var.Win64)'>
                         <File Id='LicenseFile'
                             Name='License.rtf'
                             DiskId='1'
                             Source='wix\License.rtf'
                             KeyPath='yes'/>
-                    </Component>
+                    </Component> -->
                     
                     <Directory Id='Bin' Name='bin'>
                         <Component Id='Path' Guid='53C255B7-5193-49E5-9056-48B8336F1F8D' Win64='$(var.Win64)' KeyPath='yes'>
@@ -113,7 +113,7 @@
               Comment out or remove the following `ComponentRef` tag to remove
               the license sidecar file from the installer.
             -->
-            <ComponentRef Id='License'/>
+            <!-- <ComponentRef Id='License'/> -->
             
             <ComponentRef Id='pypackageBinary'/>
             <Feature

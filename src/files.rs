@@ -156,7 +156,7 @@ pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
     }
 
     fs::write(filename, result)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+        .expect("Unable to write pyproject.toml while attempting to add a dependency");
 }
 
 /// Remove dependencies from pyproject.toml.
