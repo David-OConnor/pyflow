@@ -66,8 +66,8 @@ impl FromStr for Os {
 
 #[derive(StructOpt, Debug)]
 //#[structopt(raw(setting = "structopt::clap::AppSettings::suggestions"))]
-//#[structopt(name = "Pypackage", about = "Python packaging and publishing", structopt::clap::AppSettings::suggestions = "false")]
-#[structopt(name = "Pypackage", about = "Python packaging and publishing")]
+//#[structopt(name = "pyflow", about = "Python packaging and publishing", structopt::clap::AppSettings::suggestions = "false")]
+#[structopt(name = "pyflow", about = "Python packaging and publishing")]
 struct Opt {
     #[structopt(subcommand)]
     subcmds: Option<SubCommand>,
@@ -89,10 +89,10 @@ enum SubCommand {
     #[structopt(
         name = "install",
         help = "
-Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
+Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Example:
 
-`pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
-`pypackage install numpy scipy`: install `numpy` and `scipy`.
+`pyflow install`: sync your installation with `pyproject.toml`, or `pyflow.lock` if it exists.
+`pyflow install numpy scipy`: install `numpy` and `scipy`.
 "
     )]
     Install {
@@ -132,7 +132,7 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
     /// Remove all cached packages.  Eg to free up hard drive space.
     #[structopt(name = "clear")]
     Clear,
-    /// Run a CLI script like `ipython` or `black`. Note that you can simply run `pypackage black`
+    /// Run a CLI script like `ipython` or `black`. Note that you can simply run `pyflow black`
     /// as a shortcut.
     #[structopt(name = "run")] // We don't need to invoke this directly, but the option exists
     Run {
@@ -145,7 +145,7 @@ Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Exa
         #[structopt(name = "args")]
         args: Vec<String>,
     },
-    /// Change Python versions for this project. eg `pypackage swtich 3.7`. Equivalent to setting
+    /// Change Python versions for this project. eg `pyflow swtich 3.7`. Equivalent to setting
     /// `py_version` in `pyproject.toml`.
     #[structopt(name = "switch")]
     Switch {
@@ -175,7 +175,7 @@ pub struct Config {
     package_url: Option<String>,
     readme_filename: Option<String>,
     //    entry_points: HashMap<String, Vec<String>>, // todo option?
-    scripts: HashMap<String, String>, //todo: put under [tool.pypackage.scripts] ?
+    scripts: HashMap<String, String>, //todo: put under [tool.pyflow.scripts] ?
                                       //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
 }
 
@@ -199,7 +199,7 @@ impl Config {
         };
         let mut result = Self::default();
 
-        // Parse Poetry first, since we'll use PyPackage if there's a conflict.
+        // Parse Poetry first, since we'll use pyflow if there's a conflict.
         if let Some(po) = decoded.tool.poetry {
             if let Some(v) = po.name {
                 result.name = Some(v);
@@ -245,7 +245,7 @@ impl Config {
                 )
             }
 
-            // todo: DRY (c+p) from pypackage dependency parsing, other than parsing python version here,
+            // todo: DRY (c+p) from pyflow dependency parsing, other than parsing python version here,
             // todo which only poetry does.
             if let Some(deps) = po.dependencies {
                 for (name, data) in deps {
@@ -290,7 +290,7 @@ impl Config {
             }
         }
 
-        if let Some(pp) = decoded.tool.pypackage {
+        if let Some(pp) = decoded.tool.pyflow {
             if let Some(v) = pp.name {
                 result.name = Some(v);
             }
@@ -394,7 +394,7 @@ impl Config {
              file's structure.\n"
                 .to_string();
 
-        result.push_str("\n[tool.pypackage]\n");
+        result.push_str("\n[tool.pyflow]\n");
         if let Some(name) = &self.name {
             result.push_str(&("name = \"".to_owned() + name + "\"\n"));
         } else {
@@ -424,7 +424,7 @@ impl Config {
         // todo: more fields.
 
         result.push_str("\n\n");
-        result.push_str("[tool.pypackage.dependencies]\n\n");
+        result.push_str("[tool.pyflow.dependencies]\n\n");
         for dep in self.reqs.iter() {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
@@ -464,7 +464,7 @@ __pypackages__/
     let pyproject_init = &format!(
         r##"#See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
 
-[tool.pypackage]
+[tool.pyflow]
 name = "{}"
 py_version = "3.7"
 version = "0.1.0"
@@ -475,7 +475,7 @@ pyackage_url = "https://test.pypi.org"
 # pyackage_url = "https://pypi.org"
 
 
-[tool.pypackage.dependencies]
+[tool.pyflow.dependencies]
 
 "##,
         name
@@ -492,8 +492,8 @@ pyackage_url = "https://test.pypi.org"
 }
 
 /// Read dependency data from a lock file.
-fn read_lock(filename: &str) -> Result<(Lock), Box<dyn Error>> {
-    let data = fs::read_to_string(filename)?;
+fn read_lock(path: &PathBuf) -> Result<(Lock), Box<dyn Error>> {
+    let data = fs::read_to_string(path)?;
     Ok(toml::from_str(&data)?)
 }
 
@@ -779,7 +779,7 @@ fn run_cli_tool(
     cfg: &Config,
     args: Vec<String>,
 ) {
-    // Allow both `pypackage run ipython` (args), and `pypackage ipython` (opt.script)
+    // Allow both `pyflow run ipython` (args), and `pyflow ipython` (opt.script)
     if args.is_empty() {
         return;
     }
@@ -787,7 +787,7 @@ fn run_cli_tool(
     let name = match args.get(0) {
         Some(a) => a.clone(),
         None => {
-            abort("`run` must be followed by the script to run, eg `pypackage run black`");
+            abort("`run` must be followed by the script to run, eg `pyflow run black`");
             unreachable!()
         }
     };
@@ -835,7 +835,7 @@ fn run_cli_tool(
     //            None => {
     let abort_msg = format!(
         "Problem running the script {}. Is it installed? \
-         Try running `pypackage install {}`",
+         Try running `pyflow install {}`",
         name, name
     );
     let script_path = vers_path.join("bin").join(name);
@@ -887,11 +887,11 @@ fn find_deps_from_script(file_path: &PathBuf) -> Vec<String> {
 /// todo: We're using script name as unique identifier; address this in the future,
 /// todo perhaps with an id in a comment at the top of a file
 fn run_script(script_env_path: &PathBuf, cache_path: &PathBuf, os: Os, args: &mut Vec<String>) {
-    // todo: DRY with run_script
+    // todo: DRY with run_cli_tool and subcommand::Install
     let filename = match args.get(0) {
         Some(a) => a.clone(),
         None => {
-            abort("`run` must be followed by the script to run, eg `pypackage script myscript.py`");
+            abort("`run` must be followed by the script to run, eg `pyflow script myscript.py`");
             unreachable!()
         }
     };
@@ -909,10 +909,10 @@ fn run_script(script_env_path: &PathBuf, cache_path: &PathBuf, os: Os, args: &mu
     }
     let cfg_vers = Version::new(3, 7, 0); // todo temp!
 
-    let pypackages_dir = env_path.join("__pypackages__");
-    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir);
+    let pyflows_dir = env_path.join("__pypackages__");
+    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pyflows_dir);
 
-    let vers_path = pypackages_dir.join(&format!(
+    let vers_path = pyflows_dir.join(&format!(
         "{}.{}",
         py_vers.major.to_string(),
         py_vers.minor.to_string()
@@ -923,20 +923,43 @@ fn run_script(script_env_path: &PathBuf, cache_path: &PathBuf, os: Os, args: &mu
     let lock_path = env_path.join("pyproject.lock");
 
     let deps = find_deps_from_script(&PathBuf::from(&filename));
+
+    let mut found_lock = false;
+    let lock = match read_lock(&lock_path) {
+        Ok(l) => {
+            found_lock = true;
+            l
+        }
+        Err(_) => Lock::default(),
+    };
+
+    let lockpacks = lock.package.unwrap_or_else(|| vec![]);
+
     let reqs: Vec<Req> = deps
         .iter()
         .map(|name| {
-            let (fmtd_name, version, _) = dep_resolution::get_version_info(&name)
-                .expect(&format!("Problem getting version info for {}", &name));
+            let (fmtd_name, version) = match lockpacks
+                .iter()
+                .filter(|lp| util::compare_names(&lp.name, name))
+                .next()
+            {
+                Some(lp) => (
+                    lp.name.clone(),
+                    Version::from_str(&lp.version).expect("Problem getting version"),
+                ),
+                None => {
+                    let vinfo = dep_resolution::get_version_info(&name)
+                        .expect(&format!("Problem getting version info for {}", &name));
+                    (vinfo.0, vinfo.1)
+                }
+            };
+
             Req::new(
                 fmtd_name.clone(),
                 vec![Constraint::new(ReqType::Caret, version)],
             )
         })
         .collect();
-
-    // todo temp:
-    let lockpacks = vec![];
 
     sync(
         &bin_path,
@@ -1085,23 +1108,41 @@ fn sync(
 
 fn main() {
     let cfg_filename = "pyproject.toml";
-    let lock_filename = "pypackage.lock";
+    let lock_filename = "pyflow.lock";
     let python_installs_dir = dirs::home_dir()
         .expect("Problem finding home directory")
         .join(".python-installs");
     let cache_path = python_installs_dir.join("dependency-cache");
     //    let script_env_path = python_installs_dir.join("script-envs");
 
-    let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
         None => SubCommand::Run { args: opt.script },
     };
 
+    if let SubCommand::Script { mut args } = subcmd {
+        // do this first, before before trying to parse a config.
+        // todo: DRY
+        let cache_path = python_installs_dir.join("dependency-cache");
+        let script_env_path = python_installs_dir.join("script-envs");
+
+        #[cfg(target_os = "windows")]
+        let os = Os::Windows;
+        #[cfg(target_os = "linux")]
+        let os = Os::Linux;
+        #[cfg(target_os = "macos")]
+        let os = Os::Mac;
+
+        run_script(&script_env_path, &cache_path, os, &mut args);
+        return;
+    }
+
     let pypackages_dir = env::current_dir()
         .expect("Can't find current path")
         .join("__pypackages__");
+
+    let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
 
     // Run subcommands that don't require info about the environment.
     match subcmd {
@@ -1131,7 +1172,7 @@ fn main() {
             }
             if Path::new(lock_filename).exists() {
                 if fs::remove_file(lock_filename).is_err() {
-                    abort("Problem removing `pypackage.lock`")
+                    abort("Problem removing `pyflow.lock`")
                 }
             }
             util::print_color("Reset complete", Color::Green);
@@ -1171,21 +1212,21 @@ fn main() {
                 };
             }
         }
-        SubCommand::Script { mut args } => {
-            // todo: DRY
-            let cache_path = python_installs_dir.join("dependency-cache");
-            let script_env_path = python_installs_dir.join("script-envs");
-
-            #[cfg(target_os = "windows")]
-            let os = Os::Windows;
-            #[cfg(target_os = "linux")]
-            let os = Os::Linux;
-            #[cfg(target_os = "macos")]
-            let os = Os::Mac;
-
-            run_script(&script_env_path, &cache_path, os, &mut args);
-            return;
-        }
+        //        SubCommand::Script { mut args } => {
+        //            // todo: DRY
+        //            let cache_path = python_installs_dir.join("dependency-cache");
+        //            let script_env_path = python_installs_dir.join("script-envs");
+        //
+        //            #[cfg(target_os = "windows")]
+        //            let os = Os::Windows;
+        //            #[cfg(target_os = "linux")]
+        //            let os = Os::Linux;
+        //            #[cfg(target_os = "macos")]
+        //            let os = Os::Mac;
+        //
+        //            run_script(&script_env_path, &cache_path, os, &mut args);
+        //            return;
+        //        }
         _ => (),
     }
 
@@ -1230,7 +1271,7 @@ fn main() {
     let bin_path = util::find_bin_path(&vers_path);
 
     let mut found_lock = false;
-    let lock = match read_lock(lock_filename) {
+    let lock = match read_lock(&PathBuf::from(lock_filename)) {
         Ok(l) => {
             found_lock = true;
             l
@@ -1251,7 +1292,7 @@ fn main() {
     match subcmd {
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
-        // We use data from three sources: `pyproject.toml`, `pypackage.lock`, and
+        // We use data from three sources: `pyproject.toml`, `pyflow.lock`, and
         // the currently-installed packages, found by crawling metadata in the `lib` path.
         // See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages } => {

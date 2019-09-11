@@ -18,7 +18,7 @@ pub struct Pyproject {
 
 #[derive(Debug, Deserialize)]
 pub struct Tool {
-    pub pypackage: Option<Pypackage>,
+    pub pyflow: Option<pyflow>,
     pub poetry: Option<Poetry>,
 }
 
@@ -62,7 +62,7 @@ pub struct DepComponentPoetry {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Pypackage {
+pub struct pyflow {
     pub py_version: Option<String>,
     pub name: Option<String>,
     pub version: Option<String>,
@@ -78,7 +78,7 @@ pub struct Pypackage {
     pub package_url: Option<String>,
     pub readme_filename: Option<String>,
     //    pub entry_points: Option<HashMap<String, Vec<String>>>,
-    pub scripts: Option<HashMap<String, String>>, // todo. Maybe [tool.pypackage.scripts] , ie a standalone table?
+    pub scripts: Option<HashMap<String, String>>, // todo. Maybe [tool.pyflow.scripts] , ie a standalone table?
 
     pub dependencies: Option<HashMap<String, DepComponentWrapper>>,
 
@@ -130,7 +130,7 @@ pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
     for (i, line) in data.lines().enumerate() {
         result.push_str(line);
         result.push_str("\n");
-        if line == "[tool.pypackage.dependencies]" {
+        if line == "[tool.pyflow.dependencies]" {
             in_dep = true;
             continue;
         }
@@ -180,7 +180,7 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
             continue;
         }
 
-        if line == "[tool.pypackage.dependencies]" {
+        if line == "[tool.pyflow.dependencies]" {
             in_dep = true;
             result.push_str(line);
             result.push_str("\n");

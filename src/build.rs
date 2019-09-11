@@ -123,14 +123,14 @@ pub(crate) fn build(
             util::abort(&format!(
                 "{} is installed with multiple versions. We can't create a package that \
                  relies on multiple versions of a dependency - \
-                 this would cause this package not work work correctly if not used with Pypackage.",
+                 this would cause this package not work work correctly if not used with pyflow.",
                 lp.name
             ))
         }
     }
 
     // todo: Check if they exist; only install if they don't.
-    let dummy_setup_fname = "setup_temp_pypackage.py";
+    let dummy_setup_fname = "setup_temp_pyflow.py";
 
     Command::new(bin_path.join("python"))
         .args(&[

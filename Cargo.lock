@@ -928,7 +928,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pypackage"
+name = "pyflow"
 version = "0.0.4"
 dependencies = [
  "crossterm 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",

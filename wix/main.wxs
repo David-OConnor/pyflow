@@ -33,7 +33,7 @@
 
     <Product
         Id='*'
-        Name='pypackage'
+        Name='pyflow'
         UpgradeCode='ED2A9232-4F72-47D8-A244-831D6DE1CE0A'
         Manufacturer="David O'Connor"
         Language='1033'
@@ -56,11 +56,11 @@
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
-        <Property Id='DiskPrompt' Value='pypackage Installation'/>
+        <Property Id='DiskPrompt' Value='pyflow Installation'/>
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
-                <Directory Id='APPLICATIONFOLDER' Name='pypackage'>
+                <Directory Id='APPLICATIONFOLDER' Name='pyflow'>
                     <!--
                       Disabling the license sidecar file in the installer is a two step process:
 
@@ -87,12 +87,12 @@
                                 Action='set'
                                 System='yes'/>
                         </Component>
-                        <Component Id='pypackageBinary' Guid='*' Win64='$(var.Win64)'>
+                        <Component Id='pyflowBinary' Guid='*' Win64='$(var.Win64)'>
                             <File
-                                Id='pypackageEXE'
-                                Name='pypackage.exe'
+                                Id='pyflowEXE'
+                                Name='pyflow.exe'
                                 DiskId='1'
-                                Source='target\release\pypackage.exe'
+                                Source='target\release\pyflow.exe'
                                 KeyPath='yes'/>
                         </Component>
                     </Directory>
@@ -115,7 +115,7 @@
             -->
             <!-- <ComponentRef Id='License'/> -->
             
-            <ComponentRef Id='pypackageBinary'/>
+            <ComponentRef Id='pyflowBinary'/>
             <Feature
                 Id='Environment'
                 Title='PATH Environment Variable'
@@ -138,7 +138,7 @@
         <!--<Icon Id='ProductICO' SourceFile='wix\Product.ico'/>-->
         <!--<Property Id='ARPPRODUCTICON' Value='ProductICO' />-->
 
-        <Property Id='ARPHELPLINK' Value='https://www.github.com/David-OConnor/pypackage'/>
+        <Property Id='ARPHELPLINK' Value='https://www.github.com/David-OConnor/pyflow'/>
         
         <UI>
             <UIRef Id='WixUI_FeatureTree'/>

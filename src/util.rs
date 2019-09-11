@@ -35,7 +35,7 @@ pub fn abort(message: &str) {
 }
 
 /// Find which virtual environments exist.
-pub fn find_venvs(pypackages_dir: &PathBuf) -> Vec<(u32, u32)> {
+pub fn find_venvs(pyflows_dir: &PathBuf) -> Vec<(u32, u32)> {
     let py_versions: &[(u32, u32)] = &[
         (2, 6),
         (2, 7),
@@ -58,7 +58,7 @@ pub fn find_venvs(pypackages_dir: &PathBuf) -> Vec<(u32, u32)> {
 
     let mut result = vec![];
     for (maj, mi) in py_versions.iter() {
-        let venv_path = pypackages_dir.join(&format!("{}.{}/.venv", maj, mi));
+        let venv_path = pyflows_dir.join(&format!("{}.{}/.venv", maj, mi));
 
         if (venv_path.join("bin/python").exists() && venv_path.join("bin/pip").exists())
             || (venv_path.join("Scripts/python.exe").exists()
@@ -403,8 +403,8 @@ pub fn unpack_tar_xz(archive_path: &PathBuf, dest: &PathBuf) {
 }
 
 /// Find venv info, creating a venv as required.
-pub fn find_venv_info(cfg_vers: &Version, pypackages_dir: &PathBuf) -> (PathBuf, Version) {
-    let venvs = find_venvs(&pypackages_dir);
+pub fn find_venv_info(cfg_vers: &Version, pyflows_dir: &PathBuf) -> (PathBuf, Version) {
+    let venvs = find_venvs(&pyflows_dir);
     // The version's explicitly specified; check if an environment for that version
     let compatible_venvs: Vec<&(u32, u32)> = venvs
         .iter()
@@ -415,12 +415,12 @@ pub fn find_venv_info(cfg_vers: &Version, pypackages_dir: &PathBuf) -> (PathBuf,
     let py_vers;
     match compatible_venvs.len() {
         0 => {
-            let vers = py_versions::create_venv(&cfg_vers, &pypackages_dir);
-            vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
+            let vers = py_versions::create_venv(&cfg_vers, &pyflows_dir);
+            vers_path = pyflows_dir.join(&format!("{}.{}", vers.major, vers.minor));
             py_vers = Version::new_short(vers.major, vers.minor); // Don't include patch.
         }
         1 => {
-            vers_path = pypackages_dir.join(&format!(
+            vers_path = pyflows_dir.join(&format!(
                 "{}.{}",
                 compatible_venvs[0].0, compatible_venvs[0].1
             ));

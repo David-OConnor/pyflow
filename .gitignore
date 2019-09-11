@@ -9,7 +9,7 @@
 setup.py
 requirements.txt
 Pipfile
-pypackage.lock
+pyflow.lock
 pyproject.toml
 /__pypackages__
 script.py

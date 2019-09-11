@@ -1,11 +1,11 @@
 [package]
-name = "pypackage"
+name = "pyflow"
 version = "0.0.4"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 description = "A modern Python dependency manager"
 license = "MIT"
-homepage = "https://www.github.com/David-OConnor/pypackage"
-repository = "https://www.github.com/David-OConnor/pypackage"
+homepage = "https://www.github.com/David-OConnor/pyflow"
+repository = "https://www.github.com/David-OConnor/pyflow"
 readme = "README.md"
 edition = "2018"
 keywords = ["python","dependency", "packaging", "build"]
@@ -23,8 +23,8 @@ xz2 = "^0.1.6"
 regex = "^1.1.9"
 reqwest = "^0.9.19"
 ring = "^0.16.5"
-# We disable, by ommission, suggestions, so it doesn't think `pypackage ipython` is a misspelling
-# of `pypackage python`.
+# We disable, by ommission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
+# of `pyflow python`.
 structopt = { version = "0.3.1", default_features = false, features = ["color", "wrap_help", "doc"] }
 serde = {version = "^1.0.92", features = ["derive"]}
 tar = "^0.4.26"
