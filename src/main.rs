@@ -10,7 +10,6 @@ use std::{collections::HashMap, env, error::Error, fs, io, path::PathBuf, str::F
 
 use crate::dep_resolution::WarehouseRelease;
 use crate::install::PackageType;
-use crate::py_versions::create_venv;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use structopt::StructOpt;
@@ -492,13 +491,13 @@ pyackage_url = "https://test.pypi.org"
 }
 
 /// Read dependency data from a lock file.
-fn read_lock(path: &PathBuf) -> Result<(Lock), Box<dyn Error>> {
+fn read_lock(path: &Path) -> Result<(Lock), Box<dyn Error>> {
     let data = fs::read_to_string(path)?;
     Ok(toml::from_str(&data)?)
 }
 
 /// Write dependency data to a lock file.
-fn write_lock(path: &PathBuf, data: &Lock) -> Result<(), Box<dyn Error>> {
+fn write_lock(path: &Path, data: &Lock) -> Result<(), Box<dyn Error>> {
     let data = toml::to_string(data)?;
     fs::write(path, data)?;
     Ok(())
@@ -638,9 +637,9 @@ fn find_best_release(
 
 /// Install/uninstall deps as required from the passed list, and re-write the lock file.
 fn sync_deps(
-    bin_path: &PathBuf,
-    lib_path: &PathBuf,
-    cache_path: &PathBuf,
+    bin_path: &Path,
+    lib_path: &Path,
+    cache_path: &Path,
     lock_packs: &[LockPackage],
     installed: &[(String, Version, Vec<String>)],
     os: Os,
@@ -773,9 +772,9 @@ fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) ->
 
 /// Execute a python CLI tool, either specified in `pyproject.toml`, or in a dependency.
 fn run_cli_tool(
-    lib_path: &PathBuf,
-    bin_path: &PathBuf,
-    vers_path: &PathBuf,
+    lib_path: &Path,
+    bin_path: &Path,
+    vers_path: &Path,
     cfg: &Config,
     args: Vec<String>,
 ) {
@@ -854,27 +853,27 @@ fn run_cli_tool(
     }
 }
 
-/// Guess dependencies by parsing a script's imports.
-fn find_deps_from_script(file_path: &PathBuf) -> Vec<String> {
+/// Find a script's dependencies from a variable: `__requires__ = [dep1, dep2]`
+fn find_deps_from_script(file_path: &Path) -> Vec<String> {
     // todo: Helper for this type of logic? We use it several times in the program.
     let f = fs::File::open(file_path).expect("Problem opening the Python script file.");
 
-    // These regexes will stop at dots, including only the part before, as we want.
-    let re1 = Regex::new(r"^import\s+([a-zA-Z\-0-9_]+)\.*$").unwrap();
-    let re2 = Regex::new(r"^import\s+([a-zA-Z\-0-9_]+)\.*\s+as\s+.*$").unwrap();
-    // The commented out one below looks more accurate, but can't get it to work, and this appears to work fine.
-    //    let re3 = Regex::new(r"^from\s+([a-zA-Z\-0-9_]+)\.*\s+import\s+.*$").unwrap();
-    let re3 = Regex::new(r"^from\s+([a-zA-Z\-0-9_]+).*$").unwrap();
+    let re = Regex::new(r"^__requires__\s*=\s*\[(.*?)\]$").unwrap();
 
-    let mut result = Vec::new();
+    let mut result = vec![];
     for line in BufReader::new(f).lines() {
         if let Ok(l) = line {
-            if let Some(c) = re1.captures(&l) {
-                result.push(c.get(1).unwrap().as_str().to_owned())
-            } else if let Some(c) = re2.captures(&l) {
-                result.push(c.get(1).unwrap().as_str().to_owned())
-            } else if let Some(c) = re3.captures(&l) {
-                result.push(c.get(1).unwrap().as_str().to_owned())
+            if let Some(c) = re.captures(&l) {
+                let deps_list = c.get(1).unwrap().as_str().to_owned();
+                let deps: Vec<&str> = deps_list.split(',').collect();
+                result = deps
+                    .into_iter()
+                    .map(|d| d.to_owned()
+                        .replace(" ", "")
+                        .replace("\"", "")
+                        .replace("'", "")
+                    )
+                    .collect();
             }
         }
     }
@@ -886,7 +885,7 @@ fn find_deps_from_script(file_path: &PathBuf) -> Vec<String> {
 /// // todo: Perhaps move this logic to its own file, if it becomes long.
 /// todo: We're using script name as unique identifier; address this in the future,
 /// todo perhaps with an id in a comment at the top of a file
-fn run_script(script_env_path: &PathBuf, cache_path: &PathBuf, os: Os, args: &mut Vec<String>) {
+fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<String>) {
     // todo: DRY with run_cli_tool and subcommand::Install
     let filename = match args.get(0) {
         Some(a) => a.clone(),
@@ -980,14 +979,14 @@ fn run_script(script_env_path: &PathBuf, cache_path: &PathBuf, os: Os, args: &mu
 /// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
 /// the config and lock files.
 fn sync(
-    bin_path: &PathBuf,
-    lib_path: &PathBuf,
-    cache_path: &PathBuf,
+    bin_path: &Path,
+    lib_path: &Path,
+    cache_path: &Path,
     lockpacks: &[LockPackage],
     reqs: &[Req],
     os: Os,
     py_vers: &Version,
-    lock_path: &PathBuf,
+    lock_path: &Path,
 ) {
     let installed = util::find_installed(&lib_path);
     // We control the lock format, so this regex will always match

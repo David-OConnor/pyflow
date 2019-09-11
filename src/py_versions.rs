@@ -5,7 +5,7 @@ use crate::dep_types::Version;
 use crate::util;
 use crossterm::Color;
 use std::error::Error;
-use std::{collections::HashMap, fmt, fs, io, path::PathBuf, process};
+use std::{collections::HashMap, fmt, fs, io, path::Path, process};
 
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
@@ -79,7 +79,7 @@ enum Os {
 //    fn to_string(&self) -> String {}
 //}
 
-fn download(py_install_path: &PathBuf, version: &Version) {
+fn download(py_install_path: &Path, version: &Version) {
     // We use the `.xz` format due to its small size compared to `.zip`. On order half the size.
     #[cfg(target_os = "windows")]
     let os = "windows";
@@ -253,7 +253,7 @@ fn find_installed_versions() -> Vec<Version> {
 
 /// Create a new virtual environment, and install Wheel.
 //fn create_venv(cfg_v: &Version, py_install: PyInstall, pyypackages_dir: &PathBuf) -> Version {
-pub fn create_venv(cfg_v: &Version, pyypackages_dir: &PathBuf) -> Version {
+pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
     let python_installs_dir = dirs::home_dir()
         .expect("Problem finding home directory")
         .join(".python-installs"); // todo dry

@@ -3,10 +3,10 @@
 [![Build Status](https://travis-ci.org/David-OConnor/pyflow.svg?branch=master)](https://travis-ci.org/David-OConnor/pyflow)
 
 
-# Py Packages
+# Pyflow
 
 *Important: While this tool aims to install Python as required, we're still working through
-issues getting flexible binaries. FOr now, assume you must have the version of Python you wish
+issues getting flexible binaries. For now, assume you must have the version of Python you wish
 to use installed, and available on the path.*
 
 This tool manages Python installations and dependencies. It implements
@@ -47,7 +47,8 @@ creates a folder with the basics
 - Run `pyflow python` to run Python
 
 ## Quick-and-dirty start for quick-and-dirty scripts
-- Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
+- Add the line `__requires__ = [numpy, requests]` somewhere in the script, where `numpy` and `requsts` are dependencies
+the script requires. Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
 This will automatically set up an isolated environment for this script, and install
 dependencies as required, without altering any other environment. This is a safe way
 to run one-off Python files that aren't attached to a project, but have dependencies.

@@ -2,7 +2,7 @@ use crate::util;
 use regex::Regex;
 //use std::process::Stdio;
 use std::{error::Error, fmt};
-use std::{path::PathBuf, process::Command};
+use std::{path::Path, process::Command};
 
 #[derive(Debug)]
 struct _ExecutionError {
@@ -58,7 +58,7 @@ pub fn find_py_version(alias: &str) -> Option<crate::Version> {
 /// Additionally, create the __pypackages__ directory if not already created.
 pub(crate) fn create_venv(
     py_alias: &str,
-    lib_path: &PathBuf,
+    lib_path: &Path,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
@@ -72,8 +72,8 @@ pub(crate) fn create_venv(
 
 // todo: DRY for using a path instead of str. use impl Into<PathBuf> ?
 pub(crate) fn create_venv2(
-    py_alias: &PathBuf,
-    lib_path: &PathBuf,
+    py_alias: &Path,
+    lib_path: &Path,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
@@ -86,8 +86,8 @@ pub(crate) fn create_venv2(
 }
 
 pub(crate) fn run_python(
-    bin_path: &PathBuf,
-    lib_path: &PathBuf,
+    bin_path: &Path,
+    lib_path: &Path,
     args: &[String],
 ) -> Result<(), Box<dyn Error>> {
     util::set_pythonpath(lib_path);

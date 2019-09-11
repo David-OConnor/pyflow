@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::Path;
 
 /// This nested structure is required based on how the `toml` crate handles dots.
 #[derive(Debug, Deserialize)]
@@ -18,7 +18,7 @@ pub struct Pyproject {
 
 #[derive(Debug, Deserialize)]
 pub struct Tool {
-    pub pyflow: Option<pyflow>,
+    pub pyflow: Option<Pyflow>,
     pub poetry: Option<Poetry>,
 }
 
@@ -62,7 +62,7 @@ pub struct DepComponentPoetry {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct pyflow {
+pub struct Pyflow {
     pub py_version: Option<String>,
     pub name: Option<String>,
     pub version: Option<String>,
@@ -324,7 +324,7 @@ pub fn parse_pipfile(cfg: &mut Config) {
 }
 
 /// Update the config file with a new version.
-pub fn change_py_vers(cfg_path: &PathBuf, specified: &Version) {
+pub fn change_py_vers(cfg_path: &Path, specified: &Version) {
     let f = fs::File::open(&cfg_path)
         .expect("Unable to read pyproject.toml while adding Python version");
     let mut new_data = String::new();

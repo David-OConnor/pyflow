@@ -4,7 +4,7 @@ use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
-use std::{fs, io, io::BufRead, path::PathBuf, process::Command};
+use std::{fs, io, io::BufRead, path::Path, process::Command};
 use tar::Archive;
 
 #[derive(Copy, Clone, Debug)]
@@ -31,7 +31,7 @@ fn sha256_digest<R: io::Read>(mut reader: R) -> Result<digest::Digest, std::io::
 
 /// If the setup.py file uses `distutils.core`, replace with `setuptools`. This is required to build
 /// a wheel. Eg, replace `from distutils.core import setup` with `from setuptools import setup`.
-fn replace_distutils(setup_path: &PathBuf) {
+fn replace_distutils(setup_path: &Path) {
     let setup_text =
         fs::read_to_string(setup_path).expect("Can't find setup.py on a source distribution.");
 
@@ -45,7 +45,7 @@ fn replace_distutils(setup_path: &PathBuf) {
 }
 
 /// Remove scripts. Used when uninstalling.
-fn remove_scripts(scripts: Vec<String>, scripts_path: &PathBuf) {
+fn remove_scripts(scripts: Vec<String>, scripts_path: &Path) {
     // todo: Likely not a great approach. QC.
     for entry in fs::read_dir(scripts_path).expect("Problem reading dist directory") {
         let entry = entry.unwrap();
@@ -62,7 +62,7 @@ fn remove_scripts(scripts: Vec<String>, scripts_path: &PathBuf) {
     }
 }
 
-pub fn make_script(path: &PathBuf, name: &str, module: &str, func: &str) {
+pub fn make_script(path: &Path, name: &str, module: &str, func: &str) {
     let contents = format!(
         r"import re
 import sys
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 /// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
 /// Alternatively, we could just parse all `dist-info` folders every run; this should
 /// be faster.
-fn setup_scripts(name: &str, version: &Version, lib_path: &PathBuf) {
+fn setup_scripts(name: &str, version: &Version, lib_path: &Path) {
     let mut scripts = vec![];
     // todo: Sep fn for dist_info path, to avoid repetition between here and uninstall?
     let mut dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
@@ -158,9 +158,9 @@ pub fn download_and_install_package(
     url: &str,
     filename: &str,
     expected_digest: &str,
-    lib_path: &PathBuf,
-    bin_path: &PathBuf,
-    cache_path: &PathBuf,
+    lib_path: &Path,
+    bin_path: &Path,
+    cache_path: &Path,
     package_type: PackageType,
     rename: &Option<(u32, String)>,
 ) -> Result<(), reqwest::Error> {
@@ -326,7 +326,7 @@ pub fn download_and_install_package(
     Ok(())
 }
 
-pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
+pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
     #[cfg(target_os = "windows")]
     println!("Uninstalling {}: {}...", name_ins, vers_ins.to_string());
     #[cfg(target_os = "linux")]
@@ -421,7 +421,7 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &PathBuf) {
 }
 
 /// Rename files in a package. Assume we already renamed the folder, ie during installation.
-pub fn rename_package_files(top_path: &PathBuf, old: &str, new: &str) {
+pub fn rename_package_files(top_path: &Path, old: &str, new: &str) {
     for entry in fs::read_dir(top_path).expect("Problem reading renamed package path") {
         let entry = entry.expect("Problem reading file while renaming");
         let path = entry.path();
@@ -460,7 +460,7 @@ pub fn rename_package_files(top_path: &PathBuf, old: &str, new: &str) {
 }
 
 /// Rename metadata files.
-pub fn rename_metadata(path: &PathBuf, _old: &str, new: &str) {
+pub fn rename_metadata(path: &Path, _old: &str, new: &str) {
     // todo: Handle multiple items in top_level. Figure out how to handle that.
     let top_file = path.join("top_level.txt");
     //    let mut top_data = fs::read_to_string(&top_file).expect("Problem opening top_level.txt");

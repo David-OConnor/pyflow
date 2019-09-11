@@ -7,7 +7,11 @@ use crossterm::{Color, Colored};
 use regex::Regex;
 use std::io::{self, BufRead, BufReader, Read};
 use std::str::FromStr;
-use std::{env, fs, path::PathBuf, process, thread, time};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process, thread, time,
+};
 use tar::Archive;
 use xz2::read::XzDecoder;
 
@@ -35,7 +39,7 @@ pub fn abort(message: &str) {
 }
 
 /// Find which virtual environments exist.
-pub fn find_venvs(pyflows_dir: &PathBuf) -> Vec<(u32, u32)> {
+pub fn find_venvs(pyflows_dir: &Path) -> Vec<(u32, u32)> {
     let py_versions: &[(u32, u32)] = &[
         (2, 6),
         (2, 7),
@@ -73,7 +77,7 @@ pub fn find_venvs(pyflows_dir: &PathBuf) -> Vec<(u32, u32)> {
 
 /// Checks whether the path is under `/bin` (Linux generally) or `/Scripts` (Windows generally)
 /// Returns the bin path (ie under the venv)
-pub fn find_bin_path(vers_path: &PathBuf) -> PathBuf {
+pub fn find_bin_path(vers_path: &Path) -> PathBuf {
     #[cfg(target_os = "windows")]
     return vers_path.join(".venv/Scripts");
     #[cfg(target_os = "linux")]
@@ -106,7 +110,7 @@ pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::py_versions::AliasEr
 
 /// Sets the `PYTHONPATH` environment variable, causing Python to look for
 /// dependencies in `__pypackages__`,
-pub fn set_pythonpath(lib_path: &PathBuf) {
+pub fn set_pythonpath(lib_path: &Path) {
     env::set_var(
         "PYTHONPATH",
         lib_path
@@ -116,7 +120,7 @@ pub fn set_pythonpath(lib_path: &PathBuf) {
 }
 
 /// List all installed dependencies and console scripts, by examining the `libs` and `bin` folders.
-pub fn show_installed(lib_path: &PathBuf) {
+pub fn show_installed(lib_path: &Path) {
     let installed = find_installed(lib_path);
     let scripts = find_console_scripts(&lib_path.join("../bin"));
 
@@ -140,7 +144,7 @@ pub fn show_installed(lib_path: &PathBuf) {
 
 /// Find the packages installed, by browsing the lib folder for metadata.
 /// Returns package-name, version, folder names
-pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version, Vec<String>)> {
+pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
     let mut package_folders = vec![];
 
     if !lib_path.exists() {
@@ -196,7 +200,7 @@ pub fn find_installed(lib_path: &PathBuf) -> Vec<(String, Version, Vec<String>)>
 }
 
 /// Find console scripts installed, by browsing the (custom) bin folder
-pub fn find_console_scripts(bin_path: &PathBuf) -> Vec<String> {
+pub fn find_console_scripts(bin_path: &Path) -> Vec<String> {
     let mut result = vec![];
     if !bin_path.exists() {
         return vec![];
@@ -296,7 +300,7 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
 
 /// Extract the wheel or zip.
 /// From this example: https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32
-pub fn extract_zip(file: &fs::File, out_path: &PathBuf, rename: &Option<(String, String)>) {
+pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, String)>) {
     // Separate function, since we use it twice.
     let mut archive = zip::ZipArchive::new(file).unwrap();
 
@@ -348,42 +352,7 @@ pub fn extract_zip(file: &fs::File, out_path: &PathBuf, rename: &Option<(String,
     }
 }
 
-//// todo: temp TS, without the rename.
-//pub fn extract_zip2(file: &fs::File, out_path: &PathBuf) {
-//    // Separate function, since we use it twice.
-//    let mut archive = zip::ZipArchive::new(file).unwrap();
-//
-//    for i in 0..archive.len() {
-//        let mut file = archive.by_index(i).unwrap();
-//        // Change name here instead of after in case we've already installed a non-renamed version.
-//        // (which would be overwritten by this one.)
-//        let outpath = out_path.join(file.sanitized_name());
-//
-//        if (&*file.name()).ends_with('/') {
-//            fs::create_dir_all(&outpath).unwrap();
-//        } else {
-//            if let Some(p) = outpath.parent() {
-//                if !p.exists() {
-//                    fs::create_dir_all(&p).unwrap();
-//                }
-//            }
-//            let mut outfile = fs::File::create(&outpath).unwrap();
-//            io::copy(&mut file, &mut outfile).unwrap();
-//        }
-//
-//        // Get and Set permissions
-//        #[cfg(unix)]
-//        {
-//            use std::os::unix::fs::PermissionsExt;
-//
-//            if let Some(mode) = file.unix_mode() {
-//                fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
-//            }
-//        }
-//    }
-//}
-
-pub fn unpack_tar_xz(archive_path: &PathBuf, dest: &PathBuf) {
+pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
     let archive_bytes = fs::read(archive_path).expect("Problem reading archive as bytes");
 
     let mut tar: Vec<u8> = Vec::new();
@@ -403,7 +372,7 @@ pub fn unpack_tar_xz(archive_path: &PathBuf, dest: &PathBuf) {
 }
 
 /// Find venv info, creating a venv as required.
-pub fn find_venv_info(cfg_vers: &Version, pyflows_dir: &PathBuf) -> (PathBuf, Version) {
+pub fn find_venv_info(cfg_vers: &Version, pyflows_dir: &Path) -> (PathBuf, Version) {
     let venvs = find_venvs(&pyflows_dir);
     // The version's explicitly specified; check if an environment for that version
     let compatible_venvs: Vec<&(u32, u32)> = venvs
@@ -415,7 +384,7 @@ pub fn find_venv_info(cfg_vers: &Version, pyflows_dir: &PathBuf) -> (PathBuf, Ve
     let py_vers;
     match compatible_venvs.len() {
         0 => {
-            let vers = py_versions::create_venv(&cfg_vers, &pyflows_dir);
+            let vers = py_versions::create_venv(&cfg_vers, pyflows_dir);
             vers_path = pyflows_dir.join(&format!("{}.{}", vers.major, vers.minor));
             py_vers = Version::new_short(vers.major, vers.minor); // Don't include patch.
         }
