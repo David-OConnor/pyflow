@@ -5,6 +5,10 @@
 
 # Py Packages
 
+*Important: While this tool aims to install Python as required, we're still working through
+issues getting flexible binaries. FOr now, assume you must have the version of Python you wish
+to use installed, and available on the path.*
+
 This tool manages Python installations and dependencies. It implements
 [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
 and [Pep 518 -- Specifying Minimum Build System Requirements for Python Projects](https://www.python.org/dev/peps/pep-0518/)
@@ -41,6 +45,11 @@ to create a new project folder. `init` imports data from `requirements.txt` or `
 creates a folder with the basics
 - Run `pypackage install` to set up Python, and sync dependencies with `pyproject.toml`, or add dependencies to it
 - Run `pypackage python` to run Python
+
+## Quick-and-dirty start for quick-and-dirty scripts
+- Run `pypackage script myscript.py`, where `myscript.py` is the name of your script.
+This will automatically set up an isolated environment for this script, and install
+dependencies as required, without altering any other environment.
 
 
 ## Why add another Python manager?
@@ -135,8 +144,10 @@ These tools have different scopes and purposes:
 
 
 ## Use
-- Create a `pyproject.toml` file in your project directory. Note that running
- `init`, `new`, or `install` creates this file automatically. See
+- Optionally, create a `pyproject.toml` file in your project directory. Otherwise, this
+file will be created automatically. You may wish to use `pyproject new` to create a basic
+project folder (With a .gitignore, source directory etc), or `pyproject init` to populate
+info from `requirements.txt` or `Pipfile`. See
 [PEP 518](https://www.python.org/dev/peps/pep-0518/) for details.
 
 Example contents:
@@ -187,18 +198,20 @@ if you're using that.
 ## What you can do
 
 ### Managing dependencies:
-- `pypackage install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified
-- `pypackage install toolz` - If you specify one or more packages after `install`, those packages will 
+- `pypackage install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified.
+- `pypackage install requests` - If you specify one or more packages after `install`, those packages will 
 be added to `pyproject.toml` and installed.
 - `pypackage install numpy==1.16.4 matplotlib>=3.1.` - Example with multiple dependencies, and specified versions
-- `pypackage uninstall toolz` - Remove one or more dependencies
+- `pypackage uninstall requests` - Remove one or more dependencies
 
 ### Running REPL and Python files in the environment:
 - `pypackage python` - Run a Python REPL
 - `pypackage python main.py` - Run a python file
 - `pypackage ipython`, `pypackage black` etc - Run a CLI script like `ipython`. This can either
 have been installed by a dependency, or specified under `[tool.pypackage]`, `scripts`
-- `pypackage run ipython` - alternate syntax
+- `pypackage run ipython` - alternate syntax for the above
+- `pypackage script myscript.py` - Run a one-off script, outside a project directory, with per-file
+package management
 
 ### Building and publishing:
 - `pypackage package` - Package for distribution (uses setuptools internally, and 
@@ -276,6 +289,8 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Adding a dependency via the CLI with a specific version constraint, or extras.
 - Developer requirements
 - Packaging and publishing projects that use compiled extensions
+- Dealing with multiple-installed-versions of a dependency that uses importlib
+or dynamic imports
 
 
 ## Building and uploading your project to PyPi

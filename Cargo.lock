@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "pypackage"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "crossterm 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "data-encoding 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",

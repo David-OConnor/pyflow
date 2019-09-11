@@ -1,10 +1,14 @@
-use crate::{dep_types::Req, util, Config};
+use crate::{
+    dep_types::{Req, Version},
+    util, Config,
+};
 use crossterm::Color;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 
 /// This nested structure is required based on how the `toml` crate handles dots.
 #[derive(Debug, Deserialize)]
@@ -317,4 +321,27 @@ pub fn parse_pipfile(cfg: &mut Config) {
             // todo: [requires] section has python_version.
         }
     }
+}
+
+/// Update the config file with a new version.
+pub fn change_py_vers(cfg_path: &PathBuf, specified: &Version) {
+    let f = fs::File::open(&cfg_path)
+        .expect("Unable to read pyproject.toml while adding Python version");
+    let mut new_data = String::new();
+    for line in BufReader::new(f).lines() {
+        if let Ok(l) = line {
+            if l.starts_with("py_version") {
+                new_data.push_str(&format!(
+                    "py_version = \"{}.{}\"\n",
+                    specified.major, specified.minor
+                ));
+            } else {
+                new_data.push_str(&l);
+                new_data.push_str("\n");
+            }
+        }
+    }
+
+    fs::write(cfg_path, new_data)
+        .expect("Unable to write pyproject.toml while adding Python version");
 }

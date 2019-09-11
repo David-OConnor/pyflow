@@ -10,9 +10,10 @@ use std::{collections::HashMap, env, error::Error, fs, io, path::PathBuf, str::F
 
 use crate::dep_resolution::WarehouseRelease;
 use crate::install::PackageType;
-use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::io::{BufRead, BufReader};
 use structopt::StructOpt;
+use crate::py_versions::create_venv;
 
 mod build;
 mod commands;
@@ -86,8 +87,8 @@ enum SubCommand {
 
     /// Install packages from `pyproject.toml`, or ones specified
     #[structopt(
-        name = "install",
-        help = "
+    name = "install",
+    help = "
 Install packages from `pyproject.toml`, `pypackage.lock`, or speficied ones. Example:
 
 `pypackage install`: sync your installation with `pyproject.toml`, or `pypackage.lock` if it exists.
@@ -175,7 +176,7 @@ pub struct Config {
     readme_filename: Option<String>,
     //    entry_points: HashMap<String, Vec<String>>, // todo option?
     scripts: HashMap<String, String>, //todo: put under [tool.pypackage.scripts] ?
-                                      //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
+    //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
 }
 
 impl Config {
@@ -465,7 +466,7 @@ __pypackages__/
 
 [tool.pypackage]
 name = "{}"
-py_version = "^3.7"
+py_version = "3.7"
 version = "0.1.0"
 description = ""
 author = ""
@@ -497,9 +498,9 @@ fn read_lock(filename: &str) -> Result<(Lock), Box<dyn Error>> {
 }
 
 /// Write dependency data to a lock file.
-fn write_lock(filename: &str, data: &Lock) -> Result<(), Box<dyn Error>> {
+fn write_lock(path: &PathBuf, data: &Lock) -> Result<(), Box<dyn Error>> {
     let data = toml::to_string(data)?;
-    fs::write(filename, data)?;
+    fs::write(path, data)?;
     Ok(())
 }
 
@@ -723,7 +724,7 @@ fn sync_deps(
             package_type,
             rename,
         )
-        .is_err()
+            .is_err()
         {
             abort("Problem downloading packages");
         }
@@ -770,8 +771,8 @@ fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) ->
     result
 }
 
-/// Execute a python CLI script, either specified in `pyproject.toml`, or in a dependency.
-fn run_script(
+/// Execute a python CLI tool, either specified in `pyproject.toml`, or in a dependency.
+fn run_cli_tool(
     lib_path: &PathBuf,
     bin_path: &PathBuf,
     vers_path: &PathBuf,
@@ -795,39 +796,8 @@ fn run_script(
 
     // todo: Delete these scripts as required to sync with pyproject.toml.
     let re = Regex::new(r"(.*?):(.*)").unwrap();
-    //    for (name, command) in cfg.scripts.iter() {
-    //        continue;
-    //        if let Some(script) = cfg.scripts.get(name) {
-    //            let file_name = &vers_path.join("bin").join(name);
-    //
-    //            // todo: We shouldn't need to re-write to disk every time. Check that it's current.
-    //            if file_name.exists() {
-    //                fs::remove_file(file_name).expect("Problem removing existing script file");
-    //            }
-    //
-    //            match re.captures(command) {
-    //                Some(caps) => {
-    //                    let module = caps.get(1).unwrap().as_str();
-    //                    let function = caps.get(2).unwrap().as_str();
-    //
-    //                    install::make_script(
-    //                        &vers_path.join("bin").join(&name),
-    ////                        &lib_path.join("bin").join(&name),
-    //                        &name,
-    //                        &format!(".{}", module),  // ie a relative import
-    //                        function,
-    //                    );
-    //                }
-    //                None => {
-    //                    abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", command));
-    //                    unreachable!()
-    //                }
-    //            }
-    //        }
-    //    }
 
     let mut specified_args: Vec<String> = args.into_iter().skip(1).collect();
-    //        let mut args_to_pass;
 
     // todo: Unable to get it to work by running -c; instead, create a script file, as if one
     // todo for a dependency.
@@ -884,6 +854,101 @@ fn run_script(
     }
 }
 
+/// Guess dependencies by parsing a script's imports.
+fn find_deps_from_script(file_path: &PathBuf) -> Vec<String> {
+    // todo: Helper for this type of logic? We use it several times in the program.
+    let f = fs::File::open(file_path).expect("Problem opening the Python script file.");
+
+    // These regexes will stop at dots, including only the part before, as we want.
+    let re1 = Regex::new(r"^import\s+([a-zA-Z\-0-9_]+)\.*$").unwrap();
+    let re2 = Regex::new(r"^import\s+([a-zA-Z\-0-9_]+)\.*\s+as\s+.*$").unwrap();
+    // The commented out one below looks more accurate, but can't get it to work, and this appears to work fine.
+//    let re3 = Regex::new(r"^from\s+([a-zA-Z\-0-9_]+)\.*\s+import\s+.*$").unwrap();
+    let re3 = Regex::new(r"^from\s+([a-zA-Z\-0-9_]+).*$").unwrap();
+
+    let mut result = Vec::new();
+    for line in BufReader::new(f).lines() {
+        if let Ok(l) = line {
+            if let Some(c) = re1.captures(&l) {
+                result.push(c.get(1).unwrap().as_str().to_owned())
+            } else if let Some(c) = re2.captures(&l) {
+                result.push(c.get(1).unwrap().as_str().to_owned())
+            } else if let Some(c) = re3.captures(&l) {
+                result.push(c.get(1).unwrap().as_str().to_owned())
+            }
+        }
+    }
+
+    result
+}
+
+/// Run a standalone script file, with package management
+/// // todo: Perhaps move this logic to its own file, if it becomes long.
+/// todo: We're using script name as unique identifier; address this in the future,
+/// todo perhaps with an id in a comment at the top of a file
+fn run_script(script_env_path: &PathBuf, cache_path: &PathBuf, os: Os, args: &mut Vec<String>) {
+// todo: DRY with run_script
+    let filename = match args.get(0) {
+        Some(a) => a.clone(),
+        None => {
+            abort("`run` must be followed by the script to run, eg `pypackage script myscript.py`");
+            unreachable!()
+        }
+    };
+
+    let filename = util::standardize_name(&filename);
+
+    let specified_args: Vec<String> = args.into_iter().skip(1).map(|a| a.to_owned()).collect();
+
+// todo: Consider a metadata file, but for now, we'll use folders
+//    let scripts_data_path = script_env_path.join("scripts.toml");
+
+    let env_path = script_env_path.join(&filename);
+    if !env_path.exists() {
+        fs::create_dir_all(&env_path).expect("Problem creating environment for the script");
+    }
+    let py_vers = Version::new(3, 7, 0); // todo temp!
+    create_venv(&py_vers, &env_path.join("__pypackages__"));
+
+    let vers_path = env_path.join("__pypackages__").join(&format!(
+                "{}.{}",
+                py_vers.major.to_string(), py_vers.minor.to_string()
+            ));
+
+    let bin_path = vers_path.join(".venv").join("bin");
+    let lib_path = vers_path.join("lib");
+    let lock_path = env_path.join("pyproject.lock");
+
+    let deps = find_deps_from_script(&PathBuf::from(&filename));
+    let reqs: Vec<Req> = deps.iter().map(|name| {
+        let (fmtd_name, version, _) = dep_resolution::get_version_info(&name)
+            .expect(&format!("Problem getting version info for {}", &name));
+        Req::new(
+            fmtd_name.clone(),
+            vec![Constraint::new(ReqType::Caret, version)],
+        )
+    }).collect();
+
+    // todo temp:
+    let lockpacks = vec![];
+
+    sync(
+        &bin_path,
+        &lib_path,
+        &cache_path,
+        &lockpacks,
+        &reqs,
+        os,
+        &py_vers,
+        &lock_path,
+    );
+
+    if commands::run_python(&bin_path, &lib_path, args).is_err() {
+        abort("Problem running this script")
+    };
+
+}
+
 /// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
 /// the config and lock files.
 fn sync(
@@ -894,13 +959,13 @@ fn sync(
     reqs: &[Req],
     os: Os,
     py_vers: &Version,
-    lock_filename: &str,
+    lock_path: &PathBuf,
 ) {
     let installed = util::find_installed(&lib_path);
-    // We control the lock format, so this regex will always match
+// We control the lock format, so this regex will always match
     let dep_re = Regex::new(r"^(.*?)\s(.*)\s.*$").unwrap();
 
-    // We don't need to resolve reqs that are already locked.
+// We don't need to resolve reqs that are already locked.
     let locked: Vec<Package> = lockpacks
         .iter()
         .map(|lp| {
@@ -942,10 +1007,8 @@ fn sync(
         }
     };
 
-    //    println!("RESOLVED: {:#?}", &resolved);
-
-    // Now merge the existing lock packages with new ones from resolved packages.
-    // We have a collection of requirements; attempt to merge them with the already-locked ones.
+// Now merge the existing lock packages with new ones from resolved packages.
+// We have a collection of requirements; attempt to merge them with the already-locked ones.
     let mut updated_lock_packs = vec![];
 
     for package in resolved.iter() {
@@ -993,25 +1056,25 @@ fn sync(
     }
 
     let updated_lock = Lock {
-        //        metadata: Some(lock_metadata),
+//        metadata: Some(lock_metadata),
         metadata: HashMap::new(), // todo: Problem with toml conversion.
         package: Some(updated_lock_packs.clone()),
     };
-    if write_lock(lock_filename, &updated_lock).is_err() {
+    if write_lock(lock_path, &updated_lock).is_err() {
         abort("Problem writing lock file");
     }
 
-    // Now that we've confirmed or modified the lock file, we're ready to sync installed
-    // depenencies with it.
+// Now that we've confirmed or modified the lock file, we're ready to sync installed
+// depenencies with it.
     sync_deps(
-        //                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
-        &bin_path,
-        &lib_path,
-        &cache_path,
-        &updated_lock_packs,
-        &installed,
-        os,
-        &py_vers,
+//                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
+&bin_path,
+&lib_path,
+&cache_path,
+&updated_lock_packs,
+&installed,
+os,
+&py_vers,
     );
 }
 
@@ -1022,6 +1085,7 @@ fn main() {
         .expect("Problem finding home directory")
         .join(".python-installs");
     let cache_path = python_installs_dir.join("dependency-cache");
+//    let script_env_path = python_installs_dir.join("script-envs");
 
     let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
     let opt = Opt::from_args();
@@ -1034,7 +1098,7 @@ fn main() {
         .expect("Can't find current path")
         .join("__pypackages__");
 
-    // Run subcommands that don't require info about the environment.
+// Run subcommands that don't require info about the environment.
     match subcmd {
         SubCommand::New { name } => {
             new(&name).expect("Problem creating project");
@@ -1052,7 +1116,7 @@ fn main() {
                 abort("pyproject.toml already exists - not overwriting.")
             }
             cfg.write_file(cfg_filename);
-            // Don't return here; let the normal logic create the venv now.
+// Don't return here; let the normal logic create the venv now.
         }
         SubCommand::Reset {} => {
             if pypackages_dir.exists() {
@@ -1068,8 +1132,24 @@ fn main() {
             util::print_color("Reset complete", Color::Green);
             return;
         }
-        SubCommand::Switch { .. } => {
-            // Updates `pyproject.toml` with a new python version
+        SubCommand::Switch { version } => {
+// Updates `pyproject.toml` with a new python version
+            let specified = match Version::from_str(&version) {
+                Ok(v) => v,
+                Err(_) => {
+                    util::abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
+                    unreachable!()
+                }
+            };
+            files::change_py_vers(&PathBuf::from(&cfg_filename), &specified);
+            util::print_color(
+                &format!(
+                    "Switched to Python version {}.{}",
+                    &specified.major, &specified.minor
+                ),
+                Color::Green,
+            );
+            return;
         }
         SubCommand::Clear {} => {
             if !cache_path.exists() {
@@ -1086,10 +1166,25 @@ fn main() {
                 };
             }
         }
+        SubCommand::Script { mut args } => {
+            // todo: DRY
+            let cache_path = python_installs_dir.join("dependency-cache");
+            let script_env_path = python_installs_dir.join("script-envs");
+
+            #[cfg(target_os = "windows")]
+                let os = Os::Windows;
+            #[cfg(target_os = "linux")]
+                let os = Os::Linux;
+            #[cfg(target_os = "macos")]
+                let os = Os::Mac;
+
+            run_script(&script_env_path, &cache_path, os, &mut args);
+            return
+        }
         _ => (),
     }
 
-    // Check for environments. Create one if none exist. Set `vers_path`.
+// Check for environments. Create one if none exist. Set `vers_path`.
     let mut vers_path = PathBuf::new();
     let mut py_vers = Version::new(0, 0, 0);
     let venvs = util::find_venvs(&pypackages_dir);
@@ -1097,12 +1192,12 @@ fn main() {
     let cfg_vers = match cfg.py_version {
         Some(v) => v,
         None => {
-            // Ask the user, and write it to `pyproject.toml`.
+// Ask the user, and write it to `pyproject.toml`.
             util::print_color(
                 "Please enter the Python version for this project:",
                 Color::Magenta,
             );
-            // todo: Utility fn for this type promp? Shared with prompt_alias.
+// todo: Utility fn for this type promp? Shared with prompt_alias.
             let mut input = String::new();
             io::stdin()
                 .read_line(&mut input)
@@ -1113,37 +1208,21 @@ fn main() {
             let specified = match Version::from_str(&input) {
                 Ok(v) => v,
                 Err(_) => {
-                    abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
+                    util::abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
                     unreachable!()
                 }
             };
 
-            let f = fs::File::open(&cfg_filename)
-                .expect("Unable to read pyproject.toml while adding Python version");
-            let mut new_data = String::new();
-            for line in BufReader::new(f).lines() {
-                if let Ok(l) = line {
-                    if l.starts_with("py_version") {
-                        new_data
-                            .push_str(&format!("py_version = \"{}\"\n", specified.to_string2()));
-                    } else {
-                        new_data.push_str(&l);
-                    }
-                }
+            if !PathBuf::from(cfg_filename).exists() {
+                cfg.write_file(cfg_filename);
             }
-
-            fs::write(cfg_filename, new_data)
-                .expect("Unable to write pyproject.toml while adding Python version");
+            files::change_py_vers(&PathBuf::from(&cfg_filename), &specified);
 
             specified
         }
     };
 
-    //    match &cfg.py_version {
-    // The version's explicitly specified; check if an environment for that versionc
-    // exists. If not, create one, and make sure it's the right version.
-    //        Some(cfg_vers) => {
-    // The version's explicitly specified; check if an environment for that version
+// The version's explicitly specified; check if an environment for that version
     let compatible_venvs: Vec<&(u32, u32)> = venvs
         .iter()
         .filter(|(ma, mi)| cfg_vers.major == *ma && cfg_vers.minor == *mi)
@@ -1163,8 +1242,8 @@ fn main() {
             py_vers = Version::new_short(compatible_venvs[0].0, compatible_venvs[0].1);
         }
         _ => abort(
-            // todo: Handle this, eg by letting the user pick the one to use?
-            "Multiple compatible Python environments found
+// todo: Handle this, eg by letting the user pick the one to use?
+"Multiple compatible Python environments found
                 for this project.",
         ),
     }
@@ -1182,21 +1261,21 @@ fn main() {
     };
 
     #[cfg(target_os = "windows")]
-    let os = Os::Windows;
+        let os = Os::Windows;
     #[cfg(target_os = "linux")]
-    let os = Os::Linux;
+        let os = Os::Linux;
     #[cfg(target_os = "macos")]
-    let os = Os::Mac;
+        let os = Os::Mac;
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
 
-    // Now handle subcommands that require info about the environment
+// Now handle subcommands that require info about the environment
     match subcmd {
-        // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
-        // and `pyproject.lock` with the `pyproject.toml`.
-        // We use data from three sources: `pyproject.toml`, `pypackage.lock`, and
-        // the currently-installed packages, found by crawling metadata in the `lib` path.
-        // See the readme section `How installation and locking work` for details.
+// Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
+// and `pyproject.lock` with the `pyproject.toml`.
+// We use data from three sources: `pyproject.toml`, `pypackage.lock`, and
+// the currently-installed packages, found by crawling metadata in the `lib` path.
+// See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages } => {
             if !PathBuf::from(cfg_filename).exists() {
                 cfg.write_file(cfg_filename);
@@ -1205,7 +1284,7 @@ fn main() {
             if found_lock {
                 println!("Found lockfile");
             }
-            // Merge reqs added via cli with those in `pyproject.toml`.
+// Merge reqs added via cli with those in `pyproject.toml`.
             let updated_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
 
             sync(
@@ -1216,13 +1295,13 @@ fn main() {
                 &updated_reqs,
                 os,
                 &py_vers,
-                &lock_filename,
+                &PathBuf::from(lock_filename),
             );
             util::print_color("Installation complete", Color::Green);
         }
 
         SubCommand::Uninstall { packages } => {
-            // Remove dependencies specified in the CLI from the config, then lock and sync.
+// Remove dependencies specified in the CLI from the config, then lock and sync.
 
             let removed_reqs: Vec<String> = packages
                 .into_iter()
@@ -1236,7 +1315,7 @@ fn main() {
 
             files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
 
-            // Filter reqs here instead of re-reading the config from file.
+// Filter reqs here instead of re-reading the config from file.
             let updated_reqs: Vec<Req> = cfg
                 .reqs
                 .into_iter()
@@ -1251,7 +1330,7 @@ fn main() {
                 &updated_reqs,
                 os,
                 &py_vers,
-                &lock_filename,
+                &PathBuf::from(lock_filename),
             );
             util::print_color("Uninstall complete", Color::Green);
         }
@@ -1266,10 +1345,14 @@ fn main() {
         }
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
         SubCommand::Run { args } => {
-            run_script(&lib_path, &bin_path, &vers_path, &cfg, args);
+            run_cli_tool(&lib_path, &bin_path, &vers_path, &cfg, args);
             return;
         }
         SubCommand::List {} => util::show_installed(&lib_path),
+//        SubCommand::Script { mut args } => {
+////            let mut args = args2.clone();
+//            run_script(&script_env_path, &cache_path, os, &mut args);
+//        }
         _ => (),
     }
 }

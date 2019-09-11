@@ -384,17 +384,19 @@ pub fn extract_zip(file: &fs::File, out_path: &PathBuf, rename: &Option<(String,
 //}
 
 pub fn unpack_tar_xz(archive_path: &PathBuf, dest: &PathBuf) {
-    let archive_bytes = fs::read(archive_path).expect("Problem reading Python archive as bytes");
+    let archive_bytes = fs::read(archive_path).expect("Problem reading archive as bytes");
 
     let mut tar: Vec<u8> = Vec::new();
     let mut decompressor = XzDecoder::new(&archive_bytes[..]);
-    decompressor.read_to_end(&mut tar).expect("Problem reading archive bytes");
+    decompressor
+        .read_to_end(&mut tar)
+        .expect("Problem decompressing archive");
 
     // We've decompressed the .xz; now unpack the tar.
     let mut archive = Archive::new(&tar[..]);
     if archive.unpack(dest).is_err() {
         abort(&format!(
-            "Problem unpacking Python archive: {}",
+            "Problem unpacking tar: {}",
             archive_path.to_str().unwrap()
         ))
     }
