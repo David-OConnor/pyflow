@@ -1,7 +1,7 @@
 use crate::{
     dep_resolution,
     dep_types::{Constraint, Req, ReqType, Version},
-    files,
+    files, py_versions,
 };
 use crossterm::{Color, Colored};
 use regex::Regex;
@@ -400,4 +400,41 @@ pub fn unpack_tar_xz(archive_path: &PathBuf, dest: &PathBuf) {
             archive_path.to_str().unwrap()
         ))
     }
+}
+
+/// Find venv info, creating a venv as required.
+pub fn find_venv_info(cfg_vers: &Version, pypackages_dir: &PathBuf) -> (PathBuf, Version) {
+    let venvs = find_venvs(&pypackages_dir);
+    // The version's explicitly specified; check if an environment for that version
+    let compatible_venvs: Vec<&(u32, u32)> = venvs
+        .iter()
+        .filter(|(ma, mi)| cfg_vers.major == *ma && cfg_vers.minor == *mi)
+        .collect();
+
+    let vers_path;
+    let py_vers;
+    match compatible_venvs.len() {
+        0 => {
+            let vers = py_versions::create_venv(&cfg_vers, &pypackages_dir);
+            vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
+            py_vers = Version::new_short(vers.major, vers.minor); // Don't include patch.
+        }
+        1 => {
+            vers_path = pypackages_dir.join(&format!(
+                "{}.{}",
+                compatible_venvs[0].0, compatible_venvs[0].1
+            ));
+            py_vers = Version::new_short(compatible_venvs[0].0, compatible_venvs[0].1);
+        }
+        _ => {
+            abort(
+                // todo: Handle this, eg by letting the user pick the one to use?
+                "Multiple compatible Python environments found
+                for this project.",
+            );
+            unreachable!()
+        }
+    }
+
+    (vers_path, py_vers)
 }

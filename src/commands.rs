@@ -109,10 +109,6 @@ pub(crate) fn run_python(
     //    let output = a.wait_with_output().expect("Failed to wait on sed");
     //    println!("{:?}", output.stdout.as_slice());
     //    Command::new(bin_path.join("python")).args(args).status()?;
-        println!("ARGS: {:#?}", &args);
-        println!("bin: {:#?}", &bin_path);
-        println!("lib: {:#?}", &lib_path);
-
 
     Command::new(bin_path.join("python")).args(args).status()?;
 
