@@ -1148,7 +1148,16 @@ fn main() {
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
-        None => SubCommand::Run { args: opt.script },
+        None => { // This branch runs when none of the specified subcommands are used
+            if opt.script.is_empty() || opt.script[0].ends_with("py")  {
+                // Nothing's specified, eg `pyflow`, or a script is specified; run `python`.
+                SubCommand::Python{ args: opt.script }
+
+            } else {
+                // A command is specified, eg `pyflow black`
+                SubCommand::Run { args: opt.script }
+            }
+        },
     };
 
     if let SubCommand::Script { mut args } = subcmd {

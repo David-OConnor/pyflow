@@ -1,6 +1,10 @@
 # Changelog
 
+## v0.0.5
+- Running `pyflow` with no arguments now runs a Python REPL
+
 ## v0.0.4
+- Renamed from `pypackage` to `pyflow`
 - Added support for running minimally-configured scripts
 - Implemented `pyflow switch` to change py versions. Improved related prompts
 - Misc API tweaks
@@ -10,5 +14,5 @@
 - Stores downloaded packages in a global cache
 - Can run console scripts specified in `pyproject.toml` directly, instead of just
 ones installed by dependencies
-- `pyflow reset` now cleans up the lock file
+- `pypackage reset` now cleans up the lock file
 - Misc tweaks and bugfixes

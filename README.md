@@ -43,8 +43,9 @@ run `cargo install pyflow`.
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname` 
 to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
 creates a folder with the basics
-- Run `pyflow install` to set up Python, and sync dependencies with `pyproject.toml`, or add dependencies to it
-- Run `pyflow python` to run Python
+- Run `pyflow install` to sync dependencies with `pyproject.toml`, or add dependencies to it. 
+ `pyproject.toml` will be created if it doesn't exist.
+- Run `pyflow` or `pyflow myfile.py` to run Python
 
 ## Quick-and-dirty start for quick-and-dirty scripts
 - Add the line `__requires__ = [numpy, requests]` somewhere in the script, where `numpy` and `requsts` are dependencies
@@ -207,9 +208,10 @@ be added to `pyproject.toml` and installed.
 - `pyflow uninstall requests` - Remove one or more dependencies
 
 ### Running REPL and Python files in the environment:
-- `pyflow python` - Run a Python REPL
-- `pyflow python main.py` - Run a python file
-- `pyflow ipython`, `pyflow black` etc - Run a CLI script like `ipython`. This can either
+- `pyflow` - Run a Python REPL
+- `pyflow main.py` - Run a python file
+- `pyflow python` or `pyflow python main.py` - Alternate syntax for the above
+- `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`. This can either
 have been installed by a dependency, or specified under `[tool.pyflow]`, `scripts`
 - `pyflow run ipython` - alternate syntax for the above
 - `pyflow script myscript.py` - Run a one-off script, outside a project directory, with per-file
@@ -229,7 +231,7 @@ a readme, pyproject.toml, .gitignore, and directory for code
 - `pyflow init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
 `requirements.text` and `Pipfile` as required.
 - `pyflow reset` - Remove the environment, and uninstall all packages
-- `pyflow clear` - Clear the global cache of downloaded packages, in `~/python-installs/dependency-cache`.
+- `pyflow clear` - Clear the global cache of downloaded packages, in `~/python-installs/dependency-cache`
 and the global cache of one-off script environments, in `~/python-installs/script-envs`.
 - `pyflow -V` - Get the current version of this tool
 - `pyflow help` Get help, including a list of available commands
