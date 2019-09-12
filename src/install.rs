@@ -75,7 +75,6 @@ if __name__ == '__main__':
         module, func, func
     );
 
-    println!("PATH: {:?}", &path);
     fs::write(path, contents)
         .unwrap_or_else(|_| panic!("Problem creating script file for {}", name));
 }

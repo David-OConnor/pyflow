@@ -143,7 +143,7 @@ impl fmt::Display for AliasError {
 }
 
 /// Prompt which Python alias to use, if multiple are found.
-fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
+pub fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
     // Todo: Overall, the API here is inelegant.
     util::print_color("Found multiple compatible Python aliases. Please enter the number associated with the one you'd like to use for this project:", Color::Magenta);
     for (i, (alias, version)) in aliases.iter().enumerate() {
@@ -225,10 +225,8 @@ fn find_installed_versions() -> Vec<Version> {
         .expect("Problem finding home directory")
         .join(".python-installs");
 
-    if !&python_installs_dir.exists() {
-        if fs::create_dir(&python_installs_dir).is_err() {
-            util::abort("Problem creating ~/python-installs directory")
-        };
+    if !&python_installs_dir.exists() && fs::create_dir(&python_installs_dir).is_err(){
+        util::abort("Problem creating ~/python-installs directory")
     }
 
     let mut result = vec![];

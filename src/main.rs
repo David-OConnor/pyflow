@@ -868,11 +868,12 @@ fn find_deps_from_script(file_path: &Path) -> Vec<String> {
                 let deps: Vec<&str> = deps_list.split(',').collect();
                 result = deps
                     .into_iter()
-                    .map(|d| d.to_owned()
-                        .replace(" ", "")
-                        .replace("\"", "")
-                        .replace("'", "")
-                    )
+                    .map(|d| {
+                        d.to_owned()
+                            .replace(" ", "")
+                            .replace("\"", "")
+                            .replace("'", "")
+                    })
                     .collect();
             }
         }
@@ -897,8 +898,6 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
 
     let filename = util::standardize_name(&filename);
 
-    let specified_args: Vec<String> = args.into_iter().skip(1).map(|a| a.to_owned()).collect();
-
     // todo: Consider a metadata file, but for now, we'll use folders
     //    let scripts_data_path = script_env_path.join("scripts.toml");
 
@@ -906,16 +905,50 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
     if !env_path.exists() {
         fs::create_dir_all(&env_path).expect("Problem creating environment for the script");
     }
-    let cfg_vers = Version::new(3, 7, 0); // todo temp!
 
+    // Write the version we found to a file.
+    let cfg_vers;
+    let py_vers_path = env_path.join("py_vers.txt");
+
+    if py_vers_path.exists() {
+        cfg_vers = Version::from_str(
+            &fs::read_to_string(py_vers_path)
+                .expect("Problem reading Python version for this script")
+                .replace("\n", ""),
+        )
+        .expect("Problem parsing version from file");
+    } else {
+        cfg_vers = {
+            // Ask the user, and write it to `pyproject.toml`.
+            util::print_color(
+                "Please enter the Python version for this project:",
+                Color::Magenta,
+            );
+            let mut input = String::new();
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Unable to read user input for version");
+
+            input.pop(); // Remove trailing newline.
+
+            match Version::from_str(&input) {
+                Ok(v) => v,
+                Err(_) => {
+                    util::abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
+                    unreachable!()
+                }
+            }
+        };
+
+        fs::File::create(&py_vers_path)
+            .expect("Problem creating a file to store the Python version for this script");
+        fs::write(py_vers_path, &cfg_vers.to_string2())
+            .expect("Problem writing Python version file.");
+    }
+
+    // todo DRY
     let pyflows_dir = env_path.join("__pypackages__");
     let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pyflows_dir);
-
-    let vers_path = pyflows_dir.join(&format!(
-        "{}.{}",
-        py_vers.major.to_string(),
-        py_vers.minor.to_string()
-    ));
 
     let bin_path = vers_path.join(".venv").join("bin");
     let lib_path = vers_path.join("lib");
@@ -923,12 +956,8 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
 
     let deps = find_deps_from_script(&PathBuf::from(&filename));
 
-    let mut found_lock = false;
     let lock = match read_lock(&lock_path) {
-        Ok(l) => {
-            found_lock = true;
-            l
-        }
+        Ok(l) => l,
         Err(_) => Lock::default(),
     };
 
@@ -939,8 +968,7 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
         .map(|name| {
             let (fmtd_name, version) = match lockpacks
                 .iter()
-                .filter(|lp| util::compare_names(&lp.name, name))
-                .next()
+                .find(|lp| util::compare_names(&lp.name, name))
             {
                 Some(lp) => (
                     lp.name.clone(),
@@ -948,7 +976,7 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
                 ),
                 None => {
                     let vinfo = dep_resolution::get_version_info(&name)
-                        .expect(&format!("Problem getting version info for {}", &name));
+                        .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
                     (vinfo.0, vinfo.1)
                 }
             };
@@ -1112,7 +1140,14 @@ fn main() {
         .expect("Problem finding home directory")
         .join(".python-installs");
     let cache_path = python_installs_dir.join("dependency-cache");
-    //    let script_env_path = python_installs_dir.join("script-envs");
+    let script_env_path = python_installs_dir.join("script-envs");
+
+    #[cfg(target_os = "windows")]
+    let os = Os::Windows;
+    #[cfg(target_os = "linux")]
+    let os = Os::Linux;
+    #[cfg(target_os = "macos")]
+    let os = Os::Mac;
 
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
@@ -1121,18 +1156,6 @@ fn main() {
     };
 
     if let SubCommand::Script { mut args } = subcmd {
-        // do this first, before before trying to parse a config.
-        // todo: DRY
-        let cache_path = python_installs_dir.join("dependency-cache");
-        let script_env_path = python_installs_dir.join("script-envs");
-
-        #[cfg(target_os = "windows")]
-        let os = Os::Windows;
-        #[cfg(target_os = "linux")]
-        let os = Os::Linux;
-        #[cfg(target_os = "macos")]
-        let os = Os::Mac;
-
         run_script(&script_env_path, &cache_path, os, &mut args);
         return;
     }
@@ -1164,15 +1187,11 @@ fn main() {
             // Don't return here; let the normal logic create the venv now.
         }
         SubCommand::Reset {} => {
-            if pypackages_dir.exists() {
-                if fs::remove_dir_all(&pypackages_dir).is_err() {
-                    abort("Problem removing `__pypackages__` directory")
-                }
+            if pypackages_dir.exists() && fs::remove_dir_all(&pypackages_dir).is_err() {
+                abort("Problem removing `__pypackages__` directory")
             }
-            if Path::new(lock_filename).exists() {
-                if fs::remove_file(lock_filename).is_err() {
-                    abort("Problem removing `pyflow.lock`")
-                }
+            if Path::new(lock_filename).exists() && fs::remove_file(lock_filename).is_err() {
+                abort("Problem removing `pyflow.lock`")
             }
             util::print_color("Reset complete", Color::Green);
             return;
@@ -1197,35 +1216,9 @@ fn main() {
             return;
         }
         SubCommand::Clear {} => {
-            if !cache_path.exists() {
-                fs::create_dir(&cache_path).expect("Problem creating cache directory");
-            }
-
-            for entry in fs::read_dir(&cache_path).expect("Problem reading cache path") {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-
-                    if path.is_file() {
-                        fs::remove_file(path).expect("Problem removing a cached file");
-                    }
-                };
-            }
+            util::wipe_dir(&cache_path);
+            util::wipe_dir(&script_env_path);
         }
-        //        SubCommand::Script { mut args } => {
-        //            // todo: DRY
-        //            let cache_path = python_installs_dir.join("dependency-cache");
-        //            let script_env_path = python_installs_dir.join("script-envs");
-        //
-        //            #[cfg(target_os = "windows")]
-        //            let os = Os::Windows;
-        //            #[cfg(target_os = "linux")]
-        //            let os = Os::Linux;
-        //            #[cfg(target_os = "macos")]
-        //            let os = Os::Mac;
-        //
-        //            run_script(&script_env_path, &cache_path, os, &mut args);
-        //            return;
-        //        }
         _ => (),
     }
 
@@ -1277,13 +1270,6 @@ fn main() {
         }
         Err(_) => Lock::default(),
     };
-
-    #[cfg(target_os = "windows")]
-    let os = Os::Windows;
-    #[cfg(target_os = "linux")]
-    let os = Os::Linux;
-    #[cfg(target_os = "macos")]
-    let os = Os::Mac;
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
 
@@ -1364,7 +1350,6 @@ fn main() {
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
         SubCommand::Run { args } => {
             run_cli_tool(&lib_path, &bin_path, &vers_path, &cfg, args);
-            return;
         }
         SubCommand::List {} => util::show_installed(&lib_path),
         //        SubCommand::Script { mut args } => {

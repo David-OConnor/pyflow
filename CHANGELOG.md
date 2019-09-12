@@ -1,7 +1,9 @@
 # Changelog
 
 ## v0.0.4
-- Implemented `pyflow switch` to change py versions. Improved related prompts.
+- Added support for running minimally-configured scripts
+- Implemented `pyflow switch` to change py versions. Improved related prompts
+- Misc API tweaks
 
 ## v0.0.3
 - Now manages and installs Python as required

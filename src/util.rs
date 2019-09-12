@@ -407,3 +407,19 @@ pub fn find_venv_info(cfg_vers: &Version, pyflows_dir: &Path) -> (PathBuf, Versi
 
     (vers_path, py_vers)
 }
+
+/// Remove all files (but not folders) in a path.
+pub fn wipe_dir(path: &Path) {
+    if !path.exists() {
+        fs::create_dir(&path).expect("Problem creating directory");
+    }
+    for entry in fs::read_dir(&path).expect("Problem reading path") {
+        if let Ok(entry) = entry {
+            let path2 = entry.path();
+
+            if path2.is_file() {
+                fs::remove_file(path2).expect("Problem removing a file");
+            }
+        };
+    }
+}

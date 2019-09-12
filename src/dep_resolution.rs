@@ -440,7 +440,7 @@ fn find_constraints(
 fn make_renamed_packs(
     vers_cache: &HashMap<String, (String, Version, Vec<Version>)>,
     deps: &[Dependency],
-    all_deps: &[Dependency],
+    //    all_deps: &[Dependency],
     name: &str,
 ) -> Vec<Package> {
     //    println!("DEBUG TEMP: {:#?}", &deps);
@@ -593,7 +593,7 @@ pub fn resolve(
                 result_cleaned.append(&mut make_renamed_packs(
                     &version_cache,
                     &deps,
-                    &result,
+                    //                    &result,
                     &fmtd_name,
                 ));
                 continue;
@@ -659,7 +659,7 @@ pub fn resolve(
                         result_cleaned.append(&mut make_renamed_packs(
                             &version_cache,
                             &deps,
-                            &result,
+                            //                            &result,
                             &fmtd_name,
                         ));
                         continue;

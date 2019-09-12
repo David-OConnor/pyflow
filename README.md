@@ -229,7 +229,8 @@ a readme, pyproject.toml, .gitignore, and directory for code
 - `pyflow init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
 `requirements.text` and `Pipfile` as required.
 - `pyflow reset` - Remove the environment, and uninstall all packages
-- `pyflow clear` - Clear the global cache of downloaded packages, in `~/python-installs/dependency-cache`
+- `pyflow clear` - Clear the global cache of downloaded packages, in `~/python-installs/dependency-cache`.
+and the global cache of one-off script environments, in `~/python-installs/script-envs`.
 - `pyflow -V` - Get the current version of this tool
 - `pyflow help` Get help, including a list of available commands
 
