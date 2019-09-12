@@ -946,7 +946,7 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
     let pyflows_dir = env_path.join("__pypackages__");
     let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pyflows_dir);
 
-    let bin_path = vers_path.join(".venv").join("bin");
+    let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
     let lock_path = env_path.join("pyproject.lock");
 
