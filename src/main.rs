@@ -929,15 +929,11 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
                 .read_line(&mut input)
                 .expect("Unable to read user input for version");
 
-            input.pop(); // Remove trailing newline.
 
-            match Version::from_str(&input) {
-                Ok(v) => v,
-                Err(_) => {
-                    util::abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
-                    unreachable!()
-                }
-            }
+            input.pop(); // Remove trailing newline.
+            let input = input.replace("\n", "").replace("\r", "");
+
+            util::fallible_v_parse(&input)
         };
 
         fs::File::create(&py_vers_path)
@@ -1198,13 +1194,7 @@ fn main() {
         }
         SubCommand::Switch { version } => {
             // Updates `pyproject.toml` with a new python version
-            let specified = match Version::from_str(&version) {
-                Ok(v) => v,
-                Err(_) => {
-                    util::abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
-                    unreachable!()
-                }
-            };
+            let specified = util::fallible_v_parse(&version);
             files::change_py_vers(&PathBuf::from(&cfg_filename), &specified);
             util::print_color(
                 &format!(
@@ -1240,13 +1230,7 @@ fn main() {
 
             input.pop(); // Remove trailing newline.
 
-            let specified = match Version::from_str(&input) {
-                Ok(v) => v,
-                Err(_) => {
-                    util::abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
-                    unreachable!()
-                }
-            };
+            let specified = util::fallible_v_parse(&input);
 
             if !PathBuf::from(cfg_filename).exists() {
                 cfg.write_file(cfg_filename);

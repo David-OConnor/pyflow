@@ -29,9 +29,9 @@ install the specified version of Python if not already installed.
 There are 2 ways to install:
 - Download a binary from the [releases](https://github.com/David-OConnor/pyflow/releases)
  page. Installers are available for Debian/Ubuntu, and Windows. On Debian or Ubuntu, download and run
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.0.3/pyflow_0.0.3_amd64.deb). 
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow_0.0.4_amd64.deb). 
 On Windows, download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.0.3/pyflow-0.0.3-x86_64.msi). 
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow-0.0.4-x86_64.msi). 
 Alternatively, download the appropriate binary (ie `pyflow.exe` or `pyflow`) and place it somewhere
 accessible by the system path. For example, `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
