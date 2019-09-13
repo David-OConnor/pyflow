@@ -91,30 +91,6 @@ pub(crate) fn run_python(
     args: &[String],
 ) -> Result<(), Box<dyn Error>> {
     util::set_pythonpath(lib_path);
-
-    // Run this way instead of setting current_dir, so we can load files from the right place.
-    // Running with .output() prevents the REPL from running, and .spawn() causes
-    // permission errors when importing modules.
-    //    let mut child = Command::new(bin_path.join("python"))
-    //        .args(args)
-    //        .stdin(Stdio::piped())
-    //        .stdout(Stdio::piped())
-    //        .spawn()?;
-    //
-    //    let stdin = child.stdin.as_mut().expect("failed to get stdin");
-    //    stdin.write_all(b"test").expect("failed to write to stdin");
-    //
-    //    let output = child.wait_with_output().expect("failed to wait on child");
-
-    //    let output = a.wait_with_output().expect("Failed to wait on sed");
-    //    println!("{:?}", output.stdout.as_slice());
-    //    Command::new(bin_path.join("python")).args(args).status()?;
-
     Command::new(bin_path.join("python")).args(args).status()?;
-
-    //    Command::new(bin_path.join("python")).args(args).spawn()?;
-    //    let output = Command::new(bin_path.join("python")).args(args).output()?;
-    //    println!("Output: {:?}", &output);
-
     Ok(())
 }

@@ -5,6 +5,8 @@
 
 # Pyflow
 
+#### *Simple is better than complex* - The Zen of Python
+
 *Important: While this tool aims to install Python as required, we're still working through
 issues getting flexible binaries. For now, assume you must have the version of Python you wish
 to use installed, and available on the path.*
@@ -17,6 +19,9 @@ It keeps the latter isolated in the project
 directory, and runs
 Python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
+
+It also includes some convenience features, like running standalone files in their
+own environment with no config, and running project functions directly from the CLI.
 
 **Goal**: Make using and publishing Python projects as simple as possible. Understanding
 Python environments shoudn't be required to use dependencies safely.
@@ -32,7 +37,7 @@ There are 2 ways to install:
 [this deb](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow_0.0.4_amd64.deb). 
 On Windows, download and run
 [this installer](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow-0.0.4-x86_64.msi). 
-Alternatively, download the appropriate binary (ie `pyflow.exe` or `pyflow`) and place it somewhere
+Alternatively, download the appropriate binary (ie `pyflow.exe` or `pyflow-linux`) and place it somewhere
 accessible by the system path. For example, `/usr/bin` in linux, 
 or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
 
@@ -141,6 +146,7 @@ These tools have different scopes and purposes:
 | **Locks dependencies** |  | ✓ | ✓ | | | ✓ | ✓|
 | **Requires changing session state** | ✓ | | | ✓ | | | |
 | **Slow** |  | ✓ | | | | | |
+| **Easy script access** | | | | | | ✓ |
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Buggy** | | | | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
@@ -197,6 +203,21 @@ We also attempt to parse metadata and dependencies from [tool.poetry](https://po
 sections of `pyproject.toml`, so there's no need to modify the format
 if you're using that.
 
+You can specify direct entry points to parts of your program using something like this in `pyproject.toml`:
+```toml
+[tool.pyflow]
+# ...
+scripts = { scriptname = "module:function" }
+```
+Where you replace `scriptname`, `function`, and `module` with the name to call your script with, the 
+function you wish to run, and the module it's in respectively. This is similar to specifying 
+scripts in `setup.py` for built packages. The key difference is that scripts specified here 
+can be run at any time,
+without having to build the package. Run with `pyflow scriptname` to do this.
+
+If you run `pyflow package` on on a package using this, the result will work like normal script
+entry points for somone using the package, regardless of if they're using this tool.
+
 
 ## What you can do
 
@@ -210,7 +231,7 @@ be added to `pyproject.toml` and installed.
 ### Running REPL and Python files in the environment:
 - `pyflow` - Run a Python REPL
 - `pyflow main.py` - Run a python file
-- `pyflow python` or `pyflow python main.py` - Alternate syntax for the above
+- `pyflow python` or `pyflow python main.py` - Alternate syntax for the above two
 - `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`. This can either
 have been installed by a dependency, or specified under `[tool.pyflow]`, `scripts`
 - `pyflow run ipython` - alternate syntax for the above

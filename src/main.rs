@@ -798,8 +798,6 @@ fn run_cli_tool(
 
     let mut specified_args: Vec<String> = args.into_iter().skip(1).collect();
 
-    // todo: Unable to get it to work by running -c; instead, create a script file, as if one
-    // todo for a dependency.
 
     // If a script name is specified by by this project and a dependency, favor
     // this project.
@@ -816,7 +814,7 @@ fn run_cli_tool(
                 let function = caps.get(2).unwrap().as_str();
                 let mut args_to_pass = vec![
                     "-c".to_owned(),
-                    format!(r#""import {}; {}.{}()""#, module, module, function),
+                    format!(r#"import {}; {}.{}()"#, module, module, function),
                 ];
 
                 args_to_pass.append(&mut specified_args);
@@ -1042,6 +1040,7 @@ fn sync(
         })
         .collect();
 
+    // todo: Only show this when needed.
     // Powershell  doesn't like emojis
     #[cfg(target_os = "windows")]
     println!("Resolving dependencies...");
@@ -1129,6 +1128,8 @@ fn sync(
     );
 }
 
+/// We process input commands in a deliberate order, to ensure the required, and only the required
+/// setup steps are accomplished before each.
 fn main() {
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pyflow.lock";
@@ -1160,9 +1161,10 @@ fn main() {
         },
     };
 
+    // Run this before parsing the config.
     if let SubCommand::Script { mut args } = subcmd {
         run_script(&script_env_path, &cache_path, os, &mut args);
-        return;
+        return
     }
 
     let pypackages_dir = env::current_dir()
@@ -1217,6 +1219,15 @@ fn main() {
         SubCommand::Clear {} => {
             util::wipe_dir(&cache_path);
             util::wipe_dir(&script_env_path);
+        }
+        SubCommand::List => {
+            let num_venvs = util::find_venvs(&pypackages_dir).len();
+            if !PathBuf::from(&cfg_filename).exists() && num_venvs == 0 {
+                abort("Can't find a project in this directory")
+            } else if num_venvs == 0 {
+                util::print_color("There's no python environment set up for this project", Color::Green);
+                return
+            }
         }
         _ => (),
     }
