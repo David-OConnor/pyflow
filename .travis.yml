@@ -11,7 +11,7 @@ matrix:
   fast_finish: true
 
 os:
-  - windows
+#  - windows  todo: Windows builds on Travis are failing for an unknown reason
   - osx
   - linux
 

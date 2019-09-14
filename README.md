@@ -31,26 +31,28 @@ install the specified version of Python if not already installed.
 
 
 ## Installation
-There are 2 ways to install:
-- Download a binary from the [releases](https://github.com/David-OConnor/pyflow/releases)
- page. Installers are available for Debian/Ubuntu, and Windows. On Debian or Ubuntu, download and run
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow_0.0.4_amd64.deb). 
-On Windows, download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow-0.0.4-x86_64.msi). 
-Alternatively, download the appropriate binary (ie `pyflow.exe` or `pyflow-linux`) and place it somewhere
-accessible by the system path. For example, `/usr/bin` in linux, 
-or `~\AppData\Local\Programs\Python\Python37\bin` in Windows.
+- **Windows, Ubuntu, or Debian:** Download and run
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow-0.0.4-x86_64.msi)
+or
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow_0.0.4_amd64.deb) .
 
-- If you have [Rust](https://www.rust-lang.org) installed, the most convenient way is to 
-run `cargo install pyflow`.
+
+- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow-linux)
+ and place it somewhere
+accessible by the system PATH. For example, `/usr/bin`.
+
+- **If you have [Rust](https://www.rust-lang.org) installed**: Run `cargo install pyflow`.
+
+- **Mac:**  Build from source using the instructions near the bottom of this page,
+ or install via `cargo`. If able, please build and PR a Mac binary.
 
 ## Quickstart
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname` 
 to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
-creates a folder with the basics
+creates a folder with the basics.
 - Run `pyflow install` to sync dependencies with `pyproject.toml`, or add dependencies to it. 
  `pyproject.toml` will be created if it doesn't exist.
-- Run `pyflow` or `pyflow myfile.py` to run Python
+- Run `pyflow` or `pyflow myfile.py` to run Python.
 
 ## Quick-and-dirty start for quick-and-dirty scripts
 - Add the line `__requires__ = [numpy, requests]` somewhere in the script, where `numpy` and `requsts` are dependencies
@@ -146,7 +148,7 @@ These tools have different scopes and purposes:
 | **Locks dependencies** |  | ✓ | ✓ | | | ✓ | ✓|
 | **Requires changing session state** | ✓ | | | ✓ | | | |
 | **Slow** |  | ✓ | | | | | |
-| **Easy script access** | | | | | | ✓ |
+| **Easy script access** | | | | | | | ✓ |
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Buggy** | | | | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
@@ -211,7 +213,7 @@ scripts = { scriptname = "module:function" }
 ```
 Where you replace `scriptname`, `function`, and `module` with the name to call your script with, the 
 function you wish to run, and the module it's in respectively. This is similar to specifying 
-scripts in `setup.py` for built packages. The key difference is that scripts specified here 
+scripts in `setup.py` for built packages. The key difference is that functions specified here 
 can be run at any time,
 without having to build the package. Run with `pyflow scriptname` to do this.
 
@@ -225,13 +227,13 @@ entry points for somone using the package, regardless of if they're using this t
 - `pyflow install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified.
 - `pyflow install requests` - If you specify one or more packages after `install`, those packages will 
 be added to `pyproject.toml` and installed.
-- `pyflow install numpy==1.16.4 matplotlib>=3.1.` - Example with multiple dependencies, and specified versions
+- `pyflow install numpy==1.16.4 matplotlib>=3.1` - Example with multiple dependencies, and specified versions
 - `pyflow uninstall requests` - Remove one or more dependencies
 
 ### Running REPL and Python files in the environment:
 - `pyflow` - Run a Python REPL
 - `pyflow main.py` - Run a python file
-- `pyflow python` or `pyflow python main.py` - Alternate syntax for the above two
+- `pyflow python` or `pyflow python main.py` - Alternate syntax for the above twoz
 - `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`. This can either
 have been installed by a dependency, or specified under `[tool.pyflow]`, `scripts`
 - `pyflow run ipython` - alternate syntax for the above
@@ -385,7 +387,7 @@ on the server to properly determine dependencies, due to unreliable information
 ## Gotchas
 - Make sure the `pyflow` binary is accessible in your path. If installing
 via a `deb`, `msi`, or `Cargo`, this should be set up automatically.
-- Make sure `__pypackages__` and `.venv` are in your `.gitignore` file.
+- Make sure `__pypackages__` is in your `.gitignore` file.
 
 # References
 - [PEP 582 - Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
