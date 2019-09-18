@@ -55,9 +55,9 @@ creates a folder with the basics.
 - Run `pyflow` or `pyflow myfile.py` to run Python.
 
 ## Quick-and-dirty start for quick-and-dirty scripts
-- Add the line `__requires__ = [numpy, requests]` somewhere in the script, where `numpy` and `requsts` are dependencies
-the script requires. Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
-This will automatically set up an isolated environment for this script, and install
+- Add the line `__requires__ = [numpy, requests]` somewhere in the script, where `numpy` and `requsts` are dependencies.
+Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
+This will set up an isolated environment for this script, and install
 dependencies as required, without altering any other environment. This is a safe way
 to run one-off Python files that aren't attached to a project, but have dependencies.
 
@@ -150,7 +150,6 @@ These tools have different scopes and purposes:
 | **Slow** |  | ✓ | | | | | |
 | **Easy script access** | | | | | | | ✓ |
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
-| **Buggy** | | | | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 
 
@@ -175,7 +174,7 @@ numpy = "^1.16.4"
 diffeqpy = "1.1.0"
 ```
 The `[tool.pyflow]` section is used for metadata. The only required item in it is
- `py_version`, unless unless
+ `py_version`, unless
 building and distributing a package. The `[tool.pypyackage.dependencies]` section
 contains all dependencies, and is an analog to `requirements.txt`. 
 
@@ -209,9 +208,9 @@ You can specify direct entry points to parts of your program using something lik
 ```toml
 [tool.pyflow]
 # ...
-scripts = { scriptname = "module:function" }
+scripts = { name = "module:function" }
 ```
-Where you replace `scriptname`, `function`, and `module` with the name to call your script with, the 
+Where you replace `name`, `function`, and `module` with the name to call your script with, the 
 function you wish to run, and the module it's in respectively. This is similar to specifying 
 scripts in `setup.py` for built packages. The key difference is that functions specified here 
 can be run at any time,
@@ -233,7 +232,7 @@ be added to `pyproject.toml` and installed.
 ### Running REPL and Python files in the environment:
 - `pyflow` - Run a Python REPL
 - `pyflow main.py` - Run a python file
-- `pyflow python` or `pyflow python main.py` - Alternate syntax for the above twoz
+- `pyflow python` or `pyflow python main.py` - alternate syntax for the above two
 - `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`. This can either
 have been installed by a dependency, or specified under `[tool.pyflow]`, `scripts`
 - `pyflow run ipython` - alternate syntax for the above
@@ -242,7 +241,7 @@ package management
 
 ### Building and publishing:
 - `pyflow package` - Package for distribution (uses setuptools internally, and 
-builds both source and wheel if applicable.)
+builds both source and wheel.)
 - `pyflow package --features "test all"` - Package for distribution with features enabled, 
 as defined in `pyproject.toml`
 - `pyflow publish` - Upload to PyPi (Repo specified in `pyproject.toml`. Uses `Twine` internally.)

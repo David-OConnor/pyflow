@@ -11,8 +11,10 @@ use std::{collections::HashMap, fmt, fs, io, path::Path, process};
 #[derive(Clone, Copy, Debug)]
 enum PyVers {
     V3_7_4,
-    V3_6_9,
-    V3_5_6, // todo: v3.5.7 exists
+//    V3_6_9,  // todo 3.6.9 exists, but going off nuget binaries for now.
+    V3_6_8,
+//    V3_5_7,
+    V3_5_4,  // todo see note about nuget
     V3_4_10,
 }
 
@@ -24,7 +26,8 @@ impl From<Version> for PyVers {
         }
         match v.minor {
             4 => Self::V3_4_10,
-            5 => Self::V3_5_6,
+            5 => Self::V3_5_4,
+//            6 => Self::V3_6_9,
             6 => Self::V3_6_9,
             7 => Self::V3_7_4,
             _ => {
@@ -39,8 +42,8 @@ impl ToString for PyVers {
     fn to_string(&self) -> String {
         match self {
             Self::V3_7_4 => "3.7.4".into(),
-            Self::V3_6_9 => "3.6.9".into(),
-            Self::V3_5_6 => "3.5.6".into(),
+            Self::V3_6_8 => "3.6.8".into(),
+            Self::V3_5_4 => "3.5.4".into(),
             Self::V3_4_10 => "3.4.10".into(),
         }
     }
@@ -50,8 +53,8 @@ impl PyVers {
     fn to_vers(self) -> Version {
         match self {
             Self::V3_7_4 => Version::new(3, 7, 4),
-            Self::V3_6_9 => Version::new(3, 6, 9),
-            Self::V3_5_6 => Version::new(3, 5, 6),
+            Self::V3_6_8 => Version::new(3, 6, 8),
+            Self::V3_5_4 => Version::new(3, 5, 4),
             Self::V3_4_10 => Version::new(3, 4, 10),
         }
     }
