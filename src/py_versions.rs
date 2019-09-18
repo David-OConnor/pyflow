@@ -28,7 +28,7 @@ impl From<Version> for PyVers {
             4 => Self::V3_4_10,
             5 => Self::V3_5_4,
 //            6 => Self::V3_6_9,
-            6 => Self::V3_6_9,
+            6 => Self::V3_6_8,
             7 => Self::V3_7_4,
             _ => {
                 util::abort("Unsupported python version requested; only Python >=3.4 is supported");
@@ -220,15 +220,15 @@ fn find_installed_versions() -> Vec<Version> {
     #[cfg(target_os = "windows")]
     let py_name = "python";
     #[cfg(target_os = "linux")]
-    let py_name = "python3";
+    let py_name = "bin/python3";
     #[cfg(target_os = "macos")]
-    let py_name = "python3";
+    let py_name = "bin/python3";
 
     let python_installs_dir = dirs::home_dir()
         .expect("Problem finding home directory")
         .join(".python-installs");
 
-    if !&python_installs_dir.exists() && fs::create_dir(&python_installs_dir).is_err(){
+    if !&python_installs_dir.exists() && &fs::create_dir(&python_installs_dir).is_err(){
         util::abort("Problem creating ~/python-installs directory")
     }
 
@@ -243,7 +243,7 @@ fn find_installed_versions() -> Vec<Version> {
             }
 
             if let Some(v) =
-                commands::find_py_version(entry.path().join("bin").join(py_name).to_str().unwrap())
+                commands::find_py_version(entry.path().join(py_name).to_str().unwrap())
             {
                 result.push(v);
             }
