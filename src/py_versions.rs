@@ -228,7 +228,7 @@ fn find_installed_versions() -> Vec<Version> {
         .expect("Problem finding home directory")
         .join(".python-installs");
 
-    if !&python_installs_dir.exists() && &fs::create_dir(&python_installs_dir).is_err(){
+    if !&python_installs_dir.exists() && fs::create_dir(&python_installs_dir).is_err(){
         util::abort("Problem creating ~/python-installs directory")
     }
 
@@ -262,9 +262,9 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
     #[cfg(target_os = "windows")]
     let py_name = "python";
     #[cfg(target_os = "linux")]
-    let py_name = "python3";
+    let py_name = "bin/python3";
     #[cfg(target_os = "macos")]
-    let py_name = "python3";
+    let py_name = "bin/python3";
 
     let mut alias = None;
     let mut alias_path = None;
@@ -279,7 +279,6 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
             alias_path = Some(
                 python_installs_dir
                     .join(folder_name)
-                    .join("bin")
                     .join(py_name),
             );
             py_ver = Some(*iv);
@@ -318,7 +317,6 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
         alias_path = Some(
             python_installs_dir
                 .join(folder_name)
-                .join("bin")
                 .join(py_name),
         );
     }
