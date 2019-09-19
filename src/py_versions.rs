@@ -5,31 +5,72 @@ use crate::dep_types::Version;
 use crate::util;
 use crossterm::Color;
 use std::error::Error;
+use std::str::FromStr;
 use std::{collections::HashMap, fmt, fs, io, path::Path, process};
 
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
 enum PyVers {
-    V3_7_4,
-//    V3_6_9,  // todo 3.6.9 exists, but going off nuget binaries for now.
-    V3_6_8,
-//    V3_5_7,
-    V3_5_4,  // todo see note about nuget
-    V3_4_10,
+    V3_7_4,  // Either Os
+    V3_6_9,  // Linux
+    V3_6_8,  // Win
+    V3_5_7,  // Linux
+    V3_5_4,  // Win
+    V3_4_10, // Linux
 }
 
-impl From<Version> for PyVers {
-    fn from(v: Version) -> Self {
-        if v.major != 3 {
-            util::abort("Unsupported python version requested; only Python 3 is supported");
+/// Reduces code repetition for error messages related to Python binaries we don't support.
+fn abort_helper(version: &str, os: &str) {
+    util::abort(&format!(
+        "Installing Python {} on {} is currently unsupported. If you'd like\
+         to use this version of Python, please install it directly.",
+        version, os
+    ))
+}
+
+impl From<(Version, crate::Os)> for PyVers {
+    fn from(v_o: (Version, crate::Os)) -> Self {
+        if v_o.0.major != 3 {
+            util::abort("Unsupported python version requested; only Python ≥ 3.4 is supported");
             unreachable!()
         }
-        match v.minor {
-            4 => Self::V3_4_10,
-            5 => Self::V3_5_4,
-//            6 => Self::V3_6_9,
-            6 => Self::V3_6_8,
-            7 => Self::V3_7_4,
+        // todo: Handle non Ubuntu/Debian
+        match v_o.0.minor {
+            4 => match v_o.1 {
+                crate::Os::Windows => {
+                    abort_helper("3.4", "Windows");
+                    unreachable!()
+                }
+                crate::Os::Linux => Self::V3_4_10,
+                _ => {
+                    abort_helper("3.4", "Mac");
+                    unreachable!()
+                }
+            },
+            5 => match v_o.1 {
+                crate::Os::Windows => Self::V3_5_4,
+                crate::Os::Linux => Self::V3_5_7,
+                _ => {
+                    abort_helper("3.5", "Mac");
+                    unreachable!()
+                }
+            },
+            6 => match v_o.1 {
+                crate::Os::Windows => Self::V3_6_8,
+                crate::Os::Linux => Self::V3_6_9,
+                _ => {
+                    abort_helper("3.6", "Mac");
+                    unreachable!()
+                }
+            },
+            7 => match v_o.1 {
+                crate::Os::Windows => Self::V3_7_4,
+                crate::Os::Linux => Self::V3_7_4,
+                _ => {
+                    abort_helper("3.7", "Mac");
+                    unreachable!()
+                }
+            },
             _ => {
                 util::abort("Unsupported python version requested; only Python >=3.4 is supported");
                 unreachable!()
@@ -42,7 +83,9 @@ impl ToString for PyVers {
     fn to_string(&self) -> String {
         match self {
             Self::V3_7_4 => "3.7.4".into(),
+            Self::V3_6_9 => "3.6.9".into(),
             Self::V3_6_8 => "3.6.8".into(),
+            Self::V3_5_7 => "3.5.7".into(),
             Self::V3_5_4 => "3.5.4".into(),
             Self::V3_4_10 => "3.4.10".into(),
         }
@@ -53,7 +96,9 @@ impl PyVers {
     fn to_vers(self) -> Version {
         match self {
             Self::V3_7_4 => Version::new(3, 7, 4),
+            Self::V3_6_9 => Version::new(3, 6, 9),
             Self::V3_6_8 => Version::new(3, 6, 8),
+            Self::V3_5_7 => Version::new(3, 5, 7),
             Self::V3_5_4 => Version::new(3, 5, 4),
             Self::V3_4_10 => Version::new(3, 4, 10),
         }
@@ -72,16 +117,6 @@ enum Os {
     Mac,
 }
 
-//#[derive(Debug)]
-//struct Variant {
-//    version: PyVers,
-//    os: Os,
-//}
-
-//impl ToString for Variant {
-//    fn to_string(&self) -> String {}
-//}
-
 fn download(py_install_path: &Path, version: &Version) {
     // We use the `.xz` format due to its small size compared to `.zip`. On order half the size.
     #[cfg(target_os = "windows")]
@@ -92,7 +127,7 @@ fn download(py_install_path: &Path, version: &Version) {
     let os = "mac";
 
     // Match up our version to the closest match (major+minor will match) we've built.
-    let vers_to_dl2: PyVers = (*version).into();
+    let vers_to_dl2: PyVers = (*version, crate::Os::from_str(os).unwrap()).into();
     let vers_to_dl = vers_to_dl2.to_string();
 
     let url = format!(
@@ -228,7 +263,7 @@ fn find_installed_versions() -> Vec<Version> {
         .expect("Problem finding home directory")
         .join(".python-installs");
 
-    if !&python_installs_dir.exists() && fs::create_dir(&python_installs_dir).is_err(){
+    if !&python_installs_dir.exists() && fs::create_dir(&python_installs_dir).is_err() {
         util::abort("Problem creating ~/python-installs directory")
     }
 
@@ -242,8 +277,7 @@ fn find_installed_versions() -> Vec<Version> {
                 continue;
             }
 
-            if let Some(v) =
-                commands::find_py_version(entry.path().join(py_name).to_str().unwrap())
+            if let Some(v) = commands::find_py_version(entry.path().join(py_name).to_str().unwrap())
             {
                 result.push(v);
             }
@@ -259,12 +293,23 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
         .expect("Problem finding home directory")
         .join(".python-installs"); // todo dry
 
+    let py_name;
+    let os;
     #[cfg(target_os = "windows")]
-    let py_name = "python";
+    {
+        py_name = "python";
+        os = crate::Os::Windows;
+    }
     #[cfg(target_os = "linux")]
-    let py_name = "bin/python3";
+    {
+        py_name = "bin/python3";
+        os = crate::Os::Linux;
+    }
     #[cfg(target_os = "macos")]
-    let py_name = "bin/python3";
+    {
+        py_name = "bin/python3";
+        os = crate::Os::Mac;
+    }
 
     let mut alias = None;
     let mut alias_path = None;
@@ -276,11 +321,7 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
     for iv in installed_versions.iter() {
         if iv.major == cfg_v.major && iv.minor == cfg_v.minor {
             let folder_name = format!("python-{}", iv.to_string2());
-            alias_path = Some(
-                python_installs_dir
-                    .join(folder_name)
-                    .join(py_name),
-            );
+            alias_path = Some(python_installs_dir.join(folder_name).join(py_name));
             py_ver = Some(*iv);
             break;
         }
@@ -310,15 +351,11 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
         // Download and install the appropriate Python binary, if we can't find either a
         // custom install, or on the Path.
         download(&python_installs_dir, cfg_v);
-        let py_ver2: PyVers = (*cfg_v).into();
+        let py_ver2: PyVers = (*cfg_v, os).into();
         py_ver = Some(py_ver2.to_vers());
 
         let folder_name = format!("python-{}", py_ver2.to_string());
-        alias_path = Some(
-            python_installs_dir
-                .join(folder_name)
-                .join(py_name),
-        );
+        alias_path = Some(python_installs_dir.join(folder_name).join(py_name));
     }
 
     let py_ver = py_ver.expect("missing Python version");

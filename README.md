@@ -7,9 +7,10 @@
 
 #### *Simple is better than complex* - The Zen of Python
 
-*Important: While this tool aims to install Python as required, we're still working through
-issues getting flexible binaries. For now, assume you must have the version of Python you wish
-to use installed, and available on the path.*
+*Important: While this tool aims to install Python as required, this feature currently
+ only works on Windows, Ubuntu≥18.4, and Debian. For now, if on another OS, assume 
+ you must have the version of Python you wish
+to use installed, and available on the PATH.*
 
 This tool manages Python installations and dependencies. It implements
 [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
@@ -32,9 +33,9 @@ install the specified version of Python if not already installed.
 
 ## Installation
 - **Windows, Ubuntu, or Debian:** Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow-0.0.4-x86_64.msi)
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.0/pyflow-0.1.0-x86_64.msi)
 or
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow_0.0.4_amd64.deb) .
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.0/pyflow_0.1.0_amd64.deb) .
 
 
 - **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow-linux)
@@ -309,7 +310,6 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 
 
 ## Not-yet-implemented
-
 - Installing from sources other than `pypi` (eg repos)
 - Installing multiple versions of a dependency may not work if it uses compiles code
 - The lock file is missing some info like hashes
@@ -318,6 +318,7 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Packaging and publishing projects that use compiled extensions
 - Dealing with multiple-installed-versions of a dependency that uses importlib
 or dynamic imports
+- Change `~/python-installs` to something more elegant
 
 
 ## Building and uploading your project to PyPi
@@ -381,6 +382,12 @@ for a package/version combo, it may be slow. Subsequent calls, by anyone,
 should be fast. This is due to having to download and install each package
 on the server to properly determine dependencies, due to unreliable information
  on the `pypi warehouse`.
+ 
+ 
+## Python binary sources:
+- Windows: [Python official Visual Studio package](https://www.nuget.org/packages/python/3.8.0-b4),
+by Steve Dower.
+- Ubuntu/Debian: Built on Ubuntu 18.04 using standard procedures.
 
 
 ## Gotchas

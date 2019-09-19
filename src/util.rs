@@ -66,7 +66,7 @@ pub fn find_venvs(pypackages_dir: &Path) -> Vec<(u32, u32)> {
 
         if (venv_path.join("bin/python").exists() && venv_path.join("bin/pip").exists())
             || (venv_path.join("Scripts/python.exe").exists()
-            && venv_path.join("Scripts/pip.exe").exists())
+                && venv_path.join("Scripts/pip.exe").exists())
         {
             result.push((*maj, *mi))
         }
@@ -79,11 +79,11 @@ pub fn find_venvs(pypackages_dir: &Path) -> Vec<(u32, u32)> {
 /// Returns the bin path (ie under the venv)
 pub fn find_bin_path(vers_path: &Path) -> PathBuf {
     #[cfg(target_os = "windows")]
-        return vers_path.join(".venv/Scripts");
+    return vers_path.join(".venv/Scripts");
     #[cfg(target_os = "linux")]
-        return vers_path.join(".venv/bin");
+    return vers_path.join(".venv/bin");
     #[cfg(target_os = "macos")]
-        return vers_path.join(".venv/bin");
+    return vers_path.join(".venv/bin");
 }
 
 /// Wait for directories to be created; required between modifying the filesystem,
@@ -177,7 +177,7 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
                     .expect("Problem parsing version in folder name")
                     .as_str(),
             )
-                .expect("Problem parsing version in package folder");
+            .expect("Problem parsing version in package folder");
 
             let top_level = lib_path.join(folder_name).join("top_level.txt");
 
@@ -238,7 +238,7 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
             for cr in cfg.reqs.iter() {
                 if cr == ar
                     || (cr.name.to_lowercase() == ar.name.to_lowercase()
-                    && ar.constraints.is_empty())
+                        && ar.constraints.is_empty())
                 {
                     // Same req/version exists
                     add = false;
@@ -342,13 +342,13 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
 
         // Get and Set permissions
         #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
+        {
+            use std::os::unix::fs::PermissionsExt;
 
-                if let Some(mode) = file.unix_mode() {
-                    fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
-                }
+            if let Some(mode) = file.unix_mode() {
+                fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
             }
+        }
     }
 }
 

@@ -798,7 +798,6 @@ fn run_cli_tool(
 
     let mut specified_args: Vec<String> = args.into_iter().skip(1).collect();
 
-
     // If a script name is specified by by this project and a dependency, favor
     // this project.
     if let Some(s) = cfg.scripts.get(&name) {
@@ -926,7 +925,6 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
             io::stdin()
                 .read_line(&mut input)
                 .expect("Unable to read user input for version");
-
 
             input.pop(); // Remove trailing newline.
             let input = input.replace("\n", "").replace("\r", "");
@@ -1149,22 +1147,22 @@ fn main() {
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
-        None => { // This branch runs when none of the specified subcommands are used
-            if opt.script.is_empty() || opt.script[0].ends_with("py")  {
+        None => {
+            // This branch runs when none of the specified subcommands are used
+            if opt.script.is_empty() || opt.script[0].ends_with("py") {
                 // Nothing's specified, eg `pyflow`, or a script is specified; run `python`.
-                SubCommand::Python{ args: opt.script }
-
+                SubCommand::Python { args: opt.script }
             } else {
                 // A command is specified, eg `pyflow black`
                 SubCommand::Run { args: opt.script }
             }
-        },
+        }
     };
 
     // Run this before parsing the config.
     if let SubCommand::Script { mut args } = subcmd {
         run_script(&script_env_path, &cache_path, os, &mut args);
-        return
+        return;
     }
 
     let pypackages_dir = env::current_dir()
@@ -1225,8 +1223,11 @@ fn main() {
             if !PathBuf::from(&cfg_filename).exists() && num_venvs == 0 {
                 abort("Can't find a project in this directory")
             } else if num_venvs == 0 {
-                util::print_color("There's no python environment set up for this project", Color::Green);
-                return
+                util::print_color(
+                    "There's no python environment set up for this project",
+                    Color::Green,
+                );
+                return;
             }
         }
         _ => (),
