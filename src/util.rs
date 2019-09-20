@@ -353,6 +353,7 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
 }
 
 pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
+    println!("Path: {:?},  {:?}", archive_path, dest);
     let archive_bytes = fs::read(archive_path).expect("Problem reading archive as bytes");
 
     let mut tar: Vec<u8> = Vec::new();

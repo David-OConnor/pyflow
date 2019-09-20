@@ -3,6 +3,7 @@
 ## v0.1.0
 - Installing Python binaries now works correctly on Windows, Ubuntu≥18.4, and Debian
 - Running `pyflow` with no arguments now runs a Python REPL
+- Made error messages more detailed
 
 ## v0.0.4
 - Renamed from `pypackage` to `pyflow`

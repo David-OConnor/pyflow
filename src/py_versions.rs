@@ -21,16 +21,18 @@ enum PyVers {
 /// Reduces code repetition for error messages related to Python binaries we don't support.
 fn abort_helper(version: &str, os: &str) {
     util::abort(&format!(
-        "Installing Python {} on {} is currently unsupported. If you'd like\
-         to use this version of Python, please install it directly.",
+        "Automatic installation of Python {} on {} is currently unsupported. If you'd like \
+         to use this version of Python, please install it.",
         version, os
     ))
 }
 
 impl From<(Version, Os)> for PyVers {
     fn from(v_o: (Version, Os)) -> Self {
+        let unsupported = "Unsupported python version requested; only Python ≥ 3.4 is supported. \
+        to fix this, edit the `python_version` line of `pyproject.toml`, or run `pyflow switch 3.7`";
         if v_o.0.major != 3 {
-            util::abort("Unsupported python version requested; only Python ≥ 3.4 is supported");
+            util::abort(unsupported);
             unreachable!()
         }
         // todo: Handle non Ubuntu/Debian
@@ -71,7 +73,7 @@ impl From<(Version, Os)> for PyVers {
                 }
             },
             _ => {
-                util::abort("Unsupported python version requested; only Python >=3.4 is supported");
+                util::abort(unsupported);
                 unreachable!()
             }
         }
