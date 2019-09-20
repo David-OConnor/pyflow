@@ -1,5 +1,4 @@
 [![crates.io version](https://meritbadge.herokuapp.com/pyflow)](https://crates.io/crates/pyflow)
-[![docs.rs](https://docs.rs/pyflow/badge.svg)](https://docs.rs/pyflow)
 [![Build Status](https://travis-ci.org/David-OConnor/pyflow.svg?branch=master)](https://travis-ci.org/David-OConnor/pyflow)
 
 
@@ -7,16 +6,11 @@
 
 #### *Simple is better than complex* - The Zen of Python
 
-*Important: While this tool aims to install Python as required, this feature currently
- only works on Windows, Ubuntu≥18.4, and Debian. For now, if on another OS, assume 
- you must have the version of Python you wish
-to use installed, and available on the PATH.*
-
 This tool manages Python installations and dependencies. It implements
 [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
 and [Pep 518 -- Specifying Minimum Build System Requirements for Python Projects](https://www.python.org/dev/peps/pep-0518/)
 
-It keeps the latter isolated in the project 
+It keeps the latter isolated in the project
 directory, and runs
 Python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
@@ -24,11 +18,19 @@ are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib
 It also includes some convenience features, like running standalone files in their
 own environment with no config, and running project functions directly from the CLI.
 
-**Goal**: Make using and publishing Python projects as simple as possible. Understanding
-Python environments shoudn't be required to use dependencies safely.
+You don't need Python installed to use it; it will
+install the specified version of Python if not already installed. 
+*This feature currently
+ only works on Windows, Ubuntu≥18.04, and Debian. For now, if on another OS, assume 
+ you must have the version of Python you wish
+to use installed, and available on the PATH.*
 
-Only works with Python ≥ 3.4. You don't need Python installed to use it; it will
-install the specified version of Python if not already installed.
+Only works with Python ≥ 3.4. 
+
+**Goal**: Make using and publishing Python projects as simple as possible. Understanding
+Python environments shouldn't be required to use dependencies safely. We're attempting
+to fix each stumbling block in the Python workflow, so that it's as elegant
+as the language itself.
 
 
 ## Installation
@@ -38,7 +40,7 @@ or
 [this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.0/pyflow_0.1.0_amd64.deb) .
 
 
-- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.0.4/pyflow-linux)
+- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.0/pyflow-linux)
  and place it somewhere
 accessible by the system PATH. For example, `/usr/bin`.
 
@@ -67,11 +69,10 @@ to run one-off Python files that aren't attached to a project, but have dependen
 `Pipenv` and `Poetry` both address part of this problem.
  Some reasons why this tool is different:
  
- - It manages Python installations - lets you choose which Python version (≥ 3.4) 
-to use. If one's installed, it uses that. If not, it downloads a binary, stores it
-in `~/python-installs`, and uses that. It lets the user select which Python
-version to use in `pyproject.toml`, then uses that version, installing
-as required.
+ - It automatically manages Python installations and environments. You specify a Python version
+ in `pyproject.toml` (if ommitted, the pyflow asks), and pyflow ensures that version is used. 
+ If it's not installed, pyflow downloads a binary, stores it in `~/python-installs`, and uses that.
+ If multiple installations are found for that version, it asks which to use.
 
 - By not using Python to install or run, it remains intallation-agnostic and 
 environment-agnostic. This is important for making setup and use as simple and decison-free as
@@ -89,7 +90,7 @@ on the incomplete data available on the [pypi warehouse](https://github.com/pypa
 but reinforces the idea that there's
 no hidden state to be concerned with.
 
-- It will always use the specified version of Python. This is a notable issue, for example,
+- It will always use the specified version of Python. This is a notable problem, for example,
  with `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
 
@@ -225,6 +226,8 @@ entry points for somone using the package, regardless of if they're using this t
 
 ### Managing dependencies:
 - `pyflow install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified.
+If an environment isn't already set up for the version specified in `pyproject.toml`, sets one up. If
+no version is specified, it asks you.
 - `pyflow install requests` - If you specify one or more packages after `install`, those packages will 
 be added to `pyproject.toml` and installed.
 - `pyflow install numpy==1.16.4 matplotlib>=3.1` - Example with multiple dependencies, and specified versions
@@ -387,7 +390,7 @@ on the server to properly determine dependencies, due to unreliable information
 ## Python binary sources:
 - Windows: [Python official Visual Studio package](https://www.nuget.org/packages/python/3.8.0-b4),
 by Steve Dower.
-- Ubuntu/Debian: Built on Ubuntu 18.04 using standard procedures.
+- Ubuntu/Debian: Built on Ubuntu 18.04, using standard procedures.
 
 
 ## Gotchas

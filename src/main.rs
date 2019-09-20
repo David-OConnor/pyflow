@@ -43,7 +43,9 @@ impl FromStr for Os {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "manylinux1_i686" => Os::Linux32,
+            "manylinux2010_i686" => Os::Linux32,
             "manylinux1_x86_64" => Os::Linux,
+            "manylinux2010_x86_64" => Os::Linux,
             "linux" => Os::Linux,
             "linux2" => Os::Linux,
             "windows" => Os::Windows,
@@ -56,7 +58,7 @@ impl FromStr for Os {
                 if s.contains("mac") {
                     Os::Mac
                 } else {
-                    return Err(DependencyError::new("Problem parsing Os"));
+                    return Err(DependencyError::new(&format!("Problem parsing Os: {}", s)));
                 }
             }
         })
@@ -144,7 +146,7 @@ Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Exampl
         #[structopt(name = "args")]
         args: Vec<String>,
     },
-    /// Change Python versions for this project. eg `pyflow swtich 3.7`. Equivalent to setting
+    /// Change the Python version for this project. eg `pyflow switch 3.7`. Equivalent to setting
     /// `py_version` in `pyproject.toml`.
     #[structopt(name = "switch")]
     Switch {

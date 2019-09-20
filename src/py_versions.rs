@@ -5,7 +5,6 @@ use crate::dep_types::Version;
 use crate::util;
 use crossterm::Color;
 use std::error::Error;
-use std::str::FromStr;
 use std::{collections::HashMap, fmt, fs, io, path::Path, process};
 
 /// Only versions we've built and hosted
@@ -28,8 +27,8 @@ fn abort_helper(version: &str, os: &str) {
     ))
 }
 
-impl From<(Version, crate::Os)> for PyVers {
-    fn from(v_o: (Version, crate::Os)) -> Self {
+impl From<(Version, Os)> for PyVers {
+    fn from(v_o: (Version, Os)) -> Self {
         if v_o.0.major != 3 {
             util::abort("Unsupported python version requested; only Python ≥ 3.4 is supported");
             unreachable!()
@@ -37,35 +36,35 @@ impl From<(Version, crate::Os)> for PyVers {
         // todo: Handle non Ubuntu/Debian
         match v_o.0.minor {
             4 => match v_o.1 {
-                crate::Os::Windows => {
+                Os::Windows => {
                     abort_helper("3.4", "Windows");
                     unreachable!()
                 }
-                crate::Os::Linux => Self::V3_4_10,
+                Os::Ubuntu => Self::V3_4_10,
                 _ => {
                     abort_helper("3.4", "Mac");
                     unreachable!()
                 }
             },
             5 => match v_o.1 {
-                crate::Os::Windows => Self::V3_5_4,
-                crate::Os::Linux => Self::V3_5_7,
+                Os::Windows => Self::V3_5_4,
+                Os::Ubuntu => Self::V3_5_7,
                 _ => {
                     abort_helper("3.5", "Mac");
                     unreachable!()
                 }
             },
             6 => match v_o.1 {
-                crate::Os::Windows => Self::V3_6_8,
-                crate::Os::Linux => Self::V3_6_9,
+                Os::Windows => Self::V3_6_8,
+                Os::Ubuntu => Self::V3_6_9,
                 _ => {
                     abort_helper("3.6", "Mac");
                     unreachable!()
                 }
             },
             7 => match v_o.1 {
-                crate::Os::Windows => Self::V3_7_4,
-                crate::Os::Linux => Self::V3_7_4,
+                Os::Windows => Self::V3_7_4,
+                Os::Ubuntu => Self::V3_7_4,
                 _ => {
                     abort_helper("3.7", "Mac");
                     unreachable!()
@@ -117,27 +116,54 @@ enum Os {
     Mac,
 }
 
+//impl FromStr for Os {
+//    type Err = crate::dep_types::DependencyError;
+//
+//    fn from_str(s: &str) -> Result<Self, Self::Err> {
+//        Ok(match s {
+//            "windows" => Os::Any,
+//            "linux" => Os::Any,
+//            "mac" => Os::Any,
+//            _ => {
+//                     return Err(crate::DependencyError::new(&format!("Problem parsing Os: {}", s)));
+//                }
+//        })
+//    }
+//}
+
 fn download(py_install_path: &Path, version: &Version) {
     // We use the `.xz` format due to its small size compared to `.zip`. On order half the size.
+    let os;
+    let os_str;
     #[cfg(target_os = "windows")]
-    let os = "windows";
+    {
+        os = Os::Windows;
+        os_str = "windows";
+    }
     #[cfg(target_os = "linux")]
-    let os = "ubuntu";
+    {
+        // todo: Support different distros.
+        os = Os::Ubuntu;
+        os_str = "ubuntu";
+    }
     #[cfg(target_os = "macos")]
-    let os = "mac";
+    {
+        os = Os::Mac;
+        os_str = "mac";
+    }
 
     // Match up our version to the closest match (major+minor will match) we've built.
-    let vers_to_dl2: PyVers = (*version, crate::Os::from_str(os).unwrap()).into();
+    let vers_to_dl2: PyVers = (*version, os).into();
     let vers_to_dl = vers_to_dl2.to_string();
 
     let url = format!(
         "https://github.com/David-OConnor/pybin/releases/\
          download/{}/python-{}-{}.tar.xz",
-        vers_to_dl, vers_to_dl, os
+        vers_to_dl, vers_to_dl, os_str
     );
 
     // eg `python-3.7.4-ubuntu.tar.xz`
-    let archive_path = py_install_path.join(&format!("python-{}-{}.tar.xz", vers_to_dl, os));
+    let archive_path = py_install_path.join(&format!("python-{}-{}.tar.xz", vers_to_dl, os_str));
     if !archive_path.exists() {
         // Save the file
         util::print_color(
@@ -157,7 +183,7 @@ fn download(py_install_path: &Path, version: &Version) {
     let extracted_path = py_install_path.join(&format!("python-{}", vers_to_dl));
 
     fs::rename(
-        py_install_path.join(&format!("python-{}-{}", vers_to_dl, os)),
+        py_install_path.join(&format!("python-{}-{}", vers_to_dl, os_str)),
         &extracted_path,
     )
     .expect("Problem renaming extracted Python folder");
@@ -295,20 +321,28 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
 
     let py_name;
     let os;
+    let python_name;
+    let pip_name;
     #[cfg(target_os = "windows")]
     {
         py_name = "python";
-        os = crate::Os::Windows;
+        os = Os::Windows;
+        python_name = "python.exe";
+        pip_name = "pip.exe";
     }
     #[cfg(target_os = "linux")]
     {
         py_name = "bin/python3";
-        os = crate::Os::Linux;
+        os = Os::Ubuntu;
+        python_name = "python";
+        pip_name = "pip";
     }
     #[cfg(target_os = "macos")]
     {
         py_name = "bin/python3";
-        os = crate::Os::Mac;
+        os = Os::Mac;
+        python_name = "python";
+        pip_name = "pip";
     }
 
     let mut alias = None;
@@ -378,24 +412,6 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
         if commands::create_venv2(&alias_path, &lib_path, ".venv").is_err() {
             util::abort("Problem creating virtual environment");
         }
-    }
-
-    let python_name;
-    let pip_name;
-    #[cfg(target_os = "windows")]
-    {
-        python_name = "python.exe";
-        pip_name = "pip.exe";
-    }
-    #[cfg(target_os = "linux")]
-    {
-        python_name = "python";
-        pip_name = "pip";
-    }
-    #[cfg(target_os = "macos")]
-    {
-        python_name = "python";
-        pip_name = "pip";
     }
 
     let bin_path = util::find_bin_path(&vers_path);
