@@ -1,8 +1,9 @@
 # Changelog
 
 ## v0.1.1
+- Fixed a bug, where spaces could prevent console scripts from being installed
 - Now uses `~/.local/share/pyflow` on Linux, `~\AppData\Roaming\pyflow` on Windows, and 
-`~/Library/Application Support/pyflow` on Mac, instead of `~/.python-installs`.
+`~/Library/Application Support/pyflow` on Mac, instead of `~/.python-installs`
 
 ## v0.1.0
 - Installing Python binaries now works correctly on Windows, Ubuntu≥18.4, and Debian

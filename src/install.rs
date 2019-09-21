@@ -56,7 +56,7 @@ fn remove_scripts(scripts: Vec<String>, scripts_path: &Path) {
         for script in scripts.iter() {
             if data.contains(&format!("from {}", script)) {
                 fs::remove_file(entry.path()).expect("Problem removing console script");
-                util::print_color(&format!("Removed console script {}", script), Color::Green);
+                util::print_color(&format!("Removed console script {}:", script), Color::Green);
             }
         }
     }
@@ -100,7 +100,7 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &Path) {
         let mut in_scripts_section = false;
         for line in io::BufReader::new(ep_file).lines() {
             if let Ok(l) = line {
-                if &l == "[console_scripts]" {
+                if l.contains("[console_scripts]") {
                     in_scripts_section = true;
                     continue;
                 }
@@ -109,7 +109,8 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &Path) {
                     break;
                 }
                 if in_scripts_section && !l.is_empty() {
-                    scripts.push(l.clone());
+                    // Remove potential leading spaces; have seen indents included.
+                    scripts.push(l.clone().replace(" ", ""));
                 }
             }
         }
@@ -140,7 +141,7 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &Path) {
             let path = script_path.join(name);
             make_script(&path, name, module, func);
             util::print_color(
-                &format!("Added a command-line script: {}", name),
+                &format!("Added a console script: {}", name),
                 Color::Green,
             );
         }
