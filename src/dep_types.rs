@@ -493,7 +493,7 @@ impl Constraint {
                 major -= 1;
                 minor = MAX_VER;
                 patch = MAX_VER;
-            // ie 2.9.0. Return max of 2.8.999999
+                // ie 2.9.0. Return max of 2.8.999999
             } else if patch == 0 {
                 minor -= 1;
                 patch = MAX_VER
@@ -682,7 +682,7 @@ fn parse_extras(
             let ex_re = Regex::new(
                 r#"(extra|sys_platform|python_version)\s*(\^|~|==|<=|>=|<|>|!=)\s*['"](.*?)['"]"#,
             )
-            .unwrap();
+                .unwrap();
 
             for caps in ex_re.captures_iter(extras) {
                 let type_ = caps.get(1).unwrap().as_str();
@@ -753,14 +753,13 @@ impl Req {
             // wildcard, so we don't accidentally match a semicolon here if a
             // set of parens appears later. The non-greedy ? in the version-matching
             // expression's important as well, in some cases of extras.
-            Regex::new(r#"^([a-zA-Z\-0-9._]+)\s+\((.*?)\)(?:(?:\s*;\s*)(.*))?$"#).unwrap()
+            Regex::new(r#"^([a-zA-Z\-0-9._]+)\s+\(?(.*?)\)?(?:(?:\s*;\s*)(.*))?$"#).unwrap()
         } else {
             // eg saturn = ">=0.3.4", as in pyproject.toml
             // todo extras in this format?
             Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
         };
 
-        // todo: Excessive nesting
         if let Some(caps) = re.captures(s) {
             let name = caps.get(1).unwrap().as_str().to_owned();
             let reqs_m = caps.get(2).unwrap();
@@ -784,7 +783,6 @@ impl Req {
         } else {
             // todo extras
             Regex::new(r"^([a-zA-Z\-0-9._]+)$").unwrap()
-            //            Regex::new(r"^([a-zA-Z\-0-9._]+)(?:(a|b|rc|dep)(\d+))?$").unwrap()
         };
 
         if let Some(caps) = novers_re.captures(s) {
@@ -1154,7 +1152,7 @@ pub mod tests {
             "pathlib2; extra == \"test\" and ( python_version == \"2.7\")",
             true,
         )
-        .unwrap();
+            .unwrap();
 
         let expected2 = Req {
             name: "pathlib2".into(),
@@ -1169,7 +1167,7 @@ pub mod tests {
             "win-unicode-console (>=0.5) ; sys_platform == \"win32\" and python_version < \"3.6\"",
             true,
         )
-        .unwrap();
+            .unwrap();
 
         let expected3 = Req {
             name: "win-unicode-console".into(),
@@ -1183,6 +1181,41 @@ pub mod tests {
         assert_eq!(actual, expected);
         assert_eq!(actual2, expected2);
         assert_eq!(actual3, expected3);
+    }
+
+    // Non-standard format I've come across; more like the non-pypi fmt.
+    #[test]
+    fn parse_req_pypi_no_parens() {
+        let actual1 = Req::from_str("pydantic >=0.32.2,<=0.32.2", true).unwrap();
+        let actual2 = Req::from_str("starlette >=0.11.1,<=0.12.8", true).unwrap();
+
+        let expected1 = Req {
+            name: "pydantic".into(),
+            constraints: vec![
+                Constraint::new(Gte, Version::new(0, 32, 2)),
+                Constraint::new(Lte, Version::new(0, 32, 2)),
+            ],
+            extra: None,
+            sys_platform: None,
+            python_version: None,
+            install_with_extras: None,
+        };
+
+        let expected2 = Req {
+            name: "starlette".into(),
+            constraints: vec![
+                Constraint::new(Gte, Version::new(0, 11, 1)),
+                Constraint::new(Lte, Version::new(0, 12, 8)),
+            ],
+            extra: None,
+            sys_platform: None,
+            python_version: None,
+            install_with_extras: None,
+        };
+
+        assert_eq!(actual1, expected1);
+        assert_eq!(actual2, expected2);
+
     }
 
     #[test]

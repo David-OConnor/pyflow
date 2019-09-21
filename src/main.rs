@@ -46,6 +46,7 @@ impl FromStr for Os {
             "manylinux2010_i686" => Os::Linux32,
             "manylinux1_x86_64" => Os::Linux,
             "manylinux2010_x86_64" => Os::Linux,
+            "cygwin" => Os::Linux, // todo is this right?
             "linux" => Os::Linux,
             "linux2" => Os::Linux,
             "windows" => Os::Windows,

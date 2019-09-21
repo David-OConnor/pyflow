@@ -310,8 +310,6 @@ fn guess_graph(
         }
     }
 
-    //                println!("NON_LOCKED: {:#?}", &non_locked_reqs);
-    //            println!("LOCKED: {:#?}", &locked_reqs);
 
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
     let mut query_data = match fetch_req_data(&non_locked_reqs, vers_cache) {
@@ -358,8 +356,6 @@ fn guess_graph(
             .iter()
             .filter(|d| util::compare_names(d.name.as_ref().unwrap(), &req.name))
             .collect();
-
-        //        println!("DBG result: {:#?}", &query_result);
 
         let deps: Vec<Dependency> = query_result
             .into_iter()
@@ -524,7 +520,6 @@ pub fn resolve(
     let mut reqs_searched = Vec::new();
 
     let mut version_cache = HashMap::new();
-
     if guess_graph(
         0,
         &reqs,

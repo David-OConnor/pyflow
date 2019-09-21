@@ -2,6 +2,7 @@
 
 ## v0.1.1
 - Fixed a bug, where spaces could prevent console scripts from being installed
+- Fixed parsing pypi requirements that ommit parenthesis
 - Now uses `~/.local/share/pyflow` on Linux, `~\AppData\Roaming\pyflow` on Windows, and 
 `~/Library/Application Support/pyflow` on Mac, instead of `~/.python-installs`
 
