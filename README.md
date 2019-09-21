@@ -34,12 +34,12 @@ as the language itself.
 
 ## Installation
 - **Windows, Ubuntu, or Debian:** Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.0/pyflow-0.1.0-x86_64.msi)
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.1/pyflow-0.1.1-x86_64.msi)
 or
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.0/pyflow_0.1.0_amd64.deb) .
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.1/pyflow_0.1.1_amd64.deb) .
 
 
-- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.0/pyflow-linux)
+- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.1/pyflow-linux)
  and place it somewhere
 accessible by the system PATH. For example, `/usr/bin`.
 
