@@ -11,8 +11,7 @@ This tool manages Python installations and dependencies. It implements
 and [Pep 518 -- Specifying Minimum Build System Requirements for Python Projects](https://www.python.org/dev/peps/pep-0518/)
 
 It keeps the latter isolated in the project
-directory, and runs
-Python in an environment which uses this directory. Per PEP 582, dependencies
+directory, and runs Python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
 
 It also includes some convenience features, like running standalone files in their
@@ -71,7 +70,7 @@ to run one-off Python files that aren't attached to a project, but have dependen
  
  - It automatically manages Python installations and environments. You specify a Python version
  in `pyproject.toml` (if ommitted, the pyflow asks), and pyflow ensures that version is used. 
- If it's not installed, pyflow downloads a binary, stores it in `~/python-installs`, and uses that.
+ If it's not installed, pyflow downloads a binary, and uses that.
  If multiple installations are found for that version, it asks which to use.
 
 - By not using Python to install or run, it remains intallation-agnostic and 
@@ -237,8 +236,9 @@ be added to `pyproject.toml` and installed.
 - `pyflow` - Run a Python REPL
 - `pyflow main.py` - Run a python file
 - `pyflow python` or `pyflow python main.py` - alternate syntax for the above two
-- `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`. This can either
-have been installed by a dependency, or specified under `[tool.pyflow]`, `scripts`
+- `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`, or a project function.
+ For the former, this must have been installed by a dependency; for the latter, it's specfied
+under `[tool.pyflow]`, `scripts`
 - `pyflow run ipython` - alternate syntax for the above
 - `pyflow script myscript.py` - Run a one-off script, outside a project directory, with per-file
 package management
@@ -257,8 +257,9 @@ a readme, pyproject.toml, .gitignore, and directory for code
 - `pyflow init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
 `requirements.text` and `Pipfile` as required.
 - `pyflow reset` - Remove the environment, and uninstall all packages
-- `pyflow clear` - Clear the global cache of downloaded packages, in `~/python-installs/dependency-cache`
-and the global cache of one-off script environments, in `~/python-installs/script-envs`.
+- `pyflow clear` - Clear the global cache of downloaded packages, eg in
+ `~/.local/share/pyflow` (Linux) or `~\AppData\Roaming\pyflow` (Windows)
+and the global cache of one-off script environments, in `~/.local/share/pyflow/script-envs`.
 - `pyflow -V` - Get the current version of this tool
 - `pyflow help` Get help, including a list of available commands
 
@@ -321,7 +322,6 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Packaging and publishing projects that use compiled extensions
 - Dealing with multiple-installed-versions of a dependency that uses importlib
 or dynamic imports
-- Change `~/python-installs` to something more elegant
 
 
 ## Building and uploading your project to PyPi
@@ -371,6 +371,16 @@ If you notice unexpected behavior or missing features, please post an issue,
 or submit a PR. If you see unexpected
 behavior, it's probably a bug! Post an issue listing the dependencies that did
 not install correctly.
+
+
+## Why not to use this
+- It's adding another tool to an already complex field.
+- Most of the features here are already provided by a range of existing packages,
+like the ones in the table above.
+- The field of contributers is expected to be small, since it's written in a different language.
+- Dependency managers like Pipenv and Poetry work well enough for many cases, and 
+have dedicated dev teams, and large userbases.
+- Conda in particular handles many things this does quite well.
 
 
 ## Dependency cache repo:

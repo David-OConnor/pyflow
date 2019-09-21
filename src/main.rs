@@ -885,7 +885,7 @@ fn find_deps_from_script(file_path: &Path) -> Vec<String> {
 /// // todo: Perhaps move this logic to its own file, if it becomes long.
 /// todo: We're using script name as unique identifier; address this in the future,
 /// todo perhaps with an id in a comment at the top of a file
-fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<String>) {
+fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<String>, pyflow_dir: &Path) {
     // todo: DRY with run_cli_tool and subcommand::Install
     let filename = match args.get(0) {
         Some(a) => a.clone(),
@@ -941,8 +941,8 @@ fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<
     }
 
     // todo DRY
-    let pyflows_dir = env_path.join("__pypackages__");
-    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pyflows_dir);
+    let pypackages_dir = env_path.join("__pypackages__");
+    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir);
 
     let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
@@ -1133,11 +1133,13 @@ fn sync(
 fn main() {
     let cfg_filename = "pyproject.toml";
     let lock_filename = "pyflow.lock";
-    let python_installs_dir = dirs::home_dir()
-        .expect("Problem finding home directory")
-        .join(".python-installs");
-    let cache_path = python_installs_dir.join("dependency-cache");
-    let script_env_path = python_installs_dir.join("script-envs");
+
+    let base_dir = directories::BaseDirs::new();
+    let pyflow_dir = base_dir.expect("Problem finding base directory")
+        .data_dir().to_owned().join("pyflow");
+
+    let cache_path = pyflow_dir.join("dependency-cache");
+    let script_env_path = pyflow_dir.join("script-envs");
 
     #[cfg(target_os = "windows")]
     let os = Os::Windows;
@@ -1163,7 +1165,7 @@ fn main() {
 
     // Run this before parsing the config.
     if let SubCommand::Script { mut args } = subcmd {
-        run_script(&script_env_path, &cache_path, os, &mut args);
+        run_script(&script_env_path, &cache_path, os, &mut args, &pyflow_dir);
         return;
     }
 
@@ -1264,7 +1266,7 @@ fn main() {
         }
     };
 
-    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir);
+    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir);
 
     let lib_path = vers_path.join("lib");
     let bin_path = util::find_bin_path(&vers_path);

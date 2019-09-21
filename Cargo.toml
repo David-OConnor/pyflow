@@ -16,7 +16,7 @@ categories = ["development-tools::build-utils"]
 [dependencies]
 crossterm = "^0.10.2"
 data-encoding = "^2.1.2"
-dirs = "^2.0.2"
+directories = "^2.0.2"
 flate2 = "1.0.9"
 fs_extra = "^1.1.0"
 xz2 = "^0.1.6"

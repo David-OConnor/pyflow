@@ -353,7 +353,6 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
 }
 
 pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
-    println!("Path: {:?},  {:?}", archive_path, dest);
     let archive_bytes = fs::read(archive_path).expect("Problem reading archive as bytes");
 
     let mut tar: Vec<u8> = Vec::new();
@@ -373,7 +372,7 @@ pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
 }
 
 /// Find venv info, creating a venv as required.
-pub fn find_venv_info(cfg_vers: &Version, pypackages_dir: &Path) -> (PathBuf, Version) {
+pub fn find_venv_info(cfg_vers: &Version, pypackages_dir: &Path, pyflow_dir: &Path) -> (PathBuf, Version) {
     let venvs = find_venvs(&pypackages_dir);
     // The version's explicitly specified; check if an environment for that version
     let compatible_venvs: Vec<&(u32, u32)> = venvs
@@ -385,7 +384,7 @@ pub fn find_venv_info(cfg_vers: &Version, pypackages_dir: &Path) -> (PathBuf, Ve
     let py_vers;
     match compatible_venvs.len() {
         0 => {
-            let vers = py_versions::create_venv(&cfg_vers, pypackages_dir);
+            let vers = py_versions::create_venv(&cfg_vers, pypackages_dir, pyflow_dir);
             vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
             py_vers = Version::new_short(vers.major, vers.minor); // Don't include patch.
         }

@@ -30,7 +30,7 @@ fn abort_helper(version: &str, os: &str) {
 impl From<(Version, Os)> for PyVers {
     fn from(v_o: (Version, Os)) -> Self {
         let unsupported = "Unsupported python version requested; only Python ≥ 3.4 is supported. \
-        to fix this, edit the `python_version` line of `pyproject.toml`, or run `pyflow switch 3.7`";
+        to fix this, edit the `py_version` line of `pyproject.toml`, or run `pyflow switch 3.7`";
         if v_o.0.major != 3 {
             util::abort(unsupported);
             unreachable!()
@@ -279,7 +279,7 @@ pub fn find_py_aliases(version: &Version) -> Vec<(String, Version)> {
 }
 
 // Find versions installed with this tool.
-fn find_installed_versions() -> Vec<Version> {
+fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
     #[cfg(target_os = "windows")]
     let py_name = "python";
     #[cfg(target_os = "linux")]
@@ -287,16 +287,12 @@ fn find_installed_versions() -> Vec<Version> {
     #[cfg(target_os = "macos")]
     let py_name = "bin/python3";
 
-    let python_installs_dir = dirs::home_dir()
-        .expect("Problem finding home directory")
-        .join(".python-installs");
-
-    if !&python_installs_dir.exists() && fs::create_dir(&python_installs_dir).is_err() {
-        util::abort("Problem creating ~/python-installs directory")
+    if !&pyflow_dir.exists() && fs::create_dir(&pyflow_dir).is_err() {
+        util::abort("Problem creating the Pyflow directory")
     }
 
     let mut result = vec![];
-    for entry in python_installs_dir
+    for entry in pyflow_dir
         .read_dir()
         .expect("Can't open python installs path")
     {
@@ -316,11 +312,7 @@ fn find_installed_versions() -> Vec<Version> {
 
 /// Create a new virtual environment, and install Wheel.
 //fn create_venv(cfg_v: &Version, py_install: PyInstall, pyypackages_dir: &PathBuf) -> Version {
-pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
-    let python_installs_dir = dirs::home_dir()
-        .expect("Problem finding home directory")
-        .join(".python-installs"); // todo dry
-
+pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) -> Version {
     let py_name;
     let os;
     let python_name;
@@ -353,11 +345,11 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
 
     // If we find both a system alias, and internal version installed, go with the internal.
     // One's this tool installed
-    let installed_versions = find_installed_versions();
+    let installed_versions = find_installed_versions(pyflow_dir);
     for iv in installed_versions.iter() {
         if iv.major == cfg_v.major && iv.minor == cfg_v.minor {
             let folder_name = format!("python-{}", iv.to_string2());
-            alias_path = Some(python_installs_dir.join(folder_name).join(py_name));
+            alias_path = Some(pyflow_dir.join(folder_name).join(py_name));
             py_ver = Some(*iv);
             break;
         }
@@ -386,17 +378,17 @@ pub fn create_venv(cfg_v: &Version, pyypackages_dir: &Path) -> Version {
     if py_ver.is_none() {
         // Download and install the appropriate Python binary, if we can't find either a
         // custom install, or on the Path.
-        download(&python_installs_dir, cfg_v);
+        download(&pyflow_dir, cfg_v);
         let py_ver2: PyVers = (*cfg_v, os).into();
         py_ver = Some(py_ver2.to_vers());
 
         let folder_name = format!("python-{}", py_ver2.to_string());
-        alias_path = Some(python_installs_dir.join(folder_name).join(py_name));
+        alias_path = Some(pyflow_dir.join(folder_name).join(py_name));
     }
 
     let py_ver = py_ver.expect("missing Python version");
 
-    let vers_path = pyypackages_dir.join(format!("{}.{}", py_ver.major, py_ver.minor));
+    let vers_path = pypackages_dir.join(format!("{}.{}", py_ver.major, py_ver.minor));
 
     let lib_path = vers_path.join("lib");
 
