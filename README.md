@@ -8,28 +8,24 @@
 
 This tool manages Python installations and dependencies. It implements
 [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
-and [Pep 518 -- Specifying Minimum Build System Requirements for Python Projects](https://www.python.org/dev/peps/pep-0518/)
-
-It keeps the latter isolated in the project
-directory, and runs Python in an environment which uses this directory. Per PEP 582, dependencies
-are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
-
-It also includes some convenience features, like running standalone files in their
-own environment with no config, and running project functions directly from the CLI.
+and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/). 
+Dependencies are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
 
 You don't need Python installed to use it; it will
 install the specified version of Python if not already installed. 
 *This feature currently
  only works on Windows, Ubuntu≥18.04, and Debian. For now, if on another OS, assume 
- you must have the version of Python you wish
-to use installed, and available on the PATH.*
+ you must have the version of Python you wish to use installed.*
 
-Only works with Python ≥ 3.4. 
+It includes convenience features, like running standalone files in their
+own environment with no config, and running project functions directly from the CLI.
 
 **Goal**: Make using and publishing Python projects as simple as possible. Understanding
 Python environments shouldn't be required to use dependencies safely. We're attempting
 to fix each stumbling block in the Python workflow, so that it's as elegant
 as the language itself.
+
+Only works with Python ≥ 3.4. 
 
 
 ## Installation
@@ -52,7 +48,7 @@ accessible by the system PATH. For example, `/usr/bin`.
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname` 
 to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
 creates a folder with the basics.
-- Run `pyflow install` to sync dependencies with `pyproject.toml`, or add dependencies to it. 
+- Run `pyflow install` in a project folder to sync dependencies with `pyproject.toml`, or add dependencies to it. 
  `pyproject.toml` will be created if it doesn't exist.
 - Run `pyflow` or `pyflow myfile.py` to run Python.
 
@@ -235,11 +231,9 @@ be added to `pyproject.toml` and installed.
 ### Running REPL and Python files in the environment:
 - `pyflow` - Run a Python REPL
 - `pyflow main.py` - Run a python file
-- `pyflow python` or `pyflow python main.py` - alternate syntax for the above two
-- `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`, or a project function.
+- `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`, or a project function
  For the former, this must have been installed by a dependency; for the latter, it's specfied
 under `[tool.pyflow]`, `scripts`
-- `pyflow run ipython` - alternate syntax for the above
 - `pyflow script myscript.py` - Run a one-off script, outside a project directory, with per-file
 package management
 
