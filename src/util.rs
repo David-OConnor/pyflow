@@ -8,6 +8,7 @@ use regex::Regex;
 use std::io::{self, BufRead, BufReader, Read};
 use std::str::FromStr;
 use std::{
+    collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
     process, thread, time,
@@ -372,7 +373,11 @@ pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
 }
 
 /// Find venv info, creating a venv as required.
-pub fn find_venv_info(cfg_vers: &Version, pypackages_dir: &Path, pyflow_dir: &Path) -> (PathBuf, Version) {
+pub fn find_venv_info(
+    cfg_vers: &Version,
+    pypackages_dir: &Path,
+    pyflow_dir: &Path,
+) -> (PathBuf, Version) {
     let venvs = find_venvs(&pypackages_dir);
     // The version's explicitly specified; check if an environment for that version
     let compatible_venvs: Vec<&(u32, u32)> = venvs
@@ -434,4 +439,59 @@ pub fn fallible_v_parse(vers: &str) -> Version {
             unreachable!()
         }
     }
+}
+
+/// A generic prompt function, where the user selects from a list
+pub fn prompt_list<T: Clone + ToString>(
+    init_msg: &str,
+    type_: &str,
+    items: &[(String, T)],
+    show_item: bool,
+) -> (String, T) {
+    print_color(init_msg, Color::Magenta);
+    for (i, (name, content)) in items.iter().enumerate() {
+        if show_item {
+            println!("{}: {}: {}", i + 1, name, content.to_string())
+        } else {
+            println!("{}: {}", i + 1, name)
+        }
+    }
+
+    let mut mapping = HashMap::new();
+    for (i, item) in items.iter().enumerate() {
+        mapping.insert(i + 1, item);
+    }
+
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Problem reading input");
+
+    let input = input
+        .chars()
+        .next()
+        .expect("Problem parsing input")
+        .to_string()
+        .parse::<usize>();
+
+    let input = match input {
+        Ok(ip) => ip,
+        Err(e) => {
+            abort("Please try again; enter a number like 1 or 2 .");
+            unreachable!()
+        }
+    };
+
+    let (name, content) = match mapping.get(&input) {
+        Some(r) => r,
+        None => {
+            abort(&format!(
+                "Can't find the {} associated with that number. Is it in the list above?",
+                type_
+            ));
+            unreachable!()
+        }
+    };
+
+    (name.to_string(), content.clone())
 }

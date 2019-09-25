@@ -5,7 +5,7 @@ use crate::dep_types::Version;
 use crate::util;
 use crossterm::Color;
 use std::error::Error;
-use std::{collections::HashMap, fmt, fs, io, path::Path, process};
+use std::{fmt, fs, io, path::Path, process};
 
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
@@ -35,7 +35,6 @@ impl From<(Version, Os)> for PyVers {
             util::abort(unsupported);
             unreachable!()
         }
-        // todo: Handle non Ubuntu/Debian
         match v_o.0.minor {
             4 => match v_o.1 {
                 Os::Windows => {
@@ -43,6 +42,7 @@ impl From<(Version, Os)> for PyVers {
                     unreachable!()
                 }
                 Os::Ubuntu => Self::V3_4_10,
+                Os::Centos => Self::V3_4_10,
                 _ => {
                     abort_helper("3.4", "Mac");
                     unreachable!()
@@ -51,6 +51,7 @@ impl From<(Version, Os)> for PyVers {
             5 => match v_o.1 {
                 Os::Windows => Self::V3_5_4,
                 Os::Ubuntu => Self::V3_5_7,
+                Os::Centos => Self::V3_5_7,
                 _ => {
                     abort_helper("3.5", "Mac");
                     unreachable!()
@@ -59,6 +60,7 @@ impl From<(Version, Os)> for PyVers {
             6 => match v_o.1 {
                 Os::Windows => Self::V3_6_8,
                 Os::Ubuntu => Self::V3_6_9,
+                Os::Centos => Self::V3_6_9,
                 _ => {
                     abort_helper("3.6", "Mac");
                     unreachable!()
@@ -67,6 +69,7 @@ impl From<(Version, Os)> for PyVers {
             7 => match v_o.1 {
                 Os::Windows => Self::V3_7_4,
                 Os::Ubuntu => Self::V3_7_4,
+                Os::Centos => Self::V3_7_4,
                 _ => {
                     abort_helper("3.7", "Mac");
                     unreachable!()
@@ -108,14 +111,30 @@ impl PyVers {
 
 /// Only Oses we've built and hosted
 /// todo: How cross-compat are these? Eg work across diff versions of Ubuntu?
-/// todo Ubuntu/Debian? Ubuntu/all linux??
 /// todo: 32-bit
 #[derive(Clone, Copy, Debug)]
 enum Os {
     // Don't confuse with crate::Os
-    Ubuntu,
+    Ubuntu, // Builds on Ubuntu 18.04 work on Ubuntu 19.04, Debian, and Kali
+    Centos, // Will this work on Red Hat as well?
     Windows,
     Mac,
+}
+
+/// For use in the Linux distro prompt
+impl fmt::Display for Os {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Ubuntu => "Ubuntu",
+                Self::Centos => "Centos",
+                Self::Windows => "Windows",
+                Self::Mac => "Mac",
+            }
+        )
+    }
 }
 
 //impl FromStr for Os {
@@ -144,9 +163,31 @@ fn download(py_install_path: &Path, version: &Version) {
     }
     #[cfg(target_os = "linux")]
     {
-        // todo: Support different distros.
-        os = Os::Ubuntu;
-        os_str = "ubuntu";
+        let result = util::prompt_list(
+            "Please enter the number associated with your Linux distro:",
+            "Linux distro",
+            &[
+                ("Ubuntu, Debian, Kali".to_owned(), Os::Ubuntu),
+                ("Centos, Redhat".to_owned(), Os::Centos),
+            ],
+            false,
+        );
+        os = result.1;
+        os_str = match os {
+            Os::Ubuntu => "ubuntu",
+            Os::Centos => "centos",
+            _ => {
+                util::abort(
+                    "Unfortunately, we don't yet support other Operating systems.\
+                     It's worth trying the other options, to see if one works anyway.",
+                );
+                unreachable!()
+            } //            _ => panic!("If you're seeing this, the code is in what I thought was an unreachable\
+              //            state. I could give you advice for what to do. But honestly, why should you trust me?\
+              //            I clearly screwed this up. I'm writing a message that should never appear, yet\
+              //            I know it will probably appear someday. On a deep level, I know I'm not up to this tak.\
+              //            I'm so sorry.")
+        };
     }
     #[cfg(target_os = "macos")]
     {
@@ -208,42 +249,6 @@ impl fmt::Display for AliasError {
     }
 }
 
-/// Prompt which Python alias to use, if multiple are found.
-pub fn prompt_alias(aliases: &[(String, Version)]) -> (String, Version) {
-    // Todo: Overall, the API here is inelegant.
-    util::print_color("Found multiple compatible Python aliases. Please enter the number associated with the one you'd like to use for this project:", Color::Magenta);
-    for (i, (alias, version)) in aliases.iter().enumerate() {
-        println!("{}: {} version: {}", i + 1, alias, version.to_string())
-    }
-
-    let mut mapping = HashMap::new();
-    for (i, alias) in aliases.iter().enumerate() {
-        mapping.insert(i + 1, alias);
-    }
-
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Unable to read user input for version");
-
-    let input = input
-        .chars()
-        .next()
-        .expect("Problem reading input")
-        .to_string();
-
-    let (alias, version) = mapping
-        .get(
-            &input
-                .parse::<usize>()
-                .expect("Enter the number associated with the Python alias."),
-        )
-        .expect(
-            "Can't find the Python alias associated with that number. Is it in the list above?",
-        );
-    (alias.to_string(), *version)
-}
-
 /// Make an educated guess at the command needed to execute python the
 /// current system.  An alternative approach is trying to find python
 /// installations.
@@ -287,7 +292,7 @@ fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
     #[cfg(target_os = "macos")]
     let py_name = "bin/python3";
 
-    if !&pyflow_dir.exists() && fs::create_dir(&pyflow_dir).is_err() {
+    if !&pyflow_dir.exists() && fs::create_dir_all(&pyflow_dir).is_err() {
         util::abort("Problem creating the Pyflow directory")
     }
 
@@ -368,7 +373,13 @@ pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) ->
                 py_ver = Some(r.1);
             }
             _ => {
-                let r = prompt_alias(&aliases);
+                //                let r = prompt_alias(&aliases);
+                let r = util::prompt_list(
+                    "Found multiple compatible Python aliases. Please enter the number associated with the one you'd like to use for this project:",
+                    "Python alias",
+                    &aliases,
+                    true,
+                );
                 alias = Some(r.0);
                 py_ver = Some(r.1);
             }

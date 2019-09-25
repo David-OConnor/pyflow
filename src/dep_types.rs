@@ -493,7 +493,7 @@ impl Constraint {
                 major -= 1;
                 minor = MAX_VER;
                 patch = MAX_VER;
-                // ie 2.9.0. Return max of 2.8.999999
+            // ie 2.9.0. Return max of 2.8.999999
             } else if patch == 0 {
                 minor -= 1;
                 patch = MAX_VER
@@ -682,7 +682,7 @@ fn parse_extras(
             let ex_re = Regex::new(
                 r#"(extra|sys_platform|python_version)\s*(\^|~|==|<=|>=|<|>|!=)\s*['"](.*?)['"]"#,
             )
-                .unwrap();
+            .unwrap();
 
             for caps in ex_re.captures_iter(extras) {
                 let type_ = caps.get(1).unwrap().as_str();
@@ -1152,7 +1152,7 @@ pub mod tests {
             "pathlib2; extra == \"test\" and ( python_version == \"2.7\")",
             true,
         )
-            .unwrap();
+        .unwrap();
 
         let expected2 = Req {
             name: "pathlib2".into(),
@@ -1167,7 +1167,7 @@ pub mod tests {
             "win-unicode-console (>=0.5) ; sys_platform == \"win32\" and python_version < \"3.6\"",
             true,
         )
-            .unwrap();
+        .unwrap();
 
         let expected3 = Req {
             name: "win-unicode-console".into(),
@@ -1215,7 +1215,6 @@ pub mod tests {
 
         assert_eq!(actual1, expected1);
         assert_eq!(actual2, expected2);
-
     }
 
     #[test]

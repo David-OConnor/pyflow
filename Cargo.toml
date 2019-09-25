@@ -1,6 +1,6 @@
 [package]
 name = "pyflow"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 description = "A modern Python dependency manager"
 license = "MIT"
@@ -43,3 +43,9 @@ are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib
 A virtual environment is created in the same diretory as `lib`, and is used
 transparently."""
 
+
+[package.metadata.rpm]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+pyflow = { path = "/usr/bin/pyflow" }

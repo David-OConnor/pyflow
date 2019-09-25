@@ -310,7 +310,6 @@ fn guess_graph(
         }
     }
 
-
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
     let mut query_data = match fetch_req_data(&non_locked_reqs, vers_cache) {
         Ok(d) => d,

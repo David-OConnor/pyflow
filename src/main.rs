@@ -161,7 +161,8 @@ Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Exampl
 // todo: Auto-desr some of these
 pub struct Config {
     py_version: Option<Version>,
-    reqs: Vec<Req>, // name, requirements.
+    reqs: Vec<Req>,
+    dev_reqs: Vec<Req>,
     name: Option<String>,
     version: Option<Version>,
     author: Option<String>,
@@ -182,6 +183,47 @@ pub struct Config {
 }
 
 impl Config {
+    /// Helper fn to prevent repetition
+    fn parse_deps(deps: HashMap<String, files::DepComponentWrapper>) -> Vec<Req> {
+        let mut result = Vec::new();
+        for (name, data) in deps {
+            let constraints;
+            let mut extras = None;
+            let mut python_version = None;
+            match data {
+                files::DepComponentWrapper::A(constrs) => {
+                    constraints = Constraint::from_str_multiple(&constrs)
+                        .expect("Problem parsing constraints in `pyproject.toml`.");
+                }
+                files::DepComponentWrapper::B(subdata) => {
+                    constraints = Constraint::from_str_multiple(&subdata.constrs)
+                        .expect("Problem parsing constraints in `pyproject.toml`.");
+                    if let Some(ex) = subdata.extras {
+                        extras = Some(ex);
+                    }
+                    if let Some(v) = subdata.python {
+                        python_version = Some(
+                            Constraint::from_str(&v)
+                                .expect("Problem parsing python version in dependency"),
+                        );
+                    }
+                    // todo repository etc
+                }
+            }
+            //                    let
+
+            result.push(Req {
+                name,
+                constraints,
+                extra: None,
+                sys_platform: None,
+                python_version,
+                install_with_extras: extras,
+            });
+        }
+        result
+    }
+
     /// Pull config data from `pyproject.toml`. We use this to deserialize things like Versions
     /// and requirements.
     fn from_file(filename: &str) -> Option<Self> {
@@ -249,6 +291,7 @@ impl Config {
 
             // todo: DRY (c+p) from pyflow dependency parsing, other than parsing python version here,
             // todo which only poetry does.
+            // todo: Parse poetry dev deps
             if let Some(deps) = po.dependencies {
                 for (name, data) in deps {
                     let constraints;
@@ -292,92 +335,61 @@ impl Config {
             }
         }
 
-        if let Some(pp) = decoded.tool.pyflow {
-            if let Some(v) = pp.name {
+        if let Some(pf) = decoded.tool.pyflow {
+            if let Some(v) = pf.name {
                 result.name = Some(v);
             }
-            if let Some(v) = pp.author {
+            if let Some(v) = pf.author {
                 result.author = Some(v);
             }
-            if let Some(v) = pp.author_email {
+            if let Some(v) = pf.author_email {
                 result.author_email = Some(v);
             }
-            if let Some(v) = pp.license {
+            if let Some(v) = pf.license {
                 result.license = Some(v);
             }
-            if let Some(v) = pp.homepage {
+            if let Some(v) = pf.homepage {
                 result.homepage = Some(v);
             }
-            if let Some(v) = pp.description {
+            if let Some(v) = pf.description {
                 result.description = Some(v);
             }
-            if let Some(v) = pp.repository {
+            if let Some(v) = pf.repository {
                 result.repository = Some(v);
             }
 
             // todo: Process entry pts, classifiers etc?
-            if let Some(v) = pp.classifiers {
+            if let Some(v) = pf.classifiers {
                 result.classifiers = v;
             }
-            if let Some(v) = pp.keywords {
+            if let Some(v) = pf.keywords {
                 result.keywords = v;
             }
             //            if let Some(v) = pp.entry_points {
             //                result.entry_points = v;
             //            } // todo
-            if let Some(v) = pp.scripts {
+            if let Some(v) = pf.scripts {
                 result.scripts = v;
             }
 
-            if let Some(v) = pp.version {
+            if let Some(v) = pf.version {
                 result.version = Some(
                     Version::from_str(&v).expect("Problem parsing version in `pyproject.toml`"),
                 )
             }
 
-            if let Some(v) = pp.py_version {
+            if let Some(v) = pf.py_version {
                 result.py_version = Some(
                     Version::from_str(&v)
                         .expect("Problem parsing python version in `pyproject.toml`"),
                 );
             }
 
-            if let Some(deps) = pp.dependencies {
-                for (name, data) in deps {
-                    let constraints;
-                    let mut extras = None;
-                    let mut python_version = None;
-                    match data {
-                        files::DepComponentWrapper::A(constrs) => {
-                            constraints = Constraint::from_str_multiple(&constrs)
-                                .expect("Problem parsing constraints in `pyproject.toml`.");
-                        }
-                        files::DepComponentWrapper::B(subdata) => {
-                            constraints = Constraint::from_str_multiple(&subdata.constrs)
-                                .expect("Problem parsing constraints in `pyproject.toml`.");
-                            if let Some(ex) = subdata.extras {
-                                extras = Some(ex);
-                            }
-                            if let Some(v) = subdata.python {
-                                python_version = Some(
-                                    Constraint::from_str(&v)
-                                        .expect("Problem parsing python version in dependency"),
-                                );
-                            }
-                            // todo repository etc
-                        }
-                    }
-                    //                    let
-
-                    result.reqs.push(Req {
-                        name,
-                        constraints,
-                        extra: None,
-                        sys_platform: None,
-                        python_version,
-                        install_with_extras: extras,
-                    });
-                }
+            if let Some(deps) = pf.dependencies {
+                result.reqs = Self::parse_deps(deps);
+            }
+            if let Some(deps) = pf.dev_dependencies {
+                result.reqs = Self::parse_deps(deps);
             }
         }
 
@@ -886,7 +898,13 @@ fn find_deps_from_script(file_path: &Path) -> Vec<String> {
 /// // todo: Perhaps move this logic to its own file, if it becomes long.
 /// todo: We're using script name as unique identifier; address this in the future,
 /// todo perhaps with an id in a comment at the top of a file
-fn run_script(script_env_path: &Path, cache_path: &Path, os: Os, args: &mut Vec<String>, pyflow_dir: &Path) {
+fn run_script(
+    script_env_path: &Path,
+    cache_path: &Path,
+    os: Os,
+    args: &mut Vec<String>,
+    pyflow_dir: &Path,
+) {
     // todo: DRY with run_cli_tool and subcommand::Install
     let filename = match args.get(0) {
         Some(a) => a.clone(),
@@ -1136,8 +1154,11 @@ fn main() {
     let lock_filename = "pyflow.lock";
 
     let base_dir = directories::BaseDirs::new();
-    let pyflow_dir = base_dir.expect("Problem finding base directory")
-        .data_dir().to_owned().join("pyflow");
+    let pyflow_dir = base_dir
+        .expect("Problem finding base directory")
+        .data_dir()
+        .to_owned()
+        .join("pyflow");
 
     let cache_path = pyflow_dir.join("dependency-cache");
     let script_env_path = pyflow_dir.join("script-envs");

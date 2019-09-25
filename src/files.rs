@@ -81,8 +81,7 @@ pub struct Pyflow {
     pub scripts: Option<HashMap<String, String>>, // todo. Maybe [tool.pyflow.scripts] , ie a standalone table?
 
     pub dependencies: Option<HashMap<String, DepComponentWrapper>>,
-
-    pub dev_dependencies: Option<HashMap<String, String>>,
+    pub dev_dependencies: Option<HashMap<String, DepComponentWrapper>>,
     pub extras: Option<HashMap<String, String>>,
 }
 
@@ -105,8 +104,7 @@ pub struct Poetry {
     pub extras: Option<HashMap<String, String>>,
 
     pub dependencies: Option<HashMap<String, DepComponentWrapperPoetry>>,
-    // todo: Can't find dets on poetry docs, but apparently exists
-    //    dev_dependencies: Option<HashMap<String, String>>,
+    pub dev_dependencies: Option<HashMap<String, DepComponentWrapperPoetry>>,
     // todo: Include these
     //    pub source: Option<HashMap<String, String>>,
     pub scripts: Option<HashMap<String, String>>,

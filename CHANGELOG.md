@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.2
+- Added support for installing Python on different linux distros
+- Fixed a bug related to creating `pyflow` directory
+
 ## v0.1.1
 - Fixed a bug, where spaces could prevent console scripts from being installed
 - Fixed parsing pypi requirements that ommit parenthesis

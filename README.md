@@ -13,9 +13,8 @@ Dependencies are stored in the project directory → `__pypackages__` → `3.7`(
 
 You don't need Python installed to use it; it will
 install the specified version of Python if not already installed. 
-*This feature currently
- only works on Windows, Ubuntu≥18.04, and Debian. For now, if on another OS, assume 
- you must have the version of Python you wish to use installed.*
+*This feature has only been tested on Windows, Ubuntu≥18.04, Debian, and Kali. 
+For now, if on another OS, assume you must have the version of Python you wish to use installed.*
 
 It includes convenience features, like running standalone files in their
 own environment with no config, and running project functions directly from the CLI.
@@ -224,7 +223,7 @@ entry points for somone using the package, regardless of if they're using this t
 If an environment isn't already set up for the version specified in `pyproject.toml`, sets one up. If
 no version is specified, it asks you.
 - `pyflow install requests` - If you specify one or more packages after `install`, those packages will 
-be added to `pyproject.toml` and installed.
+be added to `pyproject.toml` and installed
 - `pyflow install numpy==1.16.4 matplotlib>=3.1` - Example with multiple dependencies, and specified versions
 - `pyflow uninstall requests` - Remove one or more dependencies
 
@@ -398,9 +397,12 @@ by Steve Dower.
 
 
 ## Gotchas
+- Make sure `__pypackages__` is in your `.gitignore` file.
+- You may need to set up IDEs to find packages in `__pypackages__`. If using PyCharm, 
+using the tree on the left, right click `__pypackages__/3.x/lib`,
+select `Mark directory as`, `Sources Root`.
 - Make sure the `pyflow` binary is accessible in your path. If installing
 via a `deb`, `msi`, or `Cargo`, this should be set up automatically.
-- Make sure `__pypackages__` is in your `.gitignore` file.
 
 # References
 - [PEP 582 - Python local packages directory](https://www.python.org/dev/peps/pep-0582/)

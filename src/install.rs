@@ -47,7 +47,9 @@ fn replace_distutils(setup_path: &Path) {
 /// Remove scripts. Used when uninstalling.
 fn remove_scripts(scripts: Vec<String>, scripts_path: &Path) {
     // todo: Likely not a great approach. QC.
-    for entry in fs::read_dir(scripts_path).expect("Problem reading dist directory") {
+    for entry in
+        fs::read_dir(scripts_path).expect("Problem reading dist directory when removing scripts")
+    {
         let entry = entry.unwrap();
         if !entry.file_type().unwrap().is_file() {
             continue;
@@ -140,10 +142,7 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &Path) {
             let func = caps.get(3).unwrap().as_str();
             let path = script_path.join(name);
             make_script(&path, name, module, func);
-            util::print_color(
-                &format!("Added a console script: {}", name),
-                Color::Green,
-            );
+            util::print_color(&format!("Added a console script: {}", name), Color::Green);
         }
     }
 
@@ -273,9 +272,10 @@ pub fn download_and_install_package(
             //                .unwrap()
             //                .to_owned();
             let mut built_wheel_filename = String::new();
-            for entry in
-                fs::read_dir(extracted_parent.join("dist")).expect("Problem reading dist directory")
-            {
+            for entry in fs::read_dir(extracted_parent.join("dist")).expect(
+                "Problem reading the dist directory of a package built from source. \
+                 The `wheel` package have not have been installed in this environment.",
+            ) {
                 let entry = entry.unwrap();
                 built_wheel_filename = entry
                     .path()
