@@ -13,8 +13,6 @@ Dependencies are stored in the project directory → `__pypackages__` → `3.7`(
 
 You don't need Python installed to use it; it will
 install the specified version of Python if not already installed. 
-*This feature has only been tested on Windows, Ubuntu≥18.04, Debian, and Kali. 
-For now, if on another OS, assume you must have the version of Python you wish to use installed.*
 
 It includes convenience features, like running standalone files in their
 own environment with no config, and running project functions directly from the CLI.
@@ -47,8 +45,9 @@ accessible by the system PATH. For example, `/usr/bin`.
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname` 
 to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
 creates a folder with the basics.
-- Run `pyflow install` in a project folder to sync dependencies with `pyproject.toml`, or add dependencies to it. 
- `pyproject.toml` will be created if it doesn't exist.
+- Run `pyflow install` in a project folder to sync dependencies with `pyproject.toml`, 
+or add dependencies to it. 
+this file will be created if it doesn't exist.
 - Run `pyflow` or `pyflow myfile.py` to run Python.
 
 ## Quick-and-dirty start for quick-and-dirty scripts

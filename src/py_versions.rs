@@ -164,11 +164,11 @@ fn download(py_install_path: &Path, version: &Version) {
     #[cfg(target_os = "linux")]
     {
         let result = util::prompt_list(
-            "Please enter the number associated with your Linux distro:",
+            "Please enter the number corresponding to your Linux distro:",
             "Linux distro",
             &[
-                ("Ubuntu, Debian, Kali".to_owned(), Os::Ubuntu),
-                ("Centos, Redhat".to_owned(), Os::Centos),
+                ("2018 or newer (Ubuntu > 18.04, Debian, Kali etc)".to_owned(), Os::Ubuntu),
+                ("Older (Centos, Redhat, Suse etc)".to_owned(), Os::Centos),
             ],
             false,
         );
@@ -315,30 +315,29 @@ fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
     result
 }
 
-/// Create a new virtual environment, and install Wheel.
-//fn create_venv(cfg_v: &Version, py_install: PyInstall, pyypackages_dir: &PathBuf) -> Version {
+/// Create a new virtual environment, and install `wheel`.
 pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) -> Version {
-    let py_name;
+    let mut py_name;
     let os;
     let python_name;
     let pip_name;
     #[cfg(target_os = "windows")]
     {
-        py_name = "python";
+        py_name = "python".to_string();
         os = Os::Windows;
         python_name = "python.exe";
         pip_name = "pip.exe";
     }
     #[cfg(target_os = "linux")]
     {
-        py_name = "bin/python3";
+        py_name = "bin/python3".to_string();
         os = Os::Ubuntu;
         python_name = "python";
         pip_name = "pip";
     }
     #[cfg(target_os = "macos")]
     {
-        py_name = "bin/python3";
+        py_name = "bin/python3".to_string();
         os = Os::Mac;
         python_name = "python";
         pip_name = "pip";
@@ -354,7 +353,7 @@ pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) ->
     for iv in installed_versions.iter() {
         if iv.major == cfg_v.major && iv.minor == cfg_v.minor {
             let folder_name = format!("python-{}", iv.to_string2());
-            alias_path = Some(pyflow_dir.join(folder_name).join(py_name));
+            alias_path = Some(pyflow_dir.join(folder_name).join(&py_name));
             py_ver = Some(*iv);
             break;
         }
@@ -394,6 +393,20 @@ pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) ->
         py_ver = Some(py_ver2.to_vers());
 
         let folder_name = format!("python-{}", py_ver2.to_string());
+
+        // We appear to have symlink issues on some builds, where `python3` won't work, but
+        // `python3.7` (etc) will. Note that this is no longer applicable once the venv is built,
+        // and we're using its `python`.
+        #[cfg(target_os = "linux")] {
+            match py_ver.unwrap().minor {
+                7 => py_name = py_name + ".7",
+                6 => py_name = py_name + ".6",
+                5 => py_name = py_name + ".5",
+                4 => py_name = py_name + ".4",
+                _ => panic!("Invalid python minor version"),
+            }
+        }
+
         alias_path = Some(pyflow_dir.join(folder_name).join(py_name));
     }
 
@@ -409,10 +422,12 @@ pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) ->
 
     println!("Setting up Python environment...");
 
+    // For an alias on the PATH
     if let Some(alias) = alias {
         if commands::create_venv(&alias, &lib_path, ".venv").is_err() {
             util::abort("Problem creating virtual environment");
         }
+    // For a Python one we've installed.
     } else if let Some(alias_path) = alias_path {
         if commands::create_venv2(&alias_path, &lib_path, ".venv").is_err() {
             util::abort("Problem creating virtual environment");
