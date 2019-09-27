@@ -467,6 +467,7 @@ pub fn create_venv(
             .join(venv_lib_path)
             .join("site-packages"),
         &bin_path,
+        &bin_path,
         cache_path,
         install::PackageType::Wheel,
         &None,

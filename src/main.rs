@@ -743,6 +743,7 @@ fn sync_deps(
             &best_release.digests.sha256,
             lib_path,
             bin_path,
+            &lib_path.join("../bin"),
             cache_path,
             package_type,
             rename,

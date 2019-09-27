@@ -84,7 +84,7 @@ if __name__ == '__main__':
 /// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
 /// Alternatively, we could just parse all `dist-info` folders every run; this should
 /// be faster.
-fn setup_scripts(name: &str, version: &Version, lib_path: &Path) {
+fn setup_scripts(name: &str, version: &Version, lib_path: &Path, script_path: &Path) {
     let mut scripts = vec![];
     // todo: Sep fn for dist_info path, to avoid repetition between here and uninstall?
     let mut dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
@@ -129,7 +129,6 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &Path) {
     //    let mut existing_scripts =
     //        fs::read_to_string(scripts_file).expect("Can't find console_scripts.txt");
 
-    let script_path = lib_path.join("../bin");
     if !script_path.exists() && fs::create_dir(&script_path).is_err() {
         util::abort("Problem creating script path")
     }
@@ -162,6 +161,7 @@ pub fn download_and_install_package(
     expected_digest: &str,
     lib_path: &Path,
     bin_path: &Path,
+    script_path: &Path,
     cache_path: &Path,
     package_type: PackageType,
     rename: &Option<(u32, String)>,
@@ -324,7 +324,7 @@ pub fn download_and_install_package(
             }
         }
     }
-    setup_scripts(name, version, lib_path);
+    setup_scripts(name, version, lib_path, script_path);
 
     Ok(())
 }
