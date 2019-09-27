@@ -79,6 +79,7 @@ pub struct Pyflow {
     pub readme_filename: Option<String>,
     //    pub entry_points: Option<HashMap<String, Vec<String>>>,
     pub scripts: Option<HashMap<String, String>>, // todo. Maybe [tool.pyflow.scripts] , ie a standalone table?
+    pub python_requires: Option<String>,
 
     pub dependencies: Option<HashMap<String, DepComponentWrapper>>,
     pub dev_dependencies: Option<HashMap<String, DepComponentWrapper>>,

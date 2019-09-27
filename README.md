@@ -332,12 +332,16 @@ classifiers = [
 scripts = { activate = "jeejah:activate" }
 python_requires=">=3.6"
 
+package_url = "https://pypi.org/legacy/"
+
 
 [tool.pyflow.dependencies]
 numpy = "^1.16.4"
 manim = "0.1.8"
 ipython = {version = "^7.7.0", extras=["qtconsole"]}
 ```
+`package_url` is used to determine which package repository to upload to. If ommitted, 
+`Pypi test` is used (`https://test.pypi.org/legacy/`).
 
 ## Building this from source                      
 If you’d like to build from source, [download and install Rust]( https://www.rust-lang.org/tools/install),

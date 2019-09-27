@@ -166,10 +166,16 @@ pub(crate) fn build(
 }
 
 pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
-    let repo_url = cfg
-        .package_url
-        .clone()
-        .unwrap_or_else(|| "https://test.pypi.org/legacy/".to_string());
+    let repo_url = match cfg.package_url.clone() {
+        Some(pu) => {
+            let mut r = pu;
+            if !r.ends_with('/') {
+                r.push('/');
+            }
+            r
+        },
+        None => "https://test.pypi.org/legacy/".to_string()
+    };
 
     println!("Uploading to {}", repo_url);
     Command::new(bin_path.join("twine"))

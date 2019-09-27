@@ -373,6 +373,14 @@ impl Config {
                 result.scripts = v;
             }
 
+            if let Some(v) = pf.python_requires {
+                result.python_requires = Some(v);
+            }
+
+            if let Some(v) = pf.package_url {
+                result.package_url = Some(v);
+            }
+
             if let Some(v) = pf.version {
                 result.version = Some(
                     Version::from_str(&v).expect("Problem parsing version in `pyproject.toml`"),
@@ -486,8 +494,8 @@ version = "0.1.0"
 description = ""
 author = ""
 
-pyackage_url = "https://test.pypi.org/legacy/"
-# pyackage_url = "https://pypi.org/legacy/"
+package_url = "https://test.pypi.org/legacy/"
+# package_url = "https://pypi.org/legacy/"
 
 
 [tool.pyflow.dependencies]
