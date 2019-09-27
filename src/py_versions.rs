@@ -451,9 +451,9 @@ pub fn create_venv(
     #[cfg(target_os = "windows")]
     let venv_lib_path = "Lib";
     #[cfg(target_os = "linux")]
-    let venv_lib_path = &format!("python{}.{}", py_ver.major, py_ver.minor);
+    let venv_lib_path = "lib64".join(&format!("python{}.{}", py_ver.major, py_ver.minor));
     #[cfg(target_os = "macos")]
-    let venv_lib_path = &format!("python{}.{}", py_ver.major, py_ver.minor);
+    let venv_lib_path = "lib64".join(&format!("python{}.{}", py_ver.major, py_ver.minor));
 
     install::download_and_install_package(
         "wheel",
@@ -464,7 +464,6 @@ pub fn create_venv(
         // todo lib too (not 64)?
         &vers_path
             .join(".venv")
-            .join("lib64")
             .join(venv_lib_path)
             .join("site-packages"),
         &bin_path,
