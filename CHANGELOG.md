@@ -3,6 +3,7 @@
 ## v0.1.2
 - Added support for installing Python on most Linux distros
 - Fixed a bug related to creating `pyflow` directory
+- Fixed a bug in specifying package url with the `publish` command.
 
 ## v0.1.1
 - Fixed a bug, where spaces could prevent console scripts from being installed

@@ -433,7 +433,7 @@ fn find_constraints(
 
 /// We've determined we need to add all the included packages, and renamed all but one.
 fn make_renamed_packs(
-    vers_cache: &HashMap<String, (String, Version, Vec<Version>)>,
+    _vers_cache: &HashMap<String, (String, Version, Vec<Version>)>,
     deps: &[Dependency],
     //    all_deps: &[Dependency],
     name: &str,
@@ -577,7 +577,7 @@ pub fn resolve(
             // Find what constraints are driving each dep that shares a name.
             let constraints = find_constraints(reqs, &result, &deps);
 
-            let names: Vec<String> = deps.iter().map(|d| d.version.to_string()).collect();
+            let _names: Vec<String> = deps.iter().map(|d| d.version.to_string()).collect();
             //            println!("(dbg): Multiple versions found for {}: {:#?}", &name, names);
             let inter = dep_types::intersection_many(&constraints);
 

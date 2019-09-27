@@ -48,13 +48,18 @@ fn _serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
 
 /// Creates a temporary file which imitates setup.py
 fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
+    let cfg = cfg.clone();
+
     let version = match cfg.version {
         Some(v) => v.to_string(),
         None => "".into(),
     };
-    let cfg = cfg.clone();
 
-    println!("CFG: {:#?}", &cfg);
+    let mut keywords = String::new();
+    for kw in &cfg.keywords {
+        keywords.push_str(" ");
+        keywords.push_str(kw);
+    }
 
     let data = format!(
         r#"import setuptools
@@ -73,14 +78,16 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="{}",
     packages=setuptools.find_packages(),
-
+    keywords="{}",
     classifiers={},
-
-    entry_points={{
-        "console_scripts": ,
-    }},
+    python_requires="{}",
 )
 "#,
+
+//            entry_points={{
+//        "console_scripts": ,
+//    }},
+
         cfg.readme_filename.unwrap_or_else(|| "README.md".into()),
         cfg.name.unwrap_or_else(|| "".into()),
         version,
@@ -89,8 +96,10 @@ setuptools.setup(
         cfg.license.unwrap_or_else(|| "".into()),
         cfg.description.unwrap_or_else(|| "".into()),
         cfg.homepage.unwrap_or_else(|| "".into()),
+        keywords,
         serialize_py_list(&cfg.classifiers),
         //        serialize_py_list(&cfg.console_scripts),
+        cfg.python_requires.unwrap_or_else(|| "".into()),
 
         // todo:
         //            extras_require="{}",
@@ -160,14 +169,14 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
     let repo_url = cfg
         .package_url
         .clone()
-        .unwrap_or_else(|| "https://test.pypi.org/legacy".to_string());
+        .unwrap_or_else(|| "https://test.pypi.org/legacy/".to_string());
 
     println!("Uploading to {}", repo_url);
     Command::new(bin_path.join("twine"))
         .args(&[
             "upload",
-            // todo - test repo / setting repos not working.
-            //            &format!("--repository-url {}/", repo_url),
+            "--repository-url",
+            &repo_url,
             "dist/*",
         ])
         .status()

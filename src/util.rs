@@ -221,7 +221,8 @@ pub fn find_console_scripts(bin_path: &Path) -> Vec<String> {
 pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> Vec<Req> {
     let mut added_reqs = vec![];
     for p in added.iter() {
-        match Req::from_str(&p, false) {
+        let trimmed = p.replace(',', "");
+        match Req::from_str(&trimmed, false) {
             Ok(r) => added_reqs.push(r),
             Err(_) => abort(&format!("Unable to parse this package: {}. \
                     Note that installing a specific version via the CLI is currently unsupported. If you need to specify a version,\
@@ -476,7 +477,7 @@ pub fn prompt_list<T: Clone + ToString>(
 
     let input = match input {
         Ok(ip) => ip,
-        Err(e) => {
+        Err(_) => {
             abort("Please try again; enter a number like 1 or 2 .");
             unreachable!()
         }

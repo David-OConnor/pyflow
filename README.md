@@ -6,23 +6,20 @@
 
 #### *Simple is better than complex* - The Zen of Python
 
-This tool manages Python installations and dependencies. It implements
-[PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
-and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/). 
-Dependencies are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
+This tool manages Python installations and dependencies.
 
-You don't need Python installed to use it; it will
-install the specified version of Python if not already installed. 
-
-It includes convenience features, like running standalone files in their
-own environment with no config, and running project functions directly from the CLI.
-
-**Goal**: Make using and publishing Python projects as simple as possible. Understanding
+**Goals**: Make using and publishing Python projects as simple as possible. Understanding
 Python environments shouldn't be required to use dependencies safely. We're attempting
 to fix each stumbling block in the Python workflow, so that it's as elegant
 as the language itself.
 
-Only works with Python ≥ 3.4. 
+You don't need Python or any other tools installed to use Pyflow.
+
+It can run standalone scripts in their
+own environments with no config, and project functions directly from the CLI.
+
+It implements [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
+and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and supports Python ≥ 3.4.  
 
 
 ## Installation
@@ -31,7 +28,6 @@ Only works with Python ≥ 3.4.
 or
 [this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.1/pyflow_0.1.1_amd64.deb) .
 
-
 - **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.1/pyflow-linux)
  and place it somewhere
 accessible by the system PATH. For example, `/usr/bin`.
@@ -39,7 +35,7 @@ accessible by the system PATH. For example, `/usr/bin`.
 - **If you have [Rust](https://www.rust-lang.org) installed**: Run `cargo install pyflow`.
 
 - **Mac:**  Build from source using the instructions near the bottom of this page,
- or install via `cargo`. If able, please build and PR a Mac binary.
+ or install via `cargo`. If able, please PR the binary.
 
 ## Quickstart
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname` 
@@ -50,29 +46,31 @@ or add dependencies to it.
 this file will be created if it doesn't exist.
 - Run `pyflow` or `pyflow myfile.py` to run Python.
 
+
 ## Quick-and-dirty start for quick-and-dirty scripts
-- Add the line `__requires__ = [numpy, requests]` somewhere in the script, where `numpy` and `requsts` are dependencies.
+- Add the line `__requires__ = [numpy, requests]` somewhere in your script, where `numpy` and 
+`requsts` are dependencies.
 Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
 This will set up an isolated environment for this script, and install
-dependencies as required, without altering any other environment. This is a safe way
+dependencies as required. This is a safe way
 to run one-off Python files that aren't attached to a project, but have dependencies.
 
 
 ## Why add another Python manager?
-`Pipenv` and `Poetry` both address part of this problem.
- Some reasons why this tool is different:
+`Pipenv` and `Poetry` both address part of Pyflow's *raison d'être*.
+ Some reasons why this is different:
  
  - It automatically manages Python installations and environments. You specify a Python version
- in `pyproject.toml` (if ommitted, the pyflow asks), and pyflow ensures that version is used. 
- If it's not installed, pyflow downloads a binary, and uses that.
+ in `pyproject.toml` (if ommitted, itasks), and ensures that version is used. 
+ If the version's not installed, Pyflow downloads a binary, and uses that.
  If multiple installations are found for that version, it asks which to use.
 
-- By not using Python to install or run, it remains intallation-agnostic and 
-environment-agnostic. This is important for making setup and use as simple and decison-free as
+- By not using Python to install or run, it remains environment-agnostic. 
+This is important for making setup and use as simple and decison-free as
  possible. It's especially important on Linux, where there may be several versions
 of Python installed, with different versions and access levels. This avoids
 complications, especially for new users. It's common for Python-based CLI tools
-to not run properly when installed from `pip` due to the `PATH` 
+to not run properly when installed from `pip` due to the `PATH` or user directories
 not being configured in the expected way.
 
 - Its dependency resolution and locking is faster due to using a cached
@@ -81,17 +79,16 @@ on the incomplete data available on the [pypi warehouse](https://github.com/pypa
 
 - It keeps dependencies in the project directory, in `__pypackages__`. This is subtle, 
 but reinforces the idea that there's
-no hidden state to be concerned with.
+no hidden state.
 
-- It will always use the specified version of Python. This is a notable problem, for example,
- with `Poetry`; it
+- It will always use the specified version of Python. This is a notable limitation in `Poetry`; it
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
 
 - Multiple versions of a dependency can be installed, allowing resolution
 of conflicting sub-dependencies. (ie: Your package requires `Dep A>=1.0` and `Dep B`.
 `Dep B` requires Dep `A==0.9`) There are many cases where `Poetry` and `Pipenv` will fail
-to resolve dependencies, but we're able to by doing this. Try it for yourself with a few
- random dependencies from [pypi](https://pypi.org/); there's a good change you'll
+to resolve dependencies. Try it for yourself with a few
+ random dependencies from [pypi](https://pypi.org/); there's a good chance you'll
  hit this problem using `Poetry` or `Pipenv`. Limitations: This will not work for
 some compiled dependencies, and attempting to package something using this will
 trigger an error.
@@ -107,24 +104,22 @@ The commands may be long depending on the path of virtual envs and projects,
 and it requires modifying the state of the terminal for each project, each time
 you use it, which you may find inconvenient or inelegant.
 
-If you're satisified with an existing flow, there may be no reason to change, but
 I think we can do better. This is especially relevant for new Python users
-who haven't groked venvs, or are unaware of the hazards of working with a system Python.
+who don't understand venvs, or are unaware of the hazards of working with a system Python.
  
 `Pipenv` improves the workflow by automating environment use, and 
-allowing reproducable dependency resolution. `Poetry` improves upon `Pipenv's` API,
+allowing reproducable dependency graphs. `Poetry` improves upon `Pipenv's` API,
 speed, and dependency resolution, as well as improving
 the packaging and distributing process by using a consolidating project config. Both
- are sensitive to the Python environment used to run them. This tool
-attempts to improve upon both in the areas listed in the section above. Its goal is to be
-as intuitive as possible.
+ are sensitive to the Python environment used to run them, and won't work
+ correctly if it's not as expected. 
 
 `Conda` addresses these problems elegantly, but maintains a separate repository
 of binaries from `PyPi`. If all packages you need are available on `Conda`, it may
 be the best solution. If not, it requires falling back to `Pip`, which means 
 using two separate package managers.
 
-When building and deploying packages, a set of degenerate files are 
+When building and deploying packages, a set of overlapping files are 
 traditionally used: `setup.py`, `setup.cfg`, `requirements.txt` and `MANIFEST.in`. We use
 `pyproject.toml` as the single-source of project info required to build
 and publish.
@@ -170,7 +165,7 @@ diffeqpy = "1.1.0"
 ```
 The `[tool.pyflow]` section is used for metadata. The only required item in it is
  `py_version`, unless
-building and distributing a package. The `[tool.pypyackage.dependencies]` section
+building and distributing a package. The `[tool.pyflow.dependencies]` section
 contains all dependencies, and is an analog to `requirements.txt`. 
 
 You can specify `extra` dependencies, which will only be installed when passing
@@ -306,15 +301,14 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 
 
 ## Not-yet-implemented
-- Installing from sources other than `pypi` (eg repos)
-- Installing multiple versions of a dependency may not work if it uses compiles code
+- Installing from sources other than `pypi` (eg repos, paths)
 - The lock file is missing some info like hashes
 - Adding a dependency via the CLI with a specific version constraint, or extras.
-- Developer requirements
+- Developer dependencies
 - Packaging and publishing projects that use compiled extensions
 - Dealing with multiple-installed-versions of a dependency that uses importlib
 or dynamic imports
-
+- Install Python on Mac
 
 ## Building and uploading your project to PyPi
 In order to build and publish your project, additional info is needed in
@@ -330,11 +324,13 @@ description = "Small, but packs a punch!"
 homepage = "https://everything.math"
 repository = "https://github.com/raz/everythingkiller"
 license = "MIT"
+keywords = ["nanotech", "weapons"]
 classifiers = [
     "Topic :: System :: Hardware",
     "Topic :: Scientific/Engineering :: Human Machine Interfaces",
 ]
 scripts = { activate = "jeejah:activate" }
+python_requires=">=3.6"
 
 
 [tool.pyflow.dependencies]
@@ -370,7 +366,7 @@ not install correctly.
 - Most of the features here are already provided by a range of existing packages,
 like the ones in the table above.
 - The field of contributers is expected to be small, since it's written in a different language.
-- Dependency managers like Pipenv and Poetry work well enough for many cases, and 
+- Dependency managers like Pipenv and Poetry work well enough for many cases,
 have dedicated dev teams, and large userbases.
 - Conda in particular handles many things this does quite well.
 

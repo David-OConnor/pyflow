@@ -180,6 +180,7 @@ pub struct Config {
     //    entry_points: HashMap<String, Vec<String>>, // todo option?
     scripts: HashMap<String, String>, //todo: put under [tool.pyflow.scripts] ?
                                       //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
+    python_requires: Option<String>,
 }
 
 impl Config {
@@ -485,8 +486,8 @@ version = "0.1.0"
 description = ""
 author = ""
 
-pyackage_url = "https://test.pypi.org"
-# pyackage_url = "https://pypi.org"
+pyackage_url = "https://test.pypi.org/legacy/"
+# pyackage_url = "https://pypi.org/legacy/"
 
 
 [tool.pyflow.dependencies]
