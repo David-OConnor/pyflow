@@ -2,11 +2,10 @@
 
 use crate::commands;
 use crate::dep_types::Version;
-use crate::install::PackageType;
 use crate::{install, util};
 use crossterm::Color;
 use std::error::Error;
-use std::{fmt, fs, io, path::Path, process};
+use std::{fmt, fs, io, path::Path};
 
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
@@ -449,6 +448,13 @@ pub fn create_venv(
     //     Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
     let wheel_url = "https://files.pythonhosted.org/packages/00/83/b4a77d044e78ad1a45610eb88f745be2fd2c6d658f9798a15e384b7d57c9/wheel-0.33.6-py2.py3-none-any.whl";
 
+    #[cfg(target_os = "windows")]
+    let venv_lib_path = "Lib";
+    #[cfg(target_os = "linux")]
+    let venv_lib_path = &format!("python{}.{}", py_ver.major, py_ver.minor);
+    #[cfg(target_os = "mac")]
+    let venv_lib_path = &format!("python{}.{}", py_ver.major, py_ver.minor);
+
     install::download_and_install_package(
         "wheel",
         &Version::new(0, 33, 6),
@@ -459,9 +465,9 @@ pub fn create_venv(
         &vers_path
             .join(".venv")
             .join("lib64")
-            .join(&format!("python{}.{}", py_ver.major, py_ver.minor))
+            .join(venv_lib_path)
             .join("site-packages"),
-        &vers_path.join(".venv").join("bin"),
+        &bin_path,
         cache_path,
         install::PackageType::Wheel,
         &None,

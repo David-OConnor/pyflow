@@ -142,7 +142,10 @@ fn setup_scripts(name: &str, version: &Version, lib_path: &Path) {
             let func = caps.get(3).unwrap().as_str();
             let path = script_path.join(name);
             make_script(&path, name, module, func);
-            util::print_color(&format!("Added a console script: {}", name), Color::Green);
+            // `wheel` is a dependency required internally, but the user doesn't care.
+            if name != "wheel" {
+                util::print_color(&format!("Added a console script: {}", name), Color::Green);
+            }
         }
     }
 
