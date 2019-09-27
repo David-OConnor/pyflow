@@ -970,7 +970,8 @@ fn run_script(
 
     // todo DRY
     let pypackages_dir = env_path.join("__pypackages__");
-    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir, cache_path);
+    let (vers_path, py_vers) =
+        util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir, cache_path);
 
     let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
@@ -1298,7 +1299,8 @@ fn main() {
         }
     };
 
-    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir, &cache_path);
+    let (vers_path, py_vers) =
+        util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir, &cache_path);
 
     let lib_path = vers_path.join("lib");
     let bin_path = util::find_bin_path(&vers_path);

@@ -320,31 +320,32 @@ fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
 }
 
 /// Create a new virtual environment, and install `wheel`.
-pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path, cache_path: &Path) -> Version {
+pub fn create_venv(
+    cfg_v: &Version,
+    pypackages_dir: &Path,
+    pyflow_dir: &Path,
+    cache_path: &Path,
+) -> Version {
     let mut py_name;
     let os;
     let python_name;
-    let pip_name;
     #[cfg(target_os = "windows")]
     {
         py_name = "python".to_string();
         os = Os::Windows;
         python_name = "python.exe";
-        pip_name = "pip.exe";
     }
     #[cfg(target_os = "linux")]
     {
         py_name = "bin/python3".to_string();
         os = Os::Ubuntu;
         python_name = "python";
-        pip_name = "pip";
     }
     #[cfg(target_os = "macos")]
     {
         py_name = "bin/python3".to_string();
         os = Os::Mac;
         python_name = "python";
-        pip_name = "pip";
     }
 
     let mut alias = None;
@@ -441,7 +442,6 @@ pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path, ca
 
     let bin_path = util::find_bin_path(&vers_path);
 
-    //    util::wait_for_dirs(&[bin_path.join(python_name), bin_path.join(pip_name)])
     util::wait_for_dirs(&[bin_path.join(python_name)])
         .expect("Timed out waiting for venv to be created.");
 
@@ -456,13 +456,17 @@ pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path, ca
         "wheel-0.33.6-py2.py3-none-any.whl",
         "f4da1763d3becf2e2cd92a14a7c920f0f00eca30fdde9ea992c836685b9faf28",
         // todo lib too (not 64)?
-        // todo 3.7 i shard set!!
-        &vers_path.join(".venv").join("lib64").join("python3.7").join("site-packages"),
+        &vers_path
+            .join(".venv")
+            .join("lib64")
+            .join(&format!("python{}.{}", py_ver.major, py_ver.minor))
+            .join("site-packages"),
         &vers_path.join(".venv").join("bin"),
         cache_path,
         install::PackageType::Wheel,
         &None,
-    ).expect("Problem installing `wheel`");
+    )
+    .expect("Problem installing `wheel`");
 
     py_ver
 }
