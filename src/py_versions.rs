@@ -273,13 +273,16 @@ pub fn find_py_aliases(version: &Version) -> Vec<(String, Version)> {
     ];
 
     let mut result = Vec::new();
+    let mut found_dets = Vec::new();
 
     for alias in possible_aliases {
         // We use the --version command as a quick+effective way to determine if
         // this command is associated with Python.
+        let dets = commands::find_py_dets(alias);
         if let Some(v) = commands::find_py_version(alias) {
-            if v.major == version.major && v.minor == version.minor {
+            if v.major == version.major && v.minor == version.minor && !found_dets.contains(&dets) {
                 result.push((alias.to_string(), v));
+                found_dets.push(dets);
             }
         }
     }
@@ -451,9 +454,11 @@ pub fn create_venv(
     #[cfg(target_os = "windows")]
     let venv_lib_path = "Lib";
     #[cfg(target_os = "linux")]
-    let venv_lib_path = PathBuf::from("lib64").join(&format!("python{}.{}", py_ver.major, py_ver.minor));
+    let venv_lib_path =
+        PathBuf::from("lib64").join(&format!("python{}.{}", py_ver.major, py_ver.minor));
     #[cfg(target_os = "macos")]
-    let venv_lib_path = PathBuf::from("lib64").join(&format!("python{}.{}", py_ver.major, py_ver.minor));
+    let venv_lib_path =
+        PathBuf::from("lib64").join(&format!("python{}.{}", py_ver.major, py_ver.minor));
 
     install::download_and_install_package(
         "wheel",

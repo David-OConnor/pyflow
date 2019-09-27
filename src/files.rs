@@ -112,7 +112,7 @@ pub struct Poetry {
     //    pub extras: Option<HashMap<String, String>>,
 }
 
-/// Write dependencies to pyproject.toml. If an entry for tha = true;t package already exists, ask if
+/// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
 /// we should update the version. Assume we've already parsed the config, and are only
 /// adding new reqs, or ones with a changed version.
 pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
@@ -131,7 +131,12 @@ pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
         result.push_str("\n");
         if line == "[tool.pyflow.dependencies]" {
             in_dep = true;
-            continue;
+
+            if i != lines_vec.len() - 1 {
+                // If the last line's the start of dependencies section, don't move on;
+                // we'll add now.
+                continue;
+            }
         }
 
         if in_dep {

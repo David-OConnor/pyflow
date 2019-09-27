@@ -16,7 +16,7 @@ as the language itself.
 You don't need Python or any other tools installed to use Pyflow.
 
 It can run standalone scripts in their
-own environments with no config, and project functions directly from the CLI.
+own environments with no config, and functions directly from the CLI.
 
 It implements [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
 and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and supports Python ≥ 3.4.  
@@ -61,7 +61,7 @@ to run one-off Python files that aren't attached to a project, but have dependen
  Some reasons why this is different:
  
  - It automatically manages Python installations and environments. You specify a Python version
- in `pyproject.toml` (if ommitted, itasks), and ensures that version is used. 
+ in `pyproject.toml` (if ommitted, it asks), and ensures that version is used. 
  If the version's not installed, Pyflow downloads a binary, and uses that.
  If multiple installations are found for that version, it asks which to use.
 
@@ -89,9 +89,9 @@ of conflicting sub-dependencies. (ie: Your package requires `Dep A>=1.0` and `De
 `Dep B` requires Dep `A==0.9`) There are many cases where `Poetry` and `Pipenv` will fail
 to resolve dependencies. Try it for yourself with a few
  random dependencies from [pypi](https://pypi.org/); there's a good chance you'll
- hit this problem using `Poetry` or `Pipenv`. Limitations: This will not work for
+ hit this problem using `Poetry` or `Pipenv`. *Limitations: This will not work for
 some compiled dependencies, and attempting to package something using this will
-trigger an error.
+trigger an error.*
 
 
 ## My OS comes with Python, and Virtual environments are easy. What's the point of this?
@@ -132,7 +132,7 @@ These tools have different scopes and purposes:
 |------|------------|--------|--------|-------|-----------|-------|-----|
 | **Manages dependencies** | ✓ | ✓ | ✓ | | | ✓ | ✓|
 | **Manages Python installations** | | | | ✓ | | ✓ | ✓ |
-|| **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
+| **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
 | **Included with Python** | ✓ | | | | | | |
 | **Stores packages with project** | | | | | ✓ | | ✓|
 | **Locks dependencies** |  | ✓ | ✓ | | | ✓ | ✓|

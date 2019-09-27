@@ -21,6 +21,29 @@ impl fmt::Display for _ExecutionError {
     }
 }
 
+/// Todo: Dry from find_py_version
+pub fn find_py_dets(alias: &str) -> Option<String> {
+    let output = Command::new(alias).args(&["--version, --version"]).output();
+
+    let output_bytes = match output {
+        Ok(ob) => {
+            // Old versions of python output `--version` to `stderr`; newer ones to `stdout`,
+            // so check both.
+            if ob.stdout.is_empty() {
+                ob.stderr
+            } else {
+                ob.stdout
+            }
+        }
+        Err(_) => return None,
+    };
+
+    match std::str::from_utf8(&output_bytes) {
+        Ok(r) => Some(r.to_owned()),
+        Err(_) => None,
+    }
+}
+
 /// Find the py_version from the `python --py_version` command. Eg: "Python 3.7".
 pub fn find_py_version(alias: &str) -> Option<crate::Version> {
     let output = Command::new(alias).arg("--version").output();
@@ -61,7 +84,7 @@ pub(crate) fn create_venv(
     lib_path: &Path,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
-    // While creating the lib path, we're creating the __pypackages__ structure.
+// While creating the lib path, we're creating the __pypackages__ structure.
     Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))
@@ -76,7 +99,7 @@ pub(crate) fn create_venv2(
     lib_path: &Path,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
-    // While creating the lib path, we're creating the __pypackages__ structure.
+// While creating the lib path, we're creating the __pypackages__ structure.
     Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))

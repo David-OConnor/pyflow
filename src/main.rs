@@ -451,6 +451,7 @@ impl Config {
         for dep in self.reqs.iter() {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
+        result.push_str("\n");  // trailing newline
 
         match fs::write(file, result) {
             Ok(_) => util::print_color("Created `pyproject.toml`", Color::Green),
@@ -499,7 +500,6 @@ package_url = "https://test.pypi.org/legacy/"
 
 
 [tool.pyflow.dependencies]
-
 "##,
         name
     );
@@ -720,14 +720,17 @@ fn sync_deps(
         let (best_release, package_type) =
             find_best_release(&data, &name, &version, os, python_vers);
 
-        // Powershell  doesn't like emojis // todo format literal issues
-        //        #[cfg(target_os = "windows")]
-        //            let text = "Installing {}{}{} {} ...";
-        //        #[cfg(target_os = "linux")]
-        //            let text = "⬇️ Installing {}{}{} {} ...";
-        //        #[cfg(target_os = "macos")]
-        //            let text = "⬇️ Installing {}{}{} {} ...";
-
+        // Powershell  doesn't like emojis
+        // todo format literal issues, so repeating this whole statement.
+        #[cfg(target_os = "windows")]
+        println!(
+            "Installing {}{}{} {} ...",
+            Colored::Fg(Color::Cyan),
+            &name,
+            Colored::Fg(Color::Reset),
+            &version
+        );
+        #[cfg(target_os = "linux")]
         println!(
             "⬇️ Installing {}{}{} {} ...",
             Colored::Fg(Color::Cyan),
@@ -735,6 +738,15 @@ fn sync_deps(
             Colored::Fg(Color::Reset),
             &version
         );
+        #[cfg(target_os = "macos")]
+        println!(
+            "⬇️ Installing {}{}{} {} ...",
+            Colored::Fg(Color::Cyan),
+            &name,
+            Colored::Fg(Color::Reset),
+            &version
+        );
+
         if install::download_and_install_package(
             &name,
             &version,
@@ -826,9 +838,8 @@ fn run_cli_tool(
     // If a script name is specified by by this project and a dependency, favor
     // this project.
     if let Some(s) = cfg.scripts.get(&name) {
-        //                Some(s) => {
         let abort_msg = format!(
-            "Problem running the script {}, specified in `pyproject.toml`",
+            "Problem running the function {}, specified in `pyproject.toml`",
             name,
         );
 
@@ -855,7 +866,7 @@ fn run_cli_tool(
     }
     //            None => {
     let abort_msg = format!(
-        "Problem running the script {}. Is it installed? \
+        "Problem running the CLI tool {}. Is it installed? \
          Try running `pyflow install {}`",
         name, name
     );
@@ -1147,7 +1158,6 @@ fn sync(
     // Now that we've confirmed or modified the lock file, we're ready to sync installed
     // depenencies with it.
     sync_deps(
-        //                &bin_path, &lib_path, &packages, &installed, &os, &py_vers, &resolved,
         &bin_path,
         &lib_path,
         &cache_path,
