@@ -325,7 +325,6 @@ pub fn create_venv(
     pyflow_dir: &Path,
     cache_path: &Path,
 ) -> Version {
-    let mut py_name;
     let os;
     let python_name;
     #[cfg(target_os = "windows")]
@@ -452,7 +451,7 @@ pub fn create_venv(
     let venv_lib_path = "Lib";
     #[cfg(target_os = "linux")]
     let venv_lib_path = &format!("python{}.{}", py_ver.major, py_ver.minor);
-    #[cfg(target_os = "mac")]
+    #[cfg(target_os = "macos")]
     let venv_lib_path = &format!("python{}.{}", py_ver.major, py_ver.minor);
 
     install::download_and_install_package(
