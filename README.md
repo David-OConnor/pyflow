@@ -132,7 +132,7 @@ These tools have different scopes and purposes:
 |------|------------|--------|--------|-------|-----------|-------|-----|
 | **Manages dependencies** | ✓ | ✓ | ✓ | | | ✓ | ✓|
 | **Manages Python installations** | | | | ✓ | | ✓ | ✓ |
-| **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
+|| **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
 | **Included with Python** | ✓ | | | | | | |
 | **Stores packages with project** | | | | | ✓ | | ✓|
 | **Locks dependencies** |  | ✓ | ✓ | | | ✓ | ✓|
@@ -332,7 +332,7 @@ classifiers = [
 scripts = { activate = "jeejah:activate" }
 python_requires=">=3.6"
 
-package_url = "https://pypi.org/legacy/"
+package_url = "https://upload.pypi.org/legacy/"
 
 
 [tool.pyflow.dependencies]

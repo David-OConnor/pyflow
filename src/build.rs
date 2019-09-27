@@ -83,11 +83,9 @@ setuptools.setup(
     python_requires="{}",
 )
 "#,
-
-//            entry_points={{
-//        "console_scripts": ,
-//    }},
-
+        //            entry_points={{
+        //        "console_scripts": ,
+        //    }},
         cfg.readme_filename.unwrap_or_else(|| "README.md".into()),
         cfg.name.unwrap_or_else(|| "".into()),
         version,
@@ -100,7 +98,6 @@ setuptools.setup(
         serialize_py_list(&cfg.classifiers),
         //        serialize_py_list(&cfg.console_scripts),
         cfg.python_requires.unwrap_or_else(|| "".into()),
-
         // todo:
         //            extras_require="{}",
         //        match cfg.extras {
@@ -138,14 +135,10 @@ pub(crate) fn build(
         }
     }
 
-    // todo: Check if they exist; only install if they don't.
+    // todo: Install twine and its dependencies directly. This is the only place we need pip currently.
     let dummy_setup_fname = "setup_temp_pyflow.py";
-
     Command::new(bin_path.join("python"))
-        .args(&[
-            "-m", "pip", "install", //            "--upgrade",
-            "twine", "wheel",
-        ])
+        .args(&["-m", "pip", "install", "twine"])
         .status()
         .expect("Problem installing Twine");
 
@@ -173,18 +166,13 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
                 r.push('/');
             }
             r
-        },
-        None => "https://test.pypi.org/legacy/".to_string()
+        }
+        None => "https://test.pypi.org/legacy/".to_string(),
     };
 
     println!("Uploading to {}", repo_url);
     Command::new(bin_path.join("twine"))
-        .args(&[
-            "upload",
-            "--repository-url",
-            &repo_url,
-            "dist/*",
-        ])
+        .args(&["upload", "--repository-url", &repo_url, "dist/*"])
         .status()
         .expect("Problem publishing");
 }

@@ -2,7 +2,8 @@
 
 use crate::commands;
 use crate::dep_types::Version;
-use crate::util;
+use crate::install::PackageType;
+use crate::{install, util};
 use crossterm::Color;
 use std::error::Error;
 use std::{fmt, fs, io, path::Path, process};
@@ -167,7 +168,10 @@ fn download(py_install_path: &Path, version: &Version) {
             "Please enter the number corresponding to your Linux distro:",
             "Linux distro",
             &[
-                ("2018 or newer (Ubuntu > 18.04, Debian, Kali etc)".to_owned(), Os::Ubuntu),
+                (
+                    "2018 or newer (Ubuntu > 18.04, Debian, Kali etc)".to_owned(),
+                    Os::Ubuntu,
+                ),
                 ("Older (Centos, Redhat, Suse etc)".to_owned(), Os::Centos),
             ],
             false,
@@ -316,7 +320,7 @@ fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
 }
 
 /// Create a new virtual environment, and install `wheel`.
-pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) -> Version {
+pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path, cache_path: &Path) -> Version {
     let mut py_name;
     let os;
     let python_name;
@@ -397,7 +401,8 @@ pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) ->
         // We appear to have symlink issues on some builds, where `python3` won't work, but
         // `python3.7` (etc) will. Note that this is no longer applicable once the venv is built,
         // and we're using its `python`.
-        #[cfg(target_os = "linux")] {
+        #[cfg(target_os = "linux")]
+        {
             match py_ver.unwrap().minor {
                 7 => py_name = py_name + ".7",
                 6 => py_name = py_name + ".6",
@@ -436,15 +441,28 @@ pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dir: &Path) ->
 
     let bin_path = util::find_bin_path(&vers_path);
 
-    util::wait_for_dirs(&[bin_path.join(python_name), bin_path.join(pip_name)])
+    //    util::wait_for_dirs(&[bin_path.join(python_name), bin_path.join(pip_name)])
+    util::wait_for_dirs(&[bin_path.join(python_name)])
         .expect("Timed out waiting for venv to be created.");
 
-    // We need `wheel` installed to build wheels from source.
-    // Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
-    process::Command::new(bin_path.join("python"))
-        .args(&["-m", "pip", "install", "--quiet", "wheel"])
-        .status()
-        .expect("Problem installing `wheel`");
+    //     We need `wheel` installed to build wheels from source.
+    //     Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
+    let wheel_url = "https://files.pythonhosted.org/packages/00/83/b4a77d044e78ad1a45610eb88f745be2fd2c6d658f9798a15e384b7d57c9/wheel-0.33.6-py2.py3-none-any.whl";
+
+    install::download_and_install_package(
+        "wheel",
+        &Version::new(0, 33, 6),
+        wheel_url,
+        "wheel-0.33.6-py2.py3-none-any.whl",
+        "f4da1763d3becf2e2cd92a14a7c920f0f00eca30fdde9ea992c836685b9faf28",
+        // todo lib too (not 64)?
+        // todo 3.7 i shard set!!
+        &vers_path.join(".venv").join("lib64").join("python3.7").join("site-packages"),
+        &vers_path.join(".venv").join("bin"),
+        cache_path,
+        install::PackageType::Wheel,
+        &None,
+    ).expect("Problem installing `wheel`");
 
     py_ver
 }

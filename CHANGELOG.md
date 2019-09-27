@@ -4,6 +4,8 @@
 - Added support for installing Python on most Linux distros
 - Fixed a bug related to creating `pyflow` directory
 - Fixed a bug in specifying package url with the `publish` command.
+- Wheel is now installed directly, instead of with Pip; should only be dependent on
+pip now to install `twine`.
 
 ## v0.1.1
 - Fixed a bug, where spaces could prevent console scripts from being installed

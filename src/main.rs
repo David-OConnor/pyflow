@@ -179,7 +179,7 @@ pub struct Config {
     readme_filename: Option<String>,
     //    entry_points: HashMap<String, Vec<String>>, // todo option?
     scripts: HashMap<String, String>, //todo: put under [tool.pyflow.scripts] ?
-                                      //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
+    //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
     python_requires: Option<String>,
 }
 
@@ -495,7 +495,7 @@ description = ""
 author = ""
 
 package_url = "https://test.pypi.org/legacy/"
-# package_url = "https://pypi.org/legacy/"
+# package_url = "https://upload.pypi.org/legacy/"
 
 
 [tool.pyflow.dependencies]
@@ -970,7 +970,7 @@ fn run_script(
 
     // todo DRY
     let pypackages_dir = env_path.join("__pypackages__");
-    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir);
+    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir, cache_path);
 
     let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
@@ -1252,6 +1252,7 @@ fn main() {
         SubCommand::Clear {} => {
             util::wipe_dir(&cache_path);
             util::wipe_dir(&script_env_path);
+            return;
         }
         SubCommand::List => {
             let num_venvs = util::find_venvs(&pypackages_dir).len();
@@ -1297,7 +1298,7 @@ fn main() {
         }
     };
 
-    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir);
+    let (vers_path, py_vers) = util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir, &cache_path);
 
     let lib_path = vers_path.join("lib");
     let bin_path = util::find_bin_path(&vers_path);
