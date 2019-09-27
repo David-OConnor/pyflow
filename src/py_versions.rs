@@ -5,7 +5,7 @@ use crate::dep_types::Version;
 use crate::{install, util};
 use crossterm::Color;
 use std::error::Error;
-use std::{fmt, fs, io, path::Path};
+use std::{fmt, fs, io, path::Path, path::PathBuf};
 
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
@@ -451,9 +451,9 @@ pub fn create_venv(
     #[cfg(target_os = "windows")]
     let venv_lib_path = "Lib";
     #[cfg(target_os = "linux")]
-    let venv_lib_path = "lib64".join(&format!("python{}.{}", py_ver.major, py_ver.minor));
+    let venv_lib_path = PathBuf::from("lib64").join(&format!("python{}.{}", py_ver.major, py_ver.minor));
     #[cfg(target_os = "macos")]
-    let venv_lib_path = "lib64".join(&format!("python{}.{}", py_ver.major, py_ver.minor));
+    let venv_lib_path = PathBuf::from("lib64").join(&format!("python{}.{}", py_ver.major, py_ver.minor));
 
     install::download_and_install_package(
         "wheel",
