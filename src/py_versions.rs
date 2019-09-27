@@ -327,6 +327,7 @@ pub fn create_venv(
 ) -> Version {
     let os;
     let python_name;
+    let mut py_name;
     #[cfg(target_os = "windows")]
     {
         py_name = "python".to_string();
