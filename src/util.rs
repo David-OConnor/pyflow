@@ -65,10 +65,7 @@ pub fn find_venvs(pypackages_dir: &Path) -> Vec<(u32, u32)> {
     for (maj, mi) in py_versions.iter() {
         let venv_path = pypackages_dir.join(&format!("{}.{}/.venv", maj, mi));
 
-        if (venv_path.join("bin/python").exists() && venv_path.join("bin/pip").exists())
-            || (venv_path.join("Scripts/python.exe").exists()
-                && venv_path.join("Scripts/pip.exe").exists())
-        {
+        if venv_path.join("bin/python").exists() || venv_path.join("Scripts/python.exe").exists() {
             result.push((*maj, *mi))
         }
     }
