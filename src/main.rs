@@ -451,7 +451,7 @@ impl Config {
         for dep in self.reqs.iter() {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
-        result.push_str("\n");  // trailing newline
+        result.push_str("\n"); // trailing newline
 
         match fs::write(file, result) {
             Ok(_) => util::print_color("Created `pyproject.toml`", Color::Green),

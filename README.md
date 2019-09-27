@@ -24,11 +24,11 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 ## Installation
 - **Windows, Ubuntu, or Debian:** Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.1/pyflow-0.1.1-x86_64.msi)
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.2/pyflow-0.1.2-x86_64.msi)
 or
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.1/pyflow_0.1.1_amd64.deb) .
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.2/pyflow_0.1.2_amd64.deb) .
 
-- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.1/pyflow-linux)
+- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.2/pyflow)
  and place it somewhere
 accessible by the system PATH. For example, `/usr/bin`.
 

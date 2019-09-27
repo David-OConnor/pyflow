@@ -84,7 +84,7 @@ pub(crate) fn create_venv(
     lib_path: &Path,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
-// While creating the lib path, we're creating the __pypackages__ structure.
+    // While creating the lib path, we're creating the __pypackages__ structure.
     Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))
@@ -99,7 +99,7 @@ pub(crate) fn create_venv2(
     lib_path: &Path,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
-// While creating the lib path, we're creating the __pypackages__ structure.
+    // While creating the lib path, we're creating the __pypackages__ structure.
     Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))

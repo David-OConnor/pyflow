@@ -168,7 +168,7 @@ fn download(py_install_path: &Path, version: &Version) {
             "Linux distro",
             &[
                 (
-                    "2018 or newer (Ubuntu > 18.04, Debian, Kali etc)".to_owned(),
+                    "2018 or newer (Ubuntu ≥ 18.04, Debian, Kali etc)".to_owned(),
                     Os::Ubuntu,
                 ),
                 ("Older (Centos, Redhat, Suse etc)".to_owned(), Os::Centos),
@@ -407,10 +407,10 @@ pub fn create_venv(
         #[cfg(target_os = "linux")]
         {
             match py_ver.unwrap().minor {
-                7 => py_name = py_name + ".7",
-                6 => py_name = py_name + ".6",
-                5 => py_name = py_name + ".5",
-                4 => py_name = py_name + ".4",
+                7 => py_name += ".7",
+                6 => py_name += ".6",
+                5 => py_name += ".5",
+                4 => py_name += ".4",
                 _ => panic!("Invalid python minor version"),
             }
         }
