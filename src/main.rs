@@ -147,6 +147,13 @@ Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Exampl
         #[structopt(name = "args")]
         args: Vec<String>,
     },
+    /// Run a package globally; used for CLI tools like `ipython` and `black`. Doesn't
+    /// interfere Python installations. Must have been installed with `pyflow install -g black` etc
+    #[structopt(name = "global")]
+    Global {
+        #[structopt(name = "name")]
+        name: String,
+    },
     /// Change the Python version for this project. eg `pyflow switch 3.7`. Equivalent to setting
     /// `py_version` in `pyproject.toml`.
     #[structopt(name = "switch")]

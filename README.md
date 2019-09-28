@@ -8,7 +8,7 @@
 
 This tool manages Python installations and dependencies.
 
-![Poetry Install](https://raw.githubusercontent.com/david-oconnor/pyflow/master/assets/install.gif)
+![Demonstration](https://raw.githubusercontent.com/david-oconnor/pyflow/master/demo.gif)
 
 **Goals**: Make using and publishing Python projects as simple as possible. Understanding
 Python environments shouldn't be required to use dependencies safely. We're attempting
@@ -319,6 +319,7 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 
 
 ## Not-yet-implemented
+- Installing "system" cli tools
 - Installing from sources other than `pypi` (eg repos, paths)
 - The lock file is missing some info like hashes
 - Adding a dependency via the CLI with a specific version constraint, or extras.

@@ -429,7 +429,7 @@ pub fn create_venv(
     }
 
     #[cfg(target_os = "windows")]
-    println!("🐍🐍🐍🐍Setting up Python environment...");
+    println!("Setting up Python environment...");
     #[cfg(target_os = "linux")]
     println!("🐍Setting up Python environment..."); // Beware! Snake may be invisible.
     #[cfg(target_os = "macos")]
