@@ -398,7 +398,7 @@ impl Config {
                 result.reqs = Self::parse_deps(deps);
             }
             if let Some(deps) = pf.dev_dependencies {
-                result.reqs = Self::parse_deps(deps);
+                result.dev_reqs = Self::parse_deps(deps);
             }
         }
 
@@ -500,6 +500,8 @@ package_url = "https://test.pypi.org/legacy/"
 
 
 [tool.pyflow.dependencies]
+
+[tool.pyflow.dev-dependencies]
 "##,
         name
     );
@@ -1374,11 +1376,22 @@ fn main() {
             files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
 
             // Filter reqs here instead of re-reading the config from file.
-            let updated_reqs: Vec<Req> = cfg
+            let mut updated_reqs: Vec<Req> = cfg
                 .reqs
                 .into_iter()
                 .filter(|req| !removed_reqs.contains(&req.name))
                 .collect();
+
+            // todo: DRY
+            let updated_dev_reqs: Vec<Req> = cfg
+                .dev_reqs
+                .into_iter()
+                .filter(|req| !removed_reqs.contains(&req.name))
+                .collect();
+
+            for dev_req in updated_dev_reqs.into_iter() {
+                updated_reqs.push(dev_req);
+            }
 
             sync(
                 &bin_path,

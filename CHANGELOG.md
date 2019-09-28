@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.3
+- Added support for dev dependencies
+- Fixed a bug where dependencies weren't being set up with the `package` command
+
 ## v0.1.2
 - Added support for installing Python on most Linux distros
 - Wheel is now installed directly, instead of with Pip; should only be dependent on

@@ -168,10 +168,10 @@ fn download(py_install_path: &Path, version: &Version) {
             "Linux distro",
             &[
                 (
-                    "2018 or newer (Ubuntu ≥ 18.04, Debian, Kali etc)".to_owned(),
+                    "2018 or newer (Ubuntu≥18.04, Debian≥10, Suse≥15, Kali, etc)".to_owned(),
                     Os::Ubuntu,
                 ),
-                ("Older (Centos, Redhat, Suse etc)".to_owned(), Os::Centos),
+                ("Older (Centos, Redhat)".to_owned(), Os::Centos),
             ],
             false,
         );
@@ -381,7 +381,7 @@ pub fn create_venv(
             _ => {
                 //                let r = prompt_alias(&aliases);
                 let r = util::prompt_list(
-                    "Found multiple compatible Python aliases. Please enter the number associated with the one you'd like to use for this project:",
+                    "Found multiple compatible Python versions. Please enter the number associated with the one you'd like to use:",
                     "Python alias",
                     &aliases,
                     true,
@@ -428,7 +428,12 @@ pub fn create_venv(
         fs::create_dir_all(&lib_path).expect("Problem creating __pypackages__ directory");
     }
 
-    println!("Setting up Python environment...");
+    #[cfg(target_os = "windows")]
+    println!("🐍🐍🐍🐍Setting up Python environment...");
+    #[cfg(target_os = "linux")]
+    println!("🐍Setting up Python environment..."); // Beware! Snake may be invisible.
+    #[cfg(target_os = "macos")]
+    println!("🐍Setting up Python environment...");
 
     // For an alias on the PATH
     if let Some(alias) = alias {

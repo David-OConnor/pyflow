@@ -234,7 +234,12 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
             // return true if the added req's not in the cfg reqs, or if it is
             // and the version's different.
             let mut add = true;
-            for cr in cfg.reqs.iter() {
+            let mut reqs = cfg.reqs.clone();
+            for dev_req in cfg.dev_reqs.clone().into_iter() {
+                reqs.push(dev_req);
+            }
+
+            for cr in reqs.iter() {
                 if cr == ar
                     || (cr.name.to_lowercase() == ar.name.to_lowercase()
                         && ar.constraints.is_empty())

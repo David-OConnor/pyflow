@@ -125,43 +125,43 @@ pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
 
     // We collect lines here so we can start the index at a non-0 point.
     let lines_vec: Vec<&str> = data.lines().collect();
+    let mut insertion_pt = 0;
+
+    for (i, line) in data.lines().enumerate() {
+        if &line.replace(" ", "") == "[tool.pyflow.dependencies]" {
+            in_dep = true;
+            continue;
+        }
+
+        // We've found the end of the dependencies section.
+        if in_dep && (sect_re.is_match(line) || i == lines_vec.len() - 1) {
+            insertion_pt = i - 2;
+            break;
+        }
+    }
 
     for (i, line) in data.lines().enumerate() {
         result.push_str(line);
         result.push_str("\n");
-        if line == "[tool.pyflow.dependencies]" {
-            in_dep = true;
 
-            if i != lines_vec.len() - 1 {
-                // If the last line's the start of dependencies section, don't move on;
-                // we'll add now.
-                continue;
-            }
-        }
-
-        if in_dep {
-            let mut ready_to_insert = true;
-            // Check if this is the last non-blank line in the dependencies section.
-            for i2 in i..lines_vec.len() {
-                let line2 = lines_vec[i2];
-                // We've hit the end of the section or file without encountering a non-empty line.
-                if sect_re.is_match(line2) || i2 == lines_vec.len() - 1 {
-                    break;
-                }
-                if !line2.is_empty() {
-                    // We haven't hit the end of the section yet; don't add the new reqs here.
-                    ready_to_insert = false;
-                    break;
-                }
-            }
-            if ready_to_insert {
-                for req in added {
-                    result.push_str(&req.to_cfg_string());
-                    result.push_str("\n");
-                }
+        if i == insertion_pt {
+            for req in added {
+                result.push_str(&req.to_cfg_string());
+                result.push_str("\n");
             }
         }
     }
+    if !in_dep {
+        // todo: A bit of an awkward way to handle.
+        result.push_str("[tool.pyflow.dependencies]");
+        result.push_str("\n");
+        for req in added {
+            result.push_str(&req.to_cfg_string());
+            result.push_str("\n");
+        }
+    }
+
+    //        }
 
     fs::write(filename, result)
         .expect("Unable to write pyproject.toml while attempting to add a dependency");

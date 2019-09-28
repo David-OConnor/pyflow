@@ -61,6 +61,8 @@ fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
         keywords.push_str(kw);
     }
 
+    let deps: Vec<String> = cfg.reqs.iter().map(|r| r.to_setup_py_string()).collect();
+
     let data = format!(
         r#"import setuptools
  
@@ -81,6 +83,7 @@ setuptools.setup(
     keywords="{}",
     classifiers={},
     python_requires="{}",
+    install_requires={},
 )
 "#,
         //            entry_points={{
@@ -98,6 +101,7 @@ setuptools.setup(
         serialize_py_list(&cfg.classifiers),
         //        serialize_py_list(&cfg.console_scripts),
         cfg.python_requires.unwrap_or_else(|| "".into()),
+        serialize_py_list(&deps),
         // todo:
         //            extras_require="{}",
         //        match cfg.extras {

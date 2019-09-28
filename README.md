@@ -8,6 +8,8 @@
 
 This tool manages Python installations and dependencies.
 
+![Poetry Install](https://raw.githubusercontent.com/david-oconnor/pyflow/master/assets/install.gif)
+
 **Goals**: Make using and publishing Python projects as simple as possible. Understanding
 Python environments shouldn't be required to use dependencies safely. We're attempting
 to fix each stumbling block in the Python workflow, so that it's as elegant
@@ -24,11 +26,11 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 ## Installation
 - **Windows, Ubuntu, or Debian:** Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.2/pyflow-0.1.2-x86_64.msi)
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.3/pyflow-0.1.3-x86_64.msi)
 or
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.2/pyflow_0.1.2_amd64.deb) .
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.3/pyflow_0.1.3_amd64.deb) .
 
-- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.2/pyflow)
+- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.3/pyflow)
  and place it somewhere
 accessible by the system PATH. For example, `/usr/bin`.
 
@@ -57,13 +59,16 @@ to run one-off Python files that aren't attached to a project, but have dependen
 
 
 ## Why add another Python manager?
-`Pipenv` and `Poetry` both address part of Pyflow's *raison d'être*.
- Some reasons why this is different:
+`Pipenv`, `Poetry`, and `Pyenv` address parts of 
+Pyflow's *raison d'être*, but expose stumbling blocks that may frustrate new users, 
+both when installing and using.  Some reasons why this is different:
  
- - It automatically manages Python installations and environments. You specify a Python version
+- It automatically manages Python installations and environments. You specify a Python version
  in `pyproject.toml` (if ommitted, it asks), and ensures that version is used. 
  If the version's not installed, Pyflow downloads a binary, and uses that.
  If multiple installations are found for that version, it asks which to use.
+ `Pyenv` can be used to install Python, but only if your system is configured in a certain way: 
+ I don’t think expecting a user’s computer to compile Python is reasonable.
 
 - By not using Python to install or run, it remains environment-agnostic. 
 This is important for making setup and use as simple and decison-free as
@@ -71,18 +76,29 @@ This is important for making setup and use as simple and decison-free as
 of Python installed, with different versions and access levels. This avoids
 complications, especially for new users. It's common for Python-based CLI tools
 to not run properly when installed from `pip` due to the `PATH` or user directories
-not being configured in the expected way.
+not being configured in the expected way. Pipenv’s installation 
+instructions are confusing, and may result in it not working correctly.
 
 - Its dependency resolution and locking is faster due to using a cached
 database of dependencies, vice downloading and checking each package, or relying
 on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
+Pipenv’s resolution in particular may be prohibitively-slow on weak internet connections.
 
 - It keeps dependencies in the project directory, in `__pypackages__`. This is subtle, 
 but reinforces the idea that there's
 no hidden state.
 
-- It will always use the specified version of Python. This is a notable limitation in `Poetry`; it
+- It will always use the specified version of Python. This is a notable limitation in `Poetry`; Poetry
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
+Poetry allows projects to specify version, but neither selects, 
+nor provides a way to select the right one. If it chooses the wrong one, it will 
+install the wrong environment, and produce a confusing 
+error message. This can be worked around using `Pyenv`, but neither the poetry docs 
+nor error message provide guidance 
+on this. This adds friction to the workflow and may confuse new users, as it occurs 
+by default on popular linux distros like Ubuntu. Additionally, `pyenv's` docs are 
+confusing: It's not obvious how to install it, what operating systems
+it's compatible with, or what additional dependencies are required.
 
 - Multiple versions of a dependency can be installed, allowing resolution
 of conflicting sub-dependencies. (ie: Your package requires `Dep A>=1.0` and `Dep B`.
@@ -166,7 +182,9 @@ diffeqpy = "1.1.0"
 The `[tool.pyflow]` section is used for metadata. The only required item in it is
  `py_version`, unless
 building and distributing a package. The `[tool.pyflow.dependencies]` section
-contains all dependencies, and is an analog to `requirements.txt`. 
+contains all dependencies, and is an analog to `requirements.txt`. You can specify
+developer dependencies in the `[tool.pyflow.dev-dependencies]` section. These
+won't be packed or published, but will be installed locally.
 
 You can specify `extra` dependencies, which will only be installed when passing
 explicit flags to `pyflow install`, or when included in another project with the appropriate
@@ -304,7 +322,6 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Installing from sources other than `pypi` (eg repos, paths)
 - The lock file is missing some info like hashes
 - Adding a dependency via the CLI with a specific version constraint, or extras.
-- Developer dependencies
 - Packaging and publishing projects that use compiled extensions
 - Dealing with multiple-installed-versions of a dependency that uses importlib
 or dynamic imports
@@ -339,6 +356,10 @@ package_url = "https://upload.pypi.org/legacy/"
 numpy = "^1.16.4"
 manim = "0.1.8"
 ipython = {version = "^7.7.0", extras=["qtconsole"]}
+
+
+[tool.pyflow.dev-dependencies]
+black = "^18.0"
 ```
 `package_url` is used to determine which package repository to upload to. If ommitted, 
 `Pypi test` is used (`https://test.pypi.org/legacy/`).

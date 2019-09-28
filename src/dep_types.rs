@@ -858,10 +858,21 @@ impl Req {
             ),
         }
     }
-    //    /// Return true if other is a subset of self.
-    //    fn _fully_contains(&self, other: &Self) -> bool {
-    //
-    //    }
+
+    /// Format for setup.py
+    pub fn to_setup_py_string(&self) -> String {
+        format!(
+            "{}{}",
+            self.name,
+            self.constraints
+                .iter()
+                .map(|c| c.to_string(false, true))
+                .collect::<Vec<String>>()
+                .join(",")
+        )
+        .replace("^", ">")
+        .replace("~", ">") // todo: Sloppy, but perhaps the best way.
+    }
 }
 
 impl fmt::Display for Req {
