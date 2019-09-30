@@ -131,40 +131,38 @@ fn update_cfg(cfg_data: String, added: &[Req], added_dev: &[Req]) -> String {
     for (i, line) in cfg_data.lines().enumerate() {
         if &line.replace(" ", "") == "[tool.pyflow.dependencies]" {
             dep_start = i + 1;
+            if in_dev_dep {
+                dev_dep_end = i - 1;
+            }
             in_dep = true;
             in_dev_dep = false;
-            if in_dev_dep {
-                dev_dep_end = i;
-            }
             continue; // Continue so this line doesn't trigger the section's end.
         }
 
         if &line.replace(" ", "") == "[tool.pyflow.dev-dependencies]" {
             dev_dep_start = i + 1;
+            if in_dep {
+                dep_end = i - 1;
+            }
             in_dep = false;
             in_dev_dep = true;
-            if in_dep {
-                dep_end = i;
-            }
             continue;
         }
 
         // We've found the end of the dependencies section.
         if in_dep && (sect_re.is_match(line) || i == lines_vec.len() - 1) {
             in_dep = false;
-            dep_end = i;
+            dep_end = i - 1;
         }
 
-        println!("len: {:?}, &i: {:?}", &lines_vec.len(), &i);
         if in_dev_dep && (sect_re.is_match(line) || i == lines_vec.len() - 1) {
             in_dev_dep = false;
-            dev_dep_end = i;
+            dev_dep_end = i - 1;
         }
     }
 
-    println!("START: {:?}, end: {:?}", &dev_dep_start, &dev_dep_end);
     let mut insertion_pt = dep_start;
-    if dep_end != 0 {
+    if dep_start != 0 {
         for i in dep_start..dep_end + 1 {
             let line = lines_vec[i];
             if !line.is_empty() {
@@ -174,7 +172,7 @@ fn update_cfg(cfg_data: String, added: &[Req], added_dev: &[Req]) -> String {
     }
 
     let mut dev_insertion_pt = dev_dep_start;
-    if dev_dep_end != 0 {
+    if dev_dep_start != 0 {
         for i in dev_dep_start..dev_dep_end + 1 {
             let line = lines_vec[i];
             if !line.is_empty() {
@@ -184,38 +182,44 @@ fn update_cfg(cfg_data: String, added: &[Req], added_dev: &[Req]) -> String {
     }
 
     for (i, line) in cfg_data.lines().enumerate() {
-        result.push_str(line);
-        result.push_str("\n");
-
-        if i == insertion_pt && insertion_pt != 0 {
+        if i == insertion_pt && dep_start != 0 {
             for req in added {
                 result.push_str(&req.to_cfg_string());
                 result.push_str("\n");
             }
         }
-        if i == dev_insertion_pt && dev_insertion_pt != 0 {
+        if i == dev_insertion_pt && dev_dep_start != 0 {
             for req in added_dev {
                 result.push_str(&req.to_cfg_string());
                 result.push_str("\n");
             }
         }
+        result.push_str(line);
+        result.push_str("\n");
     }
 
-    // If the sectcions don't exist, create them.
+    // If the sections don't exist, create them.
+    // todo: Adjust start pad as needed so there's exactly two blank lines before adding the section.
     if dep_start == 0 {
-        result.push_str("\n\n[tool.pyflow.dependencies]\n");
+        // todo: Should add dependencies section before dev deps section.
+        result.push_str("\n[tool.pyflow.dependencies]\n");
         for req in added {
             result.push_str(&req.to_cfg_string());
+            result.push_str("\n");
+        }
+        if dev_dep_start != 0 {
+            // We only need to add one end-of-file pad.
             result.push_str("\n");
         }
     }
 
     if dev_dep_start == 0 {
-        result.push_str("\n\n[tool.pyflow.dev-dependencies]\n");
+        result.push_str("\n[tool.pyflow.dev-dependencies]\n");
         for req in added_dev {
             result.push_str(&req.to_cfg_string());
             result.push_str("\n");
         }
+        result.push_str("\n");
     }
 
     result
@@ -440,7 +444,7 @@ dev_a = "^1.17.2"
 
 "#;
 
-const BASELINE_NO_DEPS: &str = r#"
+    const BASELINE_NO_DEPS: &str = r#"
 [tool.pyflow]
 name = ""
 
@@ -450,13 +454,26 @@ dev_a = "^1.17.2"
 
 "#;
 
-const BASELINE_NO_DEV_DEPS: &str = r#"
+    const BASELINE_NO_DEV_DEPS: &str = r#"
 [tool.pyflow]
 name = ""
 
 
 [tool.pyflow.dependencies]
 a = "^0.3.5"
+
+"#;
+
+    const BASELINE_EMPTY_DEPS: &str = r#"
+[tool.pyflow]
+name = ""
+
+
+[tool.pyflow.dependencies]
+
+
+[tool.pyflow.dev-dependencies]
+dev_a = "^1.17.2"
 
 "#;
 
@@ -472,12 +489,72 @@ a = "^0.3.5"
         );
 
         let expected = r#"
-        [tool.pyflow]
+[tool.pyflow]
 name = ""
 
 
 [tool.pyflow.dependencies]
 a = "^0.3.5"
+b = "^0.0.1"
+c = "^0.0.1"
+
+
+[tool.pyflow.dev-dependencies]
+dev_a = "^1.17.2"
+dev_b = "^0.0.1"
+
+"#;
+
+        assert_eq!(expected, &actual);
+    }
+
+    #[test]
+    fn add_deps_no_dev_deps_sect() {
+        let actual = update_cfg(
+            BASELINE_NO_DEV_DEPS.into(),
+            &[
+                Req::new("b".into(), base_constrs()),
+                Req::new("c".into(), base_constrs()),
+            ],
+            &[Req::new("dev_b".into(), base_constrs())],
+        );
+
+        let expected = r#"
+[tool.pyflow]
+name = ""
+
+
+[tool.pyflow.dependencies]
+a = "^0.3.5"
+b = "^0.0.1"
+c = "^0.0.1"
+
+
+[tool.pyflow.dev-dependencies]
+dev_b = "^0.0.1"
+
+"#;
+
+        assert_eq!(expected, &actual);
+    }
+
+    #[test]
+    fn add_deps_baseline_empty_deps() {
+        let actual = update_cfg(
+            BASELINE_EMPTY_DEPS.into(),
+            &[
+                Req::new("b".into(), base_constrs()),
+                Req::new("c".into(), base_constrs()),
+            ],
+            &[Req::new("dev_b".into(), base_constrs())],
+        );
+
+        let expected = r#"
+[tool.pyflow]
+name = ""
+
+
+[tool.pyflow.dependencies]
 b = "^0.0.1"
 c = "^0.0.1"
 

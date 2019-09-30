@@ -640,10 +640,7 @@ pub fn resolve(
                 None => {
                     // We consider the possibility there's a compatible version
                     // that wasn't one of the best-per-req we queried.
-                    println!(
-                        "⛏️ Digging deeper to resolve dependencies for {}...",
-                        name
-                    );
+                    println!("⛏️ Digging deeper to resolve dependencies for {}...", name);
 
                     // I think we should query with the raw name, not fmted?
                     let versions = &version_cache.get(&name).unwrap().2;

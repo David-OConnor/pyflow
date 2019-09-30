@@ -260,8 +260,14 @@ pub fn merge_reqs(
     // version.
     for added_req in added_reqs_unique.iter_mut() {
         if added_req.constraints.is_empty() {
-            let (_, vers, _) = dep_resolution::get_version_info(&added_req.name)
-                .expect("Problem getting latest version of the package you added.");
+            let (_, vers, _) = match dep_resolution::get_version_info(&added_req.name) {
+                Ok(r) => r,
+                Err(_) => {
+                    abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?");
+                    unreachable!()
+                }
+            };
+
             added_req.constraints.push(Constraint::new(
                 ReqType::Caret,
                 //                Version::new(vers.major, vers.minor, vers.patch),

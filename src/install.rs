@@ -333,17 +333,9 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
     #[cfg(target_os = "windows")]
     println!("Uninstalling {}: {}...", name_ins, vers_ins.to_string());
     #[cfg(target_os = "linux")]
-    println!(
-        "🗑 Uninstalling {}: {}...",
-        name_ins,
-        vers_ins.to_string()
-    );
+    println!("🗑 Uninstalling {}: {}...", name_ins, vers_ins.to_string());
     #[cfg(target_os = "macos")]
-    println!(
-        "🗑 Uninstalling {}: {}...",
-        name_ins,
-        vers_ins.to_string()
-    );
+    println!("🗑 Uninstalling {}: {}...", name_ins, vers_ins.to_string());
 
     // Uninstall the package
     // package folders appear to be lowercase, while metadata keeps the package title's casing.

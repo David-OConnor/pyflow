@@ -511,12 +511,12 @@ package_url = "https://test.pypi.org/legacy/"
 [tool.pyflow.dependencies]
 
 [tool.pyflow.dev-dependencies]
+
 "##,
         name
     );
 
-    // todo: flesh readme out
-    let readme_init = &format!("# {}", name);
+    let readme_init = &format!("# {}\n\n{}", name, "(A description)");
 
     fs::write(&format!("{}/.gitignore", name), gitignore_init)?;
     fs::write(&format!("{}/pyproject.toml", name), pyproject_init)?;
