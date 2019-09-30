@@ -214,8 +214,13 @@ pub fn find_console_scripts(bin_path: &Path) -> Vec<String> {
     result
 }
 
-/// Handle reqs added via the CLI
-pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> Vec<Req> {
+/// Handle reqs added via the CLI. Result is (normal reqs, dev reqs)
+pub fn merge_reqs(
+    added: &[String],
+    dev: bool,
+    cfg: &crate::Config,
+    cfg_filename: &str,
+) -> (Vec<Req>, Vec<Req>) {
     let mut added_reqs = vec![];
     for p in added.iter() {
         let trimmed = p.replace(',', "");
@@ -227,6 +232,8 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
         }
     }
 
+    let existing = if dev { &cfg.dev_reqs } else { &cfg.reqs };
+
     // Reqs to add to `pyproject.toml`
     let mut added_reqs_unique: Vec<Req> = added_reqs
         .into_iter()
@@ -234,12 +241,8 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
             // return true if the added req's not in the cfg reqs, or if it is
             // and the version's different.
             let mut add = true;
-            let mut reqs = cfg.reqs.clone();
-            for dev_req in cfg.dev_reqs.clone().into_iter() {
-                reqs.push(dev_req);
-            }
 
-            for cr in reqs.iter() {
+            for cr in existing.iter() {
                 if cr == ar
                     || (cr.name.to_lowercase() == ar.name.to_lowercase()
                         && ar.constraints.is_empty())
@@ -271,7 +274,7 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
 
     // Merge reqs from the config and added via CLI. If there's a conflict in version,
     // use the added req.
-    for cr in cfg.reqs.iter() {
+    for cr in existing.iter() {
         let mut replaced = false;
         for added_req in added_reqs_unique.iter() {
             if compare_names(&added_req.name, &cr.name) && added_req.constraints != cr.constraints {
@@ -285,12 +288,19 @@ pub fn merge_reqs(added: &[String], cfg: &crate::Config, cfg_filename: &str) -> 
         }
     }
 
-    if !added_reqs_unique.is_empty() {
-        files::add_reqs_to_cfg(cfg_filename, &added_reqs_unique);
-    }
+    result.append(&mut added_reqs_unique.clone());
 
-    result.append(&mut added_reqs_unique);
-    result
+    if dev {
+        if !added_reqs_unique.is_empty() {
+            files::add_reqs_to_cfg(cfg_filename, &[], &added_reqs_unique);
+        }
+        (cfg.reqs.clone(), result)
+    } else {
+        if !added_reqs_unique.is_empty() {
+            files::add_reqs_to_cfg(cfg_filename, &added_reqs_unique, &[]);
+        }
+        (result, cfg.dev_reqs.clone())
+    }
 }
 
 pub fn standardize_name(name: &str) -> String {
@@ -417,21 +427,21 @@ pub fn find_venv_info(
     (vers_path, py_vers)
 }
 
-/// Remove all files (but not folders) in a path.
-pub fn wipe_dir(path: &Path) {
-    if !path.exists() {
-        fs::create_dir(&path).expect("Problem creating directory");
-    }
-    for entry in fs::read_dir(&path).expect("Problem reading path") {
-        if let Ok(entry) = entry {
-            let path2 = entry.path();
-
-            if path2.is_file() {
-                fs::remove_file(path2).expect("Problem removing a file");
-            }
-        };
-    }
-}
+///// Remove all files (but not folders) in a path.
+//pub fn wipe_dir(path: &Path) {
+//    if !path.exists() {
+//        fs::create_dir(&path).expect("Problem creating directory");
+//    }
+//    for entry in fs::read_dir(&path).expect("Problem reading path") {
+//        if let Ok(entry) = entry {
+//            let path2 = entry.path();
+//
+//            if path2.is_file() {
+//                fs::remove_file(path2).expect("Problem removing a file");
+//            }
+//        };
+//    }
+//}
 
 /// Used when the version might be an error, eg user input
 pub fn fallible_v_parse(vers: &str) -> Version {

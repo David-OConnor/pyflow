@@ -67,7 +67,6 @@ fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
 /// a vec of the versions found, so we can reuse this later without fetching a second time.
 /// Return name to, so we get correct capitalization.
 pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), DependencyError> {
-    //    println!("(dbg) Getting version info for {}", name);
     let data = get_warehouse_data(name)?;
 
     let all_versions = data
@@ -147,7 +146,6 @@ fn get_req_cache_multiple(
     packages: &HashMap<String, Vec<Version>>,
 ) -> Result<Vec<ReqCache>, reqwest::Error> {
     // input tuple is name, min version, max version.
-    //    println!("(dbg) Getting pydeps data for {:?}", packages);
     // parse strings here.
     let mut packages2 = HashMap::new();
     for (name, versions) in packages.iter() {
@@ -443,7 +441,8 @@ fn make_renamed_packs(
     util::print_color(
         &format!(
             "Installing multiple versions for {}. If this package uses \
-             compiled code, this may fail when importing...",
+             compiled code or importlib, this may fail when importing. Note that\
+             your package may not be published unless this is resolved...",
             name
         ),
         Color::DarkRed,
@@ -672,7 +671,6 @@ pub fn resolve(
                         })
                         .collect();
 
-                    //                    println!("Unresolved: {:#?}", &unresolved_deps);
                     let mut newest_unresolved = unresolved_deps
                         .into_iter()
                         .max_by(|a, b| a.version.cmp(&b.version))

@@ -100,6 +100,8 @@ Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Exampl
     Install {
         #[structopt(name = "packages")]
         packages: Vec<String>,
+        #[structopt(short, long)]
+        dev: bool,
     },
     /// Uninstall all packages, or ones specified
     #[structopt(name = "uninstall")]
@@ -131,7 +133,7 @@ Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Exampl
     /// Remove the environment, and uninstall all packages
     #[structopt(name = "reset")]
     Reset,
-    /// Remove all cached packages.  Eg to free up hard drive space.
+    /// Remove cached packages, Python installs, or script-environments. Eg to free up hard drive space.
     #[structopt(name = "clear")]
     Clear,
     /// Run a CLI script like `ipython` or `black`. Note that you can simply run `pyflow black`
@@ -1038,6 +1040,7 @@ fn run_script(
         &cache_path,
         &lockpacks,
         &reqs,
+        &[],
         os,
         &py_vers,
         &lock_path,
@@ -1056,6 +1059,7 @@ fn sync(
     cache_path: &Path,
     lockpacks: &[LockPackage],
     reqs: &[Req],
+    dev_reqs: &[Req],
     os: Os,
     py_vers: &Version,
     lock_path: &Path,
@@ -1099,7 +1103,12 @@ fn sync(
     #[cfg(target_os = "macos")]
     println!("🔍 Resolving dependencies...");
 
-    let resolved = match dep_resolution::resolve(&reqs, &locked, os, &py_vers) {
+    let mut combined_reqs = reqs.to_vec();
+    for dev_req in dev_reqs.to_vec() {
+        combined_reqs.push(dev_req);
+    }
+
+    let resolved = match dep_resolution::resolve(&combined_reqs, &locked, os, &py_vers) {
         Ok(r) => r,
         Err(_) => {
             abort("Problem resolving dependencies");
@@ -1177,6 +1186,68 @@ fn sync(
     );
 }
 
+#[derive(Clone)]
+enum ClearChoice {
+    Dependencies,
+    ScriptEnvs,
+    PyInstalls,
+    //    Global,
+    All,
+}
+
+impl ToString for ClearChoice {
+    fn to_string(&self) -> String {
+        "".into()
+    }
+}
+
+/// Clear `Pyflow`'s cache. Allow the user to select which parts to clear based on a prompt.
+fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
+    let result = util::prompt_list(
+        "Which cached items would you like to clear?",
+        "choice",
+        &[
+            ("Downloaded dependencies".into(), ClearChoice::Dependencies),
+            (
+                "Standalone-script environments".into(),
+                ClearChoice::ScriptEnvs,
+            ),
+            ("Python installations".into(), ClearChoice::PyInstalls),
+            ("All of the above".into(), ClearChoice::All),
+        ],
+        false,
+    );
+
+    // todo: DRY
+    match result.1 {
+        ClearChoice::Dependencies => {
+            if let Err(_) = fs::remove_dir_all(&cache_path) {
+                abort(&format!(
+                    "Problem removing the dependency-cache path: {:?}",
+                    cache_path
+                ));
+            }
+        }
+        ClearChoice::ScriptEnvs => {
+            if let Err(_) = fs::remove_dir_all(&script_env_path) {
+                abort(&format!(
+                    "Problem removing the script env path: {:?}",
+                    script_env_path
+                ));
+            }
+        }
+        ClearChoice::PyInstalls => {}
+        ClearChoice::All => {
+            if let Err(_) = fs::remove_dir_all(&pyflow_path) {
+                abort(&format!(
+                    "Problem removing the Pyflow path: {:?}",
+                    pyflow_path
+                ));
+            }
+        }
+    }
+}
+
 /// We process input commands in a deliberate order, to ensure the required, and only the required
 /// setup steps are accomplished before each.
 fn main() {
@@ -1184,14 +1255,14 @@ fn main() {
     let lock_filename = "pyflow.lock";
 
     let base_dir = directories::BaseDirs::new();
-    let pyflow_dir = base_dir
+    let pyflow_path = base_dir
         .expect("Problem finding base directory")
         .data_dir()
         .to_owned()
         .join("pyflow");
 
-    let cache_path = pyflow_dir.join("dependency-cache");
-    let script_env_path = pyflow_dir.join("script-envs");
+    let cache_path = pyflow_path.join("dependency-cache");
+    let script_env_path = pyflow_path.join("script-envs");
 
     #[cfg(target_os = "windows")]
     let os = Os::Windows;
@@ -1217,7 +1288,7 @@ fn main() {
 
     // Run this before parsing the config.
     if let SubCommand::Script { mut args } = subcmd {
-        run_script(&script_env_path, &cache_path, os, &mut args, &pyflow_dir);
+        run_script(&script_env_path, &cache_path, os, &mut args, &pyflow_path);
         return;
     }
 
@@ -1271,8 +1342,7 @@ fn main() {
             return;
         }
         SubCommand::Clear {} => {
-            util::wipe_dir(&cache_path);
-            util::wipe_dir(&script_env_path);
+            clear(&pyflow_path, &cache_path, &script_env_path);
             return;
         }
         SubCommand::List => {
@@ -1320,7 +1390,7 @@ fn main() {
     };
 
     let (vers_path, py_vers) =
-        util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir, &cache_path);
+        util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_path, &cache_path);
 
     let lib_path = vers_path.join("lib");
     let bin_path = util::find_bin_path(&vers_path);
@@ -1343,7 +1413,7 @@ fn main() {
         // We use data from three sources: `pyproject.toml`, `pyflow.lock`, and
         // the currently-installed packages, found by crawling metadata in the `lib` path.
         // See the readme section `How installation and locking work` for details.
-        SubCommand::Install { packages } => {
+        SubCommand::Install { packages, dev } => {
             if !PathBuf::from(cfg_filename).exists() {
                 cfg.write_file(cfg_filename);
             }
@@ -1352,7 +1422,7 @@ fn main() {
                 println!("Found lockfile");
             }
             // Merge reqs added via cli with those in `pyproject.toml`.
-            let updated_reqs = util::merge_reqs(&packages, &cfg, cfg_filename);
+            let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, cfg_filename);
 
             sync(
                 &bin_path,
@@ -1360,6 +1430,7 @@ fn main() {
                 &cache_path,
                 &lockpacks,
                 &updated_reqs,
+                &up_dev_reqs,
                 os,
                 &py_vers,
                 &PathBuf::from(lock_filename),
@@ -1368,6 +1439,7 @@ fn main() {
         }
 
         SubCommand::Uninstall { packages } => {
+            // todo: uninstall dev?
             // Remove dependencies specified in the CLI from the config, then lock and sync.
 
             let removed_reqs: Vec<String> = packages
@@ -1383,22 +1455,11 @@ fn main() {
             files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
 
             // Filter reqs here instead of re-reading the config from file.
-            let mut updated_reqs: Vec<Req> = cfg
+            let updated_reqs: Vec<Req> = cfg
                 .reqs
                 .into_iter()
                 .filter(|req| !removed_reqs.contains(&req.name))
                 .collect();
-
-            // todo: DRY
-            let updated_dev_reqs: Vec<Req> = cfg
-                .dev_reqs
-                .into_iter()
-                .filter(|req| !removed_reqs.contains(&req.name))
-                .collect();
-
-            for dev_req in updated_dev_reqs.into_iter() {
-                updated_reqs.push(dev_req);
-            }
 
             sync(
                 &bin_path,
@@ -1406,6 +1467,7 @@ fn main() {
                 &cache_path,
                 &lockpacks,
                 &updated_reqs,
+                &cfg.dev_reqs.clone(),
                 os,
                 &py_vers,
                 &PathBuf::from(lock_filename),

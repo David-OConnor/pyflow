@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.4
+- Clear now lets the user choose which parts of the cache to clear
+- Fixed a bug with dev reqs
+- Fixed a bug with CLI-added deps editing `pyproject.toml`
+- Added `--dev` flag to `install`
+
 ## v0.1.3
 - Added support for dev dependencies
 - Fixed a bug where dependencies weren't being set up with the `package` command

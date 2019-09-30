@@ -78,10 +78,10 @@ pub struct Pyflow {
     pub package_url: Option<String>,
     pub readme_filename: Option<String>,
     //    pub entry_points: Option<HashMap<String, Vec<String>>>,
-    pub scripts: Option<HashMap<String, String>>, // todo. Maybe [tool.pyflow.scripts] , ie a standalone table?
+    pub scripts: Option<HashMap<String, String>>,
     pub python_requires: Option<String>,
-
     pub dependencies: Option<HashMap<String, DepComponentWrapper>>,
+    #[serde(rename = "dev-dependencies")]
     pub dev_dependencies: Option<HashMap<String, DepComponentWrapper>>,
     pub extras: Option<HashMap<String, String>>,
 }
@@ -112,58 +112,124 @@ pub struct Poetry {
     //    pub extras: Option<HashMap<String, String>>,
 }
 
-/// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
-/// we should update the version. Assume we've already parsed the config, and are only
-/// adding new reqs, or ones with a changed version.
-pub fn add_reqs_to_cfg(filename: &str, added: &[Req]) {
+/// Split from add_reqs_to_cfg to accomodate testing
+fn update_cfg(cfg_data: String, added: &[Req], added_dev: &[Req]) -> String {
     let mut result = String::new();
-    let data = fs::read_to_string(filename)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
-
     let mut in_dep = false;
+    let mut in_dev_dep = false;
     let sect_re = Regex::new(r"^\[.*\]$").unwrap();
 
     // We collect lines here so we can start the index at a non-0 point.
-    let lines_vec: Vec<&str> = data.lines().collect();
-    let mut insertion_pt = 0;
+    let lines_vec: Vec<&str> = cfg_data.lines().collect();
 
-    for (i, line) in data.lines().enumerate() {
+    // todo: Lots of DRY between dep and dev dep
+    let mut dep_start = 0;
+    let mut dev_dep_start = 0;
+    let mut dep_end = 0;
+    let mut dev_dep_end = 0;
+
+    for (i, line) in cfg_data.lines().enumerate() {
         if &line.replace(" ", "") == "[tool.pyflow.dependencies]" {
+            dep_start = i + 1;
             in_dep = true;
+            in_dev_dep = false;
+            if in_dev_dep {
+                dev_dep_end = i;
+            }
+            continue; // Continue so this line doesn't trigger the section's end.
+        }
+
+        if &line.replace(" ", "") == "[tool.pyflow.dev-dependencies]" {
+            dev_dep_start = i + 1;
+            in_dep = false;
+            in_dev_dep = true;
+            if in_dep {
+                dep_end = i;
+            }
             continue;
         }
 
         // We've found the end of the dependencies section.
         if in_dep && (sect_re.is_match(line) || i == lines_vec.len() - 1) {
-            insertion_pt = i - 2;
-            break;
+            in_dep = false;
+            dep_end = i;
+        }
+
+        println!("len: {:?}, &i: {:?}", &lines_vec.len(), &i);
+        if in_dev_dep && (sect_re.is_match(line) || i == lines_vec.len() - 1) {
+            in_dev_dep = false;
+            dev_dep_end = i;
         }
     }
 
-    for (i, line) in data.lines().enumerate() {
+    println!("START: {:?}, end: {:?}", &dev_dep_start, &dev_dep_end);
+    let mut insertion_pt = dep_start;
+    if dep_end != 0 {
+        for i in dep_start..dep_end + 1 {
+            let line = lines_vec[i];
+            if !line.is_empty() {
+                insertion_pt = i + 1
+            }
+        }
+    }
+
+    let mut dev_insertion_pt = dev_dep_start;
+    if dev_dep_end != 0 {
+        for i in dev_dep_start..dev_dep_end + 1 {
+            let line = lines_vec[i];
+            if !line.is_empty() {
+                dev_insertion_pt = i + 1
+            }
+        }
+    }
+
+    for (i, line) in cfg_data.lines().enumerate() {
         result.push_str(line);
         result.push_str("\n");
 
-        if i == insertion_pt {
+        if i == insertion_pt && insertion_pt != 0 {
             for req in added {
                 result.push_str(&req.to_cfg_string());
                 result.push_str("\n");
             }
         }
+        if i == dev_insertion_pt && dev_insertion_pt != 0 {
+            for req in added_dev {
+                result.push_str(&req.to_cfg_string());
+                result.push_str("\n");
+            }
+        }
     }
-    if !in_dep {
-        // todo: A bit of an awkward way to handle.
-        result.push_str("[tool.pyflow.dependencies]");
-        result.push_str("\n");
+
+    // If the sectcions don't exist, create them.
+    if dep_start == 0 {
+        result.push_str("\n\n[tool.pyflow.dependencies]\n");
         for req in added {
             result.push_str(&req.to_cfg_string());
             result.push_str("\n");
         }
     }
 
-    //        }
+    if dev_dep_start == 0 {
+        result.push_str("\n\n[tool.pyflow.dev-dependencies]\n");
+        for req in added_dev {
+            result.push_str(&req.to_cfg_string());
+            result.push_str("\n");
+        }
+    }
 
-    fs::write(filename, result)
+    result
+}
+
+/// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
+/// we should update the version. Assume we've already parsed the config, and are only
+/// adding new reqs, or ones with a changed version.
+pub fn add_reqs_to_cfg(filename: &str, added: &[Req], added_dev: &[Req]) {
+    let data = fs::read_to_string(filename)
+        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+
+    let updated = update_cfg(data, added, added_dev);
+    fs::write(filename, updated)
         .expect("Unable to write pyproject.toml while attempting to add a dependency");
 }
 
@@ -348,4 +414,80 @@ pub fn change_py_vers(cfg_path: &Path, specified: &Version) {
 
     fs::write(cfg_path, new_data)
         .expect("Unable to write pyproject.toml while adding Python version");
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::dep_types::{Constraint, ReqType::Caret};
+
+    // We're not concerned with testing formatting in this func.
+    fn base_constrs() -> Vec<Constraint> {
+        vec![Constraint::new(Caret, Version::new(0, 0, 1))]
+    }
+
+    const BASELINE: &str = r#"
+[tool.pyflow]
+name = ""
+
+
+[tool.pyflow.dependencies]
+a = "^0.3.5"
+
+
+[tool.pyflow.dev-dependencies]
+dev_a = "^1.17.2"
+
+"#;
+
+const BASELINE_NO_DEPS: &str = r#"
+[tool.pyflow]
+name = ""
+
+
+[tool.pyflow.dev-dependencies]
+dev_a = "^1.17.2"
+
+"#;
+
+const BASELINE_NO_DEV_DEPS: &str = r#"
+[tool.pyflow]
+name = ""
+
+
+[tool.pyflow.dependencies]
+a = "^0.3.5"
+
+"#;
+
+    #[test]
+    fn add_deps_baseline() {
+        let actual = update_cfg(
+            BASELINE.into(),
+            &[
+                Req::new("b".into(), base_constrs()),
+                Req::new("c".into(), base_constrs()),
+            ],
+            &[Req::new("dev_b".into(), base_constrs())],
+        );
+
+        let expected = r#"
+        [tool.pyflow]
+name = ""
+
+
+[tool.pyflow.dependencies]
+a = "^0.3.5"
+b = "^0.0.1"
+c = "^0.0.1"
+
+
+[tool.pyflow.dev-dependencies]
+dev_a = "^1.17.2"
+dev_b = "^0.0.1"
+
+"#;
+
+        assert_eq!(expected, &actual);
+    }
 }

@@ -26,11 +26,11 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 ## Installation
 - **Windows, Ubuntu, or Debian:** Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.3/pyflow-0.1.3-x86_64.msi)
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow-0.1.4-x86_64.msi)
 or
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.3/pyflow_0.1.3_amd64.deb) .
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow_0.1.4_amd64.deb) .
 
-- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.3/pyflow)
+- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow)
  and place it somewhere
 accessible by the system PATH. For example, `/usr/bin`.
 
@@ -45,7 +45,7 @@ to create a new project folder. `init` imports data from `requirements.txt` or `
 creates a folder with the basics.
 - Run `pyflow install` in a project folder to sync dependencies with `pyproject.toml`, 
 or add dependencies to it. 
-this file will be created if it doesn't exist.
+This file will be created if it doesn't exist.
 - Run `pyflow` or `pyflow myfile.py` to run Python.
 
 
@@ -62,7 +62,7 @@ to run one-off Python files that aren't attached to a project, but have dependen
 `Pipenv`, `Poetry`, and `Pyenv` address parts of 
 Pyflow's *raison d'être*, but expose stumbling blocks that may frustrate new users, 
 both when installing and using.  Some reasons why this is different:
- 
+  
 - It automatically manages Python installations and environments. You specify a Python version
  in `pyproject.toml` (if ommitted, it asks), and ensures that version is used. 
  If the version's not installed, Pyflow downloads a binary, and uses that.
@@ -82,7 +82,7 @@ instructions are confusing, and may result in it not working correctly.
 - Its dependency resolution and locking is faster due to using a cached
 database of dependencies, vice downloading and checking each package, or relying
 on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
-Pipenv’s resolution in particular may be prohibitively-slow on weak internet connections.
+`Pipenv`’s resolution in particular may be prohibitively-slow on weak internet connections.
 
 - It keeps dependencies in the project directory, in `__pypackages__`. This is subtle, 
 but reinforces the idea that there's
@@ -93,10 +93,10 @@ may pick the wrong installation (eg Python2 vice Python3), with no obvious way t
 Poetry allows projects to specify version, but neither selects, 
 nor provides a way to select the right one. If it chooses the wrong one, it will 
 install the wrong environment, and produce a confusing 
-error message. This can be worked around using `Pyenv`, but neither the poetry docs 
-nor error message provide guidance 
-on this. This adds friction to the workflow and may confuse new users, as it occurs 
-by default on popular linux distros like Ubuntu. Additionally, `pyenv's` docs are 
+error message. This can be worked around using `Pyenv`, but this solution isn't 
+documented, and adds friction to the 
+workflow. It may confuse new users, as it occurs 
+by default on popular linux distros like Ubuntu. Additionally, `Pyenv's` docs are 
 confusing: It's not obvious how to install it, what operating systems
 it's compatible with, or what additional dependencies are required.
 
@@ -109,13 +109,16 @@ to resolve dependencies. Try it for yourself with a few
 some compiled dependencies, and attempting to package something using this will
 trigger an error.*
 
+Perhaps the biggest philosophical difference is that Pyflow abstracts over environments,
+rather than expecting users to manage them.
+
 
 ## My OS comes with Python, and Virtual environments are easy. What's the point of this?
 Hopefully we're not replacing [one problem](https://xkcd.com/1987/) with [another](https://xkcd.com/927/).
 
 Some people like the virtual-environment workflow - it requires only tools included 
 with Python, and uses few console commands to create,
-and activate and environments. However, it may be tedius depending on workflow:
+and activate and environments. However, it may be tedious depending on workflow:
 The commands may be long depending on the path of virtual envs and projects,
 and it requires modifying the state of the terminal for each project, each time
 you use it, which you may find inconvenient or inelegant.
@@ -184,7 +187,8 @@ The `[tool.pyflow]` section is used for metadata. The only required item in it i
 building and distributing a package. The `[tool.pyflow.dependencies]` section
 contains all dependencies, and is an analog to `requirements.txt`. You can specify
 developer dependencies in the `[tool.pyflow.dev-dependencies]` section. These
-won't be packed or published, but will be installed locally.
+won't be packed or published, but will be installed locally. You can install these
+from the cli using the `--dev` flag. Eg: `pyflow install black --dev`
 
 You can specify `extra` dependencies, which will only be installed when passing
 explicit flags to `pyflow install`, or when included in another project with the appropriate
@@ -262,9 +266,8 @@ a readme, pyproject.toml, .gitignore, and directory for code
 - `pyflow init` - Create a `pyproject.toml` file in an existing project directory. Pull info from
 `requirements.text` and `Pipfile` as required.
 - `pyflow reset` - Remove the environment, and uninstall all packages
-- `pyflow clear` - Clear the global cache of downloaded packages, eg in
- `~/.local/share/pyflow` (Linux) or `~\AppData\Roaming\pyflow` (Windows)
-and the global cache of one-off script environments, in `~/.local/share/pyflow/script-envs`.
+- `pyflow clear` - Clear the cache, of downloaded dependencies, Python installations, or script-
+environments; it will ask you which ones you'd like to clear.
 - `pyflow -V` - Get the current version of this tool
 - `pyflow help` Get help, including a list of available commands
 
@@ -347,10 +350,12 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Topic :: Scientific/Engineering :: Human Machine Interfaces",
 ]
-scripts = { activate = "jeejah:activate" }
 python_requires=">=3.6"
-
 package_url = "https://upload.pypi.org/legacy/"
+
+
+[tool.pyflow.scripts]
+activate = "jeejah:activate"
 
 
 [tool.pyflow.dependencies]
@@ -394,7 +399,7 @@ like the ones in the table above.
 - The field of contributers is expected to be small, since it's written in a different language.
 - Dependency managers like Pipenv and Poetry work well enough for many cases,
 have dedicated dev teams, and large userbases.
-- Conda in particular handles many things this does quite well.
+- `Conda` in particular handles many things this does quite well.
 
 
 ## Dependency cache repo:
