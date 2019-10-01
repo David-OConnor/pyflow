@@ -13,7 +13,7 @@ links to reflect the latest version.
 1. Check that CI pipeline passed
 1. Run `cargo package` and `cargo publish` (Allows installation via cargo)
 1. Run `cargo build --release` on Windows and Linux (to build binaries)
-1. Run `cargo deb` on Ubuntu 18.04 (perhaps earlier; for example, one built on 18.04
+1. Run `cargo deb` on Ubuntu 16.04 (perhaps earlier; for example, one built on 18.04
 works on 19.04, but not vice-versa) (to build an installer)
 1. Run `cargo wix` on Windows (to build an installer)
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.

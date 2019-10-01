@@ -440,9 +440,15 @@ impl Config {
         }
         if let Some(vers) = self.version {
             result.push_str(&(format!("version = \"{}\"", vers.to_string2()) + "\n"));
+        } else {
+            result.push_str("version = \"0.1.0\"");
+            result.push_str("\n");
         }
         if let Some(author) = &self.author {
             result.push_str(&(format!("author = \"{}\"", author) + "\n"));
+        } else {
+            result.push_str("author = \"\"");
+            result.push_str("\n");
         }
         if let Some(v) = &self.author_email {
             result.push_str(&(format!("author_email = \"{}\"", v) + "\n"));
@@ -453,13 +459,21 @@ impl Config {
         if let Some(v) = &self.homepage {
             result.push_str(&(format!("homepage = \"{}\"", v) + "\n"));
         }
-        // todo: more fields.
+
+        // todo: More fields
 
         result.push_str("\n\n");
-        result.push_str("[tool.pyflow.dependencies]\n\n");
+        result.push_str("[tool.pyflow.dependencies]\n");
         for dep in self.reqs.iter() {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
+
+        result.push_str("\n\n");
+        result.push_str("[tool.pyflow.dev-dependencies]\n");
+        for dep in self.dev_reqs.iter() {
+            result.push_str(&(dep.to_cfg_string() + "\n"));
+        }
+
         result.push_str("\n"); // trailing newline
 
         match fs::write(file, result) {
@@ -476,7 +490,6 @@ pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
         fs::File::create(&format!("{}/{}/main.py", name, name))?;
         fs::File::create(&format!("{}/README.md", name))?;
         fs::File::create(&format!("{}/LICENSE", name))?;
-        fs::File::create(&format!("{}/pyproject.toml", name))?;
         fs::File::create(&format!("{}/.gitignore", name))?;
     }
 
@@ -494,33 +507,11 @@ __pypackages__/
 # Project ignores
 "##;
 
-    let pyproject_init = &format!(
-        r##"#See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this file's structure.
-
-[tool.pyflow]
-name = "{}"
-py_version = "3.7"
-version = "0.1.0"
-description = ""
-author = ""
-
-package_url = "https://test.pypi.org/legacy/"
-# package_url = "https://upload.pypi.org/legacy/"
-
-
-[tool.pyflow.dependencies]
-
-[tool.pyflow.dev-dependencies]
-
-"##,
-        name
-    );
-
     let readme_init = &format!("# {}\n\n{}", name, "(A description)");
 
     fs::write(&format!("{}/.gitignore", name), gitignore_init)?;
-    fs::write(&format!("{}/pyproject.toml", name), pyproject_init)?;
     fs::write(&format!("{}/README.md", name), readme_init)?;
+    Config::default().write_file(&format!("{}/pyproject.toml", name));
 
     Ok(())
 }

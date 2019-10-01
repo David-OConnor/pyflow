@@ -61,7 +61,10 @@ to run one-off Python files that aren't attached to a project, but have dependen
 ## Why add another Python manager?
 `Pipenv`, `Poetry`, and `Pyenv` address parts of 
 Pyflow's *raison d'être*, but expose stumbling blocks that may frustrate new users, 
-both when installing and using.  Some reasons why this is different:
+both when installing and using. Some reasons why this is different:
+  
+- It behaves consistently regardless of how your system and Python installations
+are configured.
   
 - It automatically manages Python installations and environments. You specify a Python version
  in `pyproject.toml` (if ommitted, it asks), and ensures that version is used. 
@@ -351,10 +354,11 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Human Machine Interfaces",
 ]
 python_requires=">=3.6"
-package_url = "https://upload.pypi.org/legacy/"
+package_url = "https://upload.pypi.org/legacy/"  # If not included, will default to `test.pypi.org`
 
 
 [tool.pyflow.scripts]
+# name = "module:function"
 activate = "jeejah:activate"
 
 
