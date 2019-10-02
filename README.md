@@ -17,8 +17,8 @@ as the language itself.
 
 You don't need Python or any other tools installed to use Pyflow.
 
-It can run standalone scripts in their
-own environments with no config, and functions directly from the CLI.
+It runs standalone scripts in their
+own environments with no config, and project functions directly from the CLI.
 
 It implements [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
 and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and supports Python ≥ 3.4.  
