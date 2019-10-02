@@ -51,7 +51,7 @@ This file will be created if it doesn't exist.
 
 ## Quick-and-dirty start for quick-and-dirty scripts
 - Add the line `__requires__ = [numpy, requests]` somewhere in your script, where `numpy` and 
-`requsts` are dependencies.
+`requests` are dependencies.
 Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
 This will set up an isolated environment for this script, and install
 dependencies as required. This is a safe way
@@ -153,16 +153,16 @@ These tools have different scopes and purposes:
 | Name | [Pip + venv](https://docs.python.org/3/library/venv.html) | [Pipenv](https://docs.pipenv.org) | [Poetry](https://poetry.eustace.io) | [pyenv](https://github.com/pyenv/pyenv) | [pythonloc](https://github.com/cs01/pythonloc) | [Conda](https://docs.conda.io/en/latest/) |this |
 |------|------------|--------|--------|-------|-----------|-------|-----|
 | **Manages dependencies** | ✓ | ✓ | ✓ | | | ✓ | ✓|
+| **Resolves/locks deps** |  | ✓ | ✓ | | | ✓ | ✓|
 | **Manages Python installations** | | | | ✓ | | ✓ | ✓ |
 | **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
 | **Included with Python** | ✓ | | | | | | |
-| **Stores packages with project** | | | | | ✓ | | ✓|
-| **Locks dependencies** |  | ✓ | ✓ | | | ✓ | ✓|
+| **Stores deps with project** | | | | | ✓ | | ✓|
 | **Requires changing session state** | ✓ | | | ✓ | | | |
-| **Slow** |  | ✓ | | | | | |
 | **Easy script access** | | | | | | | ✓ |
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| **Isolated envs for scripts** | | | | | | | ✓ |
 
 
 ## Use
@@ -221,15 +221,14 @@ if you're using that.
 
 You can specify direct entry points to parts of your program using something like this in `pyproject.toml`:
 ```toml
-[tool.pyflow]
-# ...
-scripts = { name = "module:function" }
+[tool.pyflow.scripts]
+name = "module:function"
 ```
 Where you replace `name`, `function`, and `module` with the name to call your script with, the 
 function you wish to run, and the module it's in respectively. This is similar to specifying 
 scripts in `setup.py` for built packages. The key difference is that functions specified here 
 can be run at any time,
-without having to build the package. Run with `pyflow scriptname` to do this.
+without having to build the package. Run with `pyflow name` to do this.
 
 If you run `pyflow package` on on a package using this, the result will work like normal script
 entry points for somone using the package, regardless of if they're using this tool.
@@ -325,7 +324,7 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 
 
 ## Not-yet-implemented
-- Installing "system" cli tools
+- Installing global CLI tools
 - Installing from sources other than `pypi` (eg repos, paths)
 - The lock file is missing some info like hashes
 - Adding a dependency via the CLI with a specific version constraint, or extras.
@@ -353,8 +352,9 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Topic :: Scientific/Engineering :: Human Machine Interfaces",
 ]
-python_requires=">=3.6"
-package_url = "https://upload.pypi.org/legacy/"  # If not included, will default to `test.pypi.org`
+python_requires = ">=3.6"
+# If not included, will default to `test.pypi.org`
+package_url = "https://upload.pypi.org/legacy/"
 
 
 [tool.pyflow.scripts]
@@ -387,7 +387,8 @@ cargo build --release
 ```
 
 ## Updating
-If installed via `Cargo`, run `cargo install pyflow --force`.
+If installed via `Cargo`, run `cargo install pyflow --force`. If using an installer or 
+deb, run the new version's installer or deb. If manually calling a binary, replace it.
 
 ## Contributing
 If you notice unexpected behavior or missing features, please post an issue,

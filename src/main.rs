@@ -463,6 +463,12 @@ impl Config {
         // todo: More fields
 
         result.push_str("\n\n");
+        result.push_str("[tool.pyflow.scripts]\n");
+        for (name, mod_fn) in self.scripts.iter() {
+            result.push_str(&(format!("{} = \"{}\"", name, mod_fn) + "\n"));
+        }
+
+        result.push_str("\n\n");
         result.push_str("[tool.pyflow.dependencies]\n");
         for dep in self.reqs.iter() {
             result.push_str(&(dep.to_cfg_string() + "\n"));
@@ -1309,14 +1315,14 @@ fn main() {
             cfg.write_file(cfg_filename);
             // Don't return here; let the normal logic create the venv now.
         }
-        SubCommand::Reset {} => {
+        SubCommand::Reset {} => {2
             if pypackages_dir.exists() && fs::remove_dir_all(&pypackages_dir).is_err() {
                 abort("Problem removing `__pypackages__` directory")
             }
             if Path::new(lock_filename).exists() && fs::remove_file(lock_filename).is_err() {
                 abort("Problem removing `pyflow.lock`")
             }
-            util::print_color("Reset complete", Color::Green);
+            util::print_color("`__pypackages__` folder and `pyflow.lock` removed", Color::Green);
             return;
         }
         SubCommand::Switch { version } => {
