@@ -1315,7 +1315,7 @@ fn main() {
             cfg.write_file(cfg_filename);
             // Don't return here; let the normal logic create the venv now.
         }
-        SubCommand::Reset {} => {2
+        SubCommand::Reset {} => {
             if pypackages_dir.exists() && fs::remove_dir_all(&pypackages_dir).is_err() {
                 abort("Problem removing `__pypackages__` directory")
             }
