@@ -79,11 +79,7 @@ pub fn find_py_version(alias: &str) -> Option<crate::Version> {
 
 /// Create the virtual env. Assume we're running Python 3.3+, where `venv` is included.
 /// Additionally, create the __pypackages__ directory if not already created.
-pub(crate) fn create_venv(
-    py_alias: &str,
-    lib_path: &Path,
-    name: &str,
-) -> Result<(), Box<dyn Error>> {
+pub fn create_venv(py_alias: &str, lib_path: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
     Command::new(py_alias)
         .args(&["-m", "venv", name])
@@ -94,11 +90,7 @@ pub(crate) fn create_venv(
 }
 
 // todo: DRY for using a path instead of str. use impl Into<PathBuf> ?
-pub(crate) fn create_venv2(
-    py_alias: &Path,
-    lib_path: &Path,
-    name: &str,
-) -> Result<(), Box<dyn Error>> {
+pub fn create_venv2(py_alias: &Path, lib_path: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
     Command::new(py_alias)
         .args(&["-m", "venv", name])
@@ -108,12 +100,21 @@ pub(crate) fn create_venv2(
     Ok(())
 }
 
-pub(crate) fn run_python(
-    bin_path: &Path,
-    lib_path: &Path,
-    args: &[String],
-) -> Result<(), Box<dyn Error>> {
+pub fn run_python(bin_path: &Path, lib_path: &Path, args: &[String]) -> Result<(), Box<dyn Error>> {
     util::set_pythonpath(lib_path);
     Command::new(bin_path.join("python")).args(args).status()?;
+    Ok(())
+}
+
+pub fn download_git_repo(repo: &str, lib_path: &Path) -> Result<(), Box<dyn Error>> {
+    // todo: Suppress this output.
+    if Command::new("git").arg("--version").status().is_err() {
+        util::abort("Can't find Git on the PATH. Is it installed?");
+    }
+
+    Command::new("git")
+        .current_dir(lib_path)
+        .args(&["clone", repo])
+        .status()?;
     Ok(())
 }

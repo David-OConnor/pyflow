@@ -40,9 +40,9 @@ pub enum DepComponentWrapperPoetry {
 #[derive(Debug, Deserialize)]
 pub struct DepComponent {
     #[serde(rename = "version")]
-    pub constrs: String,
+    pub constrs: Option<String>,
     pub extras: Option<Vec<String>>,
-    pub repository: Option<String>,
+    pub git: Option<String>,
     pub branch: Option<String>,
     pub service: Option<String>,
     pub python: Option<String>,

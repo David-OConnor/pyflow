@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.1.5
+- Added support for adding dependencies from git repos
+
 ## v0.1.4
 - Clear now lets the user choose which parts of the cache to clear
 - Fixed a bug with dev reqs

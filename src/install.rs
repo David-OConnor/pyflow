@@ -1,5 +1,4 @@
-use crate::dep_types::Version;
-use crate::util;
+use crate::{commands, dep_types::Version, util};
 use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
 use regex::Regex;
@@ -207,7 +206,6 @@ pub fn download_and_install_package(
             .to_string();
 
         if input.to_lowercase().contains('y') {
-            // todo: Anything?
         } else {
             util::abort("Exiting due to failed hash");
         }
@@ -215,8 +213,6 @@ pub fn download_and_install_package(
 
     // We must re-open the file after computing the hash.
     let archive_file = fs::File::open(&archive_path).unwrap();
-
-    // todo: Setup executable scripts.
 
     let rename = match rename.as_ref() {
         Some((_, new)) => Some((name.to_owned(), new.to_owned())),
@@ -465,4 +461,29 @@ pub fn rename_metadata(path: &Path, _old: &str, new: &str) {
     fs::write(top_file, top_data).expect("Problem writing file while renaming");
 
     // todo: Modify other files like entry_points.txt, perhaps.
+}
+
+/// Clone a git repo of a Python package, and build a wheel from it
+pub fn download_git_repo(name: &str, url: &str, lib_path: &Path, bin_path: &Path) {
+    if commands::download_git_repo(url, lib_path).is_err() {
+        util::abort(&format!("Problem cloning this repo: {}", url));
+    };
+
+    // todo temp!!
+    let folder_name = "si_units";
+
+    // Build a wheel from the repo
+    Command::new(bin_path.join("python"))
+        // We assume that the module code is in the repo's immediate subfolder that has
+        // the package's name.
+        .current_dir(&lib_path.join(folder_name))
+        .args(&["setup.py", "bdist_wheel"])
+        .output()
+        .expect("Problem running setup.py bdist_wheel");
+
+    let wheel_fname = "siunits-0.0.6-py3-none-any.whl"; // todo temp!!
+    let archive_path = &lib_path.join(folder_name).join("dist").join(wheel_fname);
+    let archive_file = fs::File::open(&archive_path).unwrap();
+
+    util::extract_zip(&archive_file, lib_path, &None);
 }

@@ -163,6 +163,7 @@ These tools have different scopes and purposes:
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | **Isolated envs for scripts** | | | | | | | ✓ |
+| **Runs project fns (scripts) from CLI** | | | | | | | ✓ |
 
 
 ## Use
@@ -207,6 +208,12 @@ If you'd like to an install a dependency with extras, use syntax like this:
 ```toml
 [tool.pyflow.dependencies]
 ipython = { version = "^7.7.0", extras = ["qtconsole"] }
+```
+
+To install from a `git` repo instead of `pypi`, use syntax like this:
+```toml
+[tool.pyflow.dependencies]
+saturn = { git = "https://github.com/david-oconnor/saturn.git" }  # The trailing `.git` here is optional.
 ```
 
 For details on 

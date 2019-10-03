@@ -731,6 +731,7 @@ pub struct Req {
     pub sys_platform: Option<(ReqType, crate::Os)>,
     pub python_version: Option<Constraint>,
     pub install_with_extras: Option<Vec<String>>,
+    pub git: Option<String>, // String is the git repo. // todo: Branch
 }
 
 impl Req {
@@ -742,6 +743,7 @@ impl Req {
             sys_platform: None,
             python_version: None,
             install_with_extras: None,
+            git: None,
         }
     }
 
@@ -774,6 +776,7 @@ impl Req {
                 sys_platform,
                 python_version,
                 install_with_extras: None,
+                git: None,
             });
         };
 
@@ -795,6 +798,7 @@ impl Req {
                 sys_platform,
                 python_version,
                 install_with_extras: None,
+                git: None,
             });
         }
         Err(DependencyError::new(&format!(
@@ -898,16 +902,6 @@ pub enum Rename {
     // todo: May not need to store self id.
     Yes(u32, u32, String), // parent id, self id, name
 }
-
-//impl Rename {
-//    // todo: Perhaps just have this option instead of a sep enum
-//    pub fn to_opt(&self) -> Option<(u32, String)> {
-//        match self {
-//            Self::No => None,
-//            Self::Yes(parent_id, self_id, name) => Some((parent_id, name))
-//        }
-//    }
-//}
 
 #[derive(Clone, Debug)]
 pub struct Package {
@@ -1157,6 +1151,7 @@ pub mod tests {
             sys_platform: None,
             python_version: None,
             install_with_extras: None,
+            git: None,
         };
 
         let actual2 = Req::from_str(
@@ -1172,6 +1167,7 @@ pub mod tests {
             sys_platform: None,
             python_version: Some(Constraint::new(Exact, Version::new(2, 7, 0))),
             install_with_extras: None,
+            git: None,
         };
 
         let actual3 = Req::from_str(
@@ -1187,6 +1183,7 @@ pub mod tests {
             sys_platform: Some((Exact, crate::Os::Windows32)),
             python_version: Some(Constraint::new(Lt, Version::new(3, 6, 0))),
             install_with_extras: None,
+            git: None,
         };
 
         assert_eq!(actual, expected);
@@ -1210,6 +1207,7 @@ pub mod tests {
             sys_platform: None,
             python_version: None,
             install_with_extras: None,
+            git: None,
         };
 
         let expected2 = Req {
@@ -1222,6 +1220,7 @@ pub mod tests {
             sys_platform: None,
             python_version: None,
             install_with_extras: None,
+            git: None,
         };
 
         assert_eq!(actual1, expected1);

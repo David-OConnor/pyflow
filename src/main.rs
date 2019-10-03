@@ -199,17 +199,41 @@ impl Config {
         for (name, data) in deps {
             let constraints;
             let mut extras = None;
+            let mut git = None;
             let mut python_version = None;
             match data {
                 files::DepComponentWrapper::A(constrs) => {
-                    constraints = Constraint::from_str_multiple(&constrs)
-                        .expect("Problem parsing constraints in `pyproject.toml`.");
+                    constraints = match Constraint::from_str_multiple(&constrs) {
+                        Ok(c) => c,
+                        Err(_) => {
+                            abort(&format!(
+                                "Problem parsing constraints in `pyproject.toml`: {}",
+                                &constrs
+                            ));
+                            unreachable!()
+                        }
+                    };
                 }
                 files::DepComponentWrapper::B(subdata) => {
-                    constraints = Constraint::from_str_multiple(&subdata.constrs)
-                        .expect("Problem parsing constraints in `pyproject.toml`.");
+                    constraints = match subdata.constrs {
+                        Some(constrs) => match Constraint::from_str_multiple(&constrs) {
+                            Ok(c) => c,
+                            Err(_) => {
+                                abort(&format!(
+                                    "Problem parsing constraints in `pyproject.toml`: {}",
+                                    &constrs
+                                ));
+                                unreachable!()
+                            }
+                        },
+                        None => vec![],
+                    };
+
                     if let Some(ex) = subdata.extras {
                         extras = Some(ex);
+                    }
+                    if let Some(repo) = subdata.git {
+                        git = Some(repo);
                     }
                     if let Some(v) = subdata.python {
                         python_version = Some(
@@ -217,7 +241,7 @@ impl Config {
                                 .expect("Problem parsing python version in dependency"),
                         );
                     }
-                    // todo repository etc
+                    // todo path
                 }
             }
             //                    let
@@ -229,6 +253,7 @@ impl Config {
                 sys_platform: None,
                 python_version,
                 install_with_extras: extras,
+                git,
             });
         }
         result
@@ -327,7 +352,7 @@ impl Config {
                             // todo repository etc
                         }
                     }
-                    if name.to_lowercase() == "python" {
+                    if name.to_lowercase() == "python".to_string() {
                         if let Some(constr) = constraints.get(0) {
                             result.py_version = Some(constr.version)
                         }
@@ -339,6 +364,7 @@ impl Config {
                             sys_platform: None,
                             python_version,
                             install_with_extras: extras,
+                            git: None,
                         });
                     }
                 }
@@ -740,7 +766,7 @@ fn sync_deps(
         );
         #[cfg(target_os = "linux")]
         println!(
-            "⬇️ Installing {}{}{} {} ...",
+            "⬇ Installing {}{}{} {} ...",
             Colored::Fg(Color::Cyan),
             &name,
             Colored::Fg(Color::Reset),
@@ -748,7 +774,7 @@ fn sync_deps(
         );
         #[cfg(target_os = "macos")]
         println!(
-            "⬇️ Installing {}{}{} {} ...",
+            "⬇ Installing {}{}{} {} ...",
             Colored::Fg(Color::Cyan),
             &name,
             Colored::Fg(Color::Reset),
@@ -1100,10 +1126,22 @@ fn sync(
     #[cfg(target_os = "macos")]
     println!("🔍 Resolving dependencies...");
 
+    // Dev reqs and normal reqs are both installed here; we only ommit dev reqs
+    // when packaging.
     let mut combined_reqs = reqs.to_vec();
     for dev_req in dev_reqs.to_vec() {
         combined_reqs.push(dev_req);
     }
+
+    // todo: For now ommit git reqs here. Make sure to re-add it later, so
+    // todo we can resolve their dependencies. Ie build the wheel, cache it,
+    // todo pass its deps here, then install the already-downloaded/built wheel.
+
+    // todo: Remove this line back in if we handle upstream.
+    combined_reqs = combined_reqs
+        .into_iter()
+        .filter(|r| r.git.is_some())
+        .collect();
 
     let resolved = match dep_resolution::resolve(&combined_reqs, &locked, os, &py_vers) {
         Ok(r) => r,
@@ -1322,7 +1360,10 @@ fn main() {
             if Path::new(lock_filename).exists() && fs::remove_file(lock_filename).is_err() {
                 abort("Problem removing `pyflow.lock`")
             }
-            util::print_color("`__pypackages__` folder and `pyflow.lock` removed", Color::Green);
+            util::print_color(
+                "`__pypackages__` folder and `pyflow.lock` removed",
+                Color::Green,
+            );
             return;
         }
         SubCommand::Switch { version } => {
@@ -1416,10 +1457,21 @@ fn main() {
             }
 
             if found_lock {
-                println!("Found lockfile");
+                util::print_color("Found lockfile", Color::Green);
             }
             // Merge reqs added via cli with those in `pyproject.toml`.
             let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, cfg_filename);
+
+            // Todo: Do for dev reqs too.
+            for req in updated_reqs.iter().filter(|r| r.git.is_some()) {
+                // todo: as_ref() would be better than clone, if we can get it working.
+                install::download_git_repo(
+                    &req.name,
+                    &req.git.clone().unwrap(),
+                    &lib_path,
+                    &bin_path,
+                );
+            }
 
             sync(
                 &bin_path,

@@ -436,8 +436,6 @@ fn make_renamed_packs(
     //    all_deps: &[Dependency],
     name: &str,
 ) -> Vec<Package> {
-    //    println!("DEBUG TEMP: {:#?}", &deps);
-
     util::print_color(
         &format!(
             "Installing multiple versions for {}. If this package uses \
