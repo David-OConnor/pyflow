@@ -249,7 +249,7 @@ fn guess_graph(
     parent_id: u32,
     reqs: &[Req],
     locked: &[crate::Package],
-    os: crate::Os,
+    os: util::Os,
     extras: &[String],
     py_vers: &Version,
     result: &mut Vec<Dependency>, // parent id, self id.
@@ -507,7 +507,7 @@ fn assign_subdeps(packages: &mut Vec<Package>, updated_ids: &HashMap<u32, u32>) 
 pub fn resolve(
     reqs: &[Req],
     locked: &[crate::Package],
-    os: crate::Os,
+    os: util::Os,
     py_vers: &Version,
     //) -> Result<Vec<(String, Version, Vec<Req>)>, reqwest::Error> {
 ) -> Result<Vec<crate::Package>, reqwest::Error> {

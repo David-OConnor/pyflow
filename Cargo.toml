@@ -2,7 +2,7 @@
 name = "pyflow"
 version = "0.1.5"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
-description = "A modern Python dependency manager"
+description = "A modern Python installation and dependency manager"
 license = "MIT"
 homepage = "https://www.github.com/David-OConnor/pyflow"
 repository = "https://www.github.com/David-OConnor/pyflow"

@@ -1,10 +1,13 @@
 use crate::{
-    dep_resolution,
-    dep_types::{Constraint, Req, ReqType, Version},
-    files, py_versions,
+    dep_resolution::{self, WarehouseRelease},
+    dep_types::{Constraint, DependencyError, Req, ReqType, Version},
+    files,
+    install::{self, PackageType},
+    py_versions,
 };
 use crossterm::{Color, Colored};
 use regex::Regex;
+use serde::Deserialize;
 use std::io::{self, BufRead, BufReader, Read};
 use std::str::FromStr;
 use std::{
@@ -15,6 +18,48 @@ use std::{
 };
 use tar::Archive;
 use xz2::read::XzDecoder;
+
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
+/// Used to determine which version of a binary package to download. Assume 64-bit.
+pub enum Os {
+    Linux32,
+    Linux,
+    Windows32,
+    Windows,
+    //    Mac32,
+    Mac,
+    Any,
+}
+
+impl FromStr for Os {
+    type Err = DependencyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "manylinux1_i686" => Os::Linux32,
+            "manylinux2010_i686" => Os::Linux32,
+            "manylinux1_x86_64" => Os::Linux,
+            "manylinux2010_x86_64" => Os::Linux,
+            "cygwin" => Os::Linux, // todo is this right?
+            "linux" => Os::Linux,
+            "linux2" => Os::Linux,
+            "windows" => Os::Windows,
+            "win" => Os::Windows,
+            "win32" => Os::Windows32,
+            "win_amd64" => Os::Windows,
+            "macosx_10_6_intel" => Os::Mac,
+            "darwin" => Os::Mac,
+            "any" => Os::Any,
+            _ => {
+                if s.contains("mac") {
+                    Os::Mac
+                } else {
+                    return Err(DependencyError::new(&format!("Problem parsing Os: {}", s)));
+                }
+            }
+        })
+    }
+}
 
 /// Print in a color, then reset formatting.
 pub fn print_color(message: &str, color: Color) {
@@ -452,12 +497,11 @@ pub fn find_venv_info(
 /// Used when the version might be an error, eg user input
 pub fn fallible_v_parse(vers: &str) -> Version {
     let vers = vers.replace(" ", "").replace("\n", "").replace("\r", "");
-    match Version::from_str(&vers) {
-        Ok(v) => v,
-        Err(_) => {
-            abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
-            unreachable!()
-        }
+    if let Ok(v) = Version::from_str(&vers) {
+        v
+    } else {
+        abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
+        unreachable!()
     }
 }
 
@@ -494,12 +538,11 @@ pub fn prompt_list<T: Clone + ToString>(
         .to_string()
         .parse::<usize>();
 
-    let input = match input {
-        Ok(ip) => ip,
-        Err(_) => {
-            abort("Please try again; enter a number like 1 or 2 .");
-            unreachable!()
-        }
+    let input = if let Ok(ip) = input {
+        ip
+    } else {
+        abort("Please try again; enter a number like 1 or 2 .");
+        unreachable!()
     };
 
     let (name, content) = match mapping.get(&input) {
@@ -514,4 +557,121 @@ pub fn prompt_list<T: Clone + ToString>(
     };
 
     (name.to_string(), content.clone())
+}
+
+/// Find the operating system from a wheel filename. This doesn't appear to be available
+/// anywhere else on the Pypi Warehouse.
+fn os_from_wheel_fname(filename: &str) -> Result<(Os), DependencyError> {
+    // Format is "name-version-pythonversion-mobileversion?-os.whl"
+    // Also works with formats like this:
+    // `PyQt5-5.13.0-5.13.0-cp35.cp36.cp37.cp38-none-win32.whl` too.
+    // The point is, pull the last part before ".whl".
+    let re = Regex::new(r"^(?:.*?-)+(.*).whl$").unwrap();
+    if let Some(caps) = re.captures(filename) {
+        let parsed = caps.get(1).unwrap().as_str();
+        return Ok(
+            Os::from_str(parsed).unwrap_or_else(|_| panic!("Problem parsing Os: {}", parsed))
+        );
+    }
+
+    Err(DependencyError::new("Problem parsing os from wheel name"))
+}
+
+/// Find the most appropriate release to download. Ie Windows vs Linux, wheel vs source.
+pub fn find_best_release(
+    data: &[WarehouseRelease],
+    name: &str,
+    version: &Version,
+    os: Os,
+    python_vers: &Version,
+) -> (WarehouseRelease, PackageType) {
+    // Find which release we should download. Preferably wheels, and if so, for the right OS and
+    // Python version.
+    let mut compatible_releases = vec![];
+    // Store source releases as a fallback, for if no wheels are found.
+    let mut source_releases = vec![];
+
+    for rel in data.iter() {
+        let mut compatible = true;
+        match rel.packagetype.as_ref() {
+            "bdist_wheel" => {
+                if let Some(py_ver) = &rel.requires_python {
+                    // If a version constraint exists, make sure it's compatible.
+                    let py_constrs = Constraint::from_str_multiple(&py_ver)
+                        .expect("Problem parsing constraint from requires_python");
+
+                    for constr in py_constrs.iter() {
+                        if !constr.is_compatible(&python_vers) {
+                            compatible = false;
+                        }
+                    }
+                }
+
+                let wheel_os =
+                    os_from_wheel_fname(&rel.filename).expect("Problem getting os from wheel name");
+                if wheel_os != os && wheel_os != Os::Any {
+                    compatible = false;
+                }
+
+                // Packages that use C code(eg numpy) may fail to load C extensions if installing
+                // for the wrong version of python (eg  cp35 when python 3.7 is installed), even
+                // if `requires_python` doesn't indicate an incompatibility. Check `python_version`
+                // instead of `requires_python`.
+                // Note that the result of this parse is an any match.
+                match Constraint::from_wh_py_vers(&rel.python_version) {
+                    Ok(constrs) => {
+                        let mut compat_py_v = false;
+                        for constr in constrs.iter() {
+                            if constr.is_compatible(python_vers) {
+                                compat_py_v = true;
+                            }
+                        }
+                        if !compat_py_v {
+                            compatible = false;
+                        }
+                    }
+                    Err(_) => {
+                        (println!(
+                            "Unable to match python version from python_version: {}",
+                            &rel.python_version
+                        ))
+                    }
+                }
+
+                if compatible {
+                    compatible_releases.push(rel.clone());
+                }
+            }
+            "sdist" => source_releases.push(rel.clone()),
+            // todo: handle dist_egg and bdist_wininst?
+            "bdist_egg" => println!("Found bdist_egg... skipping"),
+            "bdist_wininst" | "bdist_msi" => (), // Don't execute Windows installers
+            _ => {
+                println!("Found surprising package type: {}", rel.packagetype);
+                continue;
+            }
+        }
+    }
+
+    let best_release;
+    let package_type;
+    // todo: Sort further / try to match exact python_version if able.
+    if compatible_releases.is_empty() {
+        if source_releases.is_empty() {
+            abort(&format!(
+                "Unable to find a compatible release for {}: {}",
+                name,
+                version.to_string()
+            ));
+            unreachable!()
+        } else {
+            best_release = source_releases[0].clone();
+            package_type = install::PackageType::Source;
+        }
+    } else {
+        best_release = compatible_releases[0].clone();
+        package_type = install::PackageType::Wheel;
+    }
+
+    (best_release, package_type)
 }

@@ -41,8 +41,7 @@ impl From<(Version, Os)> for PyVers {
                     abort_helper("3.4", "Windows");
                     unreachable!()
                 }
-                Os::Ubuntu => Self::V3_4_10,
-                Os::Centos => Self::V3_4_10,
+                Os::Ubuntu | Os::Centos => Self::V3_4_10,
                 _ => {
                     abort_helper("3.4", "Mac");
                     unreachable!()
@@ -50,8 +49,7 @@ impl From<(Version, Os)> for PyVers {
             },
             5 => match v_o.1 {
                 Os::Windows => Self::V3_5_4,
-                Os::Ubuntu => Self::V3_5_7,
-                Os::Centos => Self::V3_5_7,
+                Os::Ubuntu | Os::Centos => Self::V3_5_7,
                 _ => {
                     abort_helper("3.5", "Mac");
                     unreachable!()
@@ -59,17 +57,14 @@ impl From<(Version, Os)> for PyVers {
             },
             6 => match v_o.1 {
                 Os::Windows => Self::V3_6_8,
-                Os::Ubuntu => Self::V3_6_9,
-                Os::Centos => Self::V3_6_9,
+                Os::Ubuntu | Os::Centos => Self::V3_6_9,
                 _ => {
                     abort_helper("3.6", "Mac");
                     unreachable!()
                 }
             },
             7 => match v_o.1 {
-                Os::Windows => Self::V3_7_4,
-                Os::Ubuntu => Self::V3_7_4,
-                Os::Centos => Self::V3_7_4,
+                Os::Windows | Os::Ubuntu | Os::Centos => Self::V3_7_4,
                 _ => {
                     abort_helper("3.7", "Mac");
                     unreachable!()
@@ -460,14 +455,21 @@ pub fn create_venv(
     //     Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
     let wheel_url = "https://files.pythonhosted.org/packages/00/83/b4a77d044e78ad1a45610eb88f745be2fd2c6d658f9798a15e384b7d57c9/wheel-0.33.6-py2.py3-none-any.whl";
 
+    // Try 64 first; if not, use 32.
+    let lib = if vers_path.join(".venv").join("lib64").exists() {
+        "lib64"
+    } else {
+        "lib"
+    };
+
     #[cfg(target_os = "windows")]
     let venv_lib_path = "Lib";
     #[cfg(target_os = "linux")]
     let venv_lib_path =
-        PathBuf::from("lib64").join(&format!("python{}.{}", py_ver.major, py_ver.minor));
+        PathBuf::from(lib).join(&format!("python{}.{}", py_ver.major, py_ver.minor));
     #[cfg(target_os = "macos")]
     let venv_lib_path =
-        PathBuf::from("lib64").join(&format!("python{}.{}", py_ver.major, py_ver.minor));
+        PathBuf::from(lib).join(&format!("python{}.{}", py_ver.major, py_ver.minor));
 
     install::download_and_install_package(
         "wheel",

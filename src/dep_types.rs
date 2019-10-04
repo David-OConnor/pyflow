@@ -668,7 +668,7 @@ fn parse_extras(
     m: Option<Match>,
 ) -> (
     Option<String>,
-    Option<(ReqType, crate::Os)>,
+    Option<(ReqType, util::Os)>,
     Option<Constraint>,
 ) {
     let mut extra = None;
@@ -728,7 +728,7 @@ pub struct Req {
     pub name: String,
     pub constraints: Vec<Constraint>,
     pub extra: Option<String>,
-    pub sys_platform: Option<(ReqType, crate::Os)>,
+    pub sys_platform: Option<(ReqType, util::Os)>,
     pub python_version: Option<Constraint>,
     pub install_with_extras: Option<Vec<String>>,
     pub git: Option<String>, // String is the git repo. // todo: Branch

@@ -1,4 +1,4 @@
-use crate::{commands, dep_types::Version, util};
+use crate::{dep_types::Version, util};
 use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
 use regex::Regex;
@@ -465,9 +465,9 @@ pub fn rename_metadata(path: &Path, _old: &str, new: &str) {
 
 /// Clone a git repo of a Python package, and build a wheel from it
 pub fn download_git_repo(name: &str, url: &str, lib_path: &Path, bin_path: &Path) {
-    if commands::download_git_repo(url, lib_path).is_err() {
-        util::abort(&format!("Problem cloning this repo: {}", url));
-    };
+    //    if commands::download_git_repo(url, lib_path).is_err() {
+    //        util::abort(&format!("Problem cloning this repo: {}", url));
+    //    }; // todo to keep dl small while troubleshooting.
 
     // todo temp!!
     let folder_name = "si_units";

@@ -25,19 +25,22 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 
 ## Installation
-- **Windows, Ubuntu, or Debian:** Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow-0.1.4-x86_64.msi)
-or
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow_0.1.4_amd64.deb) .
+- **Windows** Download and run 
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow-0.1.4-x86_64.msi).
+(Scoop coming soon).
+
+Ubuntu, or Debian:** Download and run 
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow_0.1.4_amd64.deb).
 
 - **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow)
  and place it somewhere
 accessible by the system PATH. For example, `/usr/bin`.
 
-- **If you have [Rust](https://www.rust-lang.org) installed**: Run `cargo install pyflow`.
-
 - **Mac:**  Build from source using the instructions near the bottom of this page,
- or install via `cargo`. If able, please PR the binary.
+ or install via `cargo`. (If able, please PR the binary.)
+ 
+ - **If you have [Rust](https://www.rust-lang.org) installed** Run `cargo install pyflow`.
+
 
 ## Quickstart
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname` 
@@ -159,11 +162,10 @@ These tools have different scopes and purposes:
 | **Included with Python** | ✓ | | | | | | |
 | **Stores deps with project** | | | | | ✓ | | ✓|
 | **Requires changing session state** | ✓ | | | ✓ | | | |
-| **Easy script access** | | | | | | | ✓ |
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | **Isolated envs for scripts** | | | | | | | ✓ |
-| **Runs project fns (scripts) from CLI** | | | | | | | ✓ |
+| **Runs project fns from CLI** | | | | | | | ✓ |
 
 
 ## Use
@@ -429,9 +431,11 @@ on the server to properly determine dependencies, due to unreliable information
  
  
 ## Python binary sources:
+### [Repo binaries are downloaded from](https://github.com/David-OConnor/pybin/releases)
 - Windows: [Python official Visual Studio package](https://www.nuget.org/packages/python/3.8.0-b4),
 by Steve Dower.
-- Ubuntu/Debian: Built on Ubuntu 18.04, using standard procedures.
+- Newer linux distros: Built on Ubuntu 18.04, using standard procedures.
+- Older linux distros: Built on CentOS 7, using standard procedures.
 
 
 ## Gotchas

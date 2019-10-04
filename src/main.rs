@@ -1,15 +1,10 @@
-use crate::dep_types::{
-    Constraint, DependencyError, Lock, LockPackage, Package, Rename, Req, ReqType, Version,
-};
-use crate::util::abort;
+use crate::dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version};
+use crate::util::{abort, Os};
 use crossterm::{Color, Colored};
-use install::PackageType::{Source, Wheel};
 use regex::Regex;
 use serde::Deserialize;
 use std::{collections::HashMap, env, error::Error, fs, io, path::PathBuf, str::FromStr};
 
-use crate::dep_resolution::WarehouseRelease;
-use crate::install::PackageType;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use structopt::StructOpt;
@@ -25,50 +20,7 @@ mod util;
 
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
 
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
-/// Used to determine which version of a binary package to download. Assume 64-bit.
-pub enum Os {
-    Linux32,
-    Linux,
-    Windows32,
-    Windows,
-    //    Mac32,
-    Mac,
-    Any,
-}
-
-impl FromStr for Os {
-    type Err = dep_types::DependencyError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "manylinux1_i686" => Os::Linux32,
-            "manylinux2010_i686" => Os::Linux32,
-            "manylinux1_x86_64" => Os::Linux,
-            "manylinux2010_x86_64" => Os::Linux,
-            "cygwin" => Os::Linux, // todo is this right?
-            "linux" => Os::Linux,
-            "linux2" => Os::Linux,
-            "windows" => Os::Windows,
-            "win" => Os::Windows,
-            "win32" => Os::Windows32,
-            "win_amd64" => Os::Windows,
-            "darwin" => Os::Mac,
-            "any" => Os::Any,
-            _ => {
-                if s.contains("mac") {
-                    Os::Mac
-                } else {
-                    return Err(DependencyError::new(&format!("Problem parsing Os: {}", s)));
-                }
-            }
-        })
-    }
-}
-
 #[derive(StructOpt, Debug)]
-//#[structopt(raw(setting = "structopt::clap::AppSettings::suggestions"))]
-//#[structopt(name = "pyflow", about = "Python packaging and publishing", structopt::clap::AppSettings::suggestions = "false")]
 #[structopt(name = "pyflow", about = "Python packaging and publishing")]
 struct Opt {
     #[structopt(subcommand)]
@@ -352,7 +304,7 @@ impl Config {
                             // todo repository etc
                         }
                     }
-                    if name.to_lowercase() == "python".to_string() {
+                    if &name.to_lowercase() == "python" {
                         if let Some(constr) = constraints.get(0) {
                             result.py_version = Some(constr.version)
                         }
@@ -490,19 +442,19 @@ impl Config {
 
         result.push_str("\n\n");
         result.push_str("[tool.pyflow.scripts]\n");
-        for (name, mod_fn) in self.scripts.iter() {
+        for (name, mod_fn) in &self.scripts {
             result.push_str(&(format!("{} = \"{}\"", name, mod_fn) + "\n"));
         }
 
         result.push_str("\n\n");
         result.push_str("[tool.pyflow.dependencies]\n");
-        for dep in self.reqs.iter() {
+        for dep in &self.reqs {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
 
         result.push_str("\n\n");
         result.push_str("[tool.pyflow.dev-dependencies]\n");
-        for dep in self.dev_reqs.iter() {
+        for dep in &self.dev_reqs {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
 
@@ -561,136 +513,16 @@ fn write_lock(path: &Path, data: &Lock) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Find the operating system from a wheel filename. This doesn't appear to be available
-/// anywhere else on the Pypi Warehouse.
-fn os_from_wheel_fname(filename: &str) -> Result<(Os), dep_types::DependencyError> {
-    // Format is "name-version-pythonversion-mobileversion?-os.whl"
-    // Also works with formats like this:
-    // `PyQt5-5.13.0-5.13.0-cp35.cp36.cp37.cp38-none-win32.whl` too.
-    // The point is, pull the last part before ".whl".
-    let re = Regex::new(r"^(?:.*?-)+(.*).whl$").unwrap();
-    if let Some(caps) = re.captures(filename) {
-        let parsed = caps.get(1).unwrap().as_str();
-        return Ok(
-            Os::from_str(parsed).unwrap_or_else(|_| panic!("Problem parsing Os: {}", parsed))
-        );
-    }
-
-    Err(dep_types::DependencyError::new(
-        "Problem parsing os from wheel name",
-    ))
-}
-
 fn parse_lockpack_rename(rename: &str) -> (u32, String) {
     let re = Regex::new(r"^(\d+)\s(.*)$").unwrap();
     let caps = re
-        .captures(&rename)
+        .captures(rename)
         .expect("Problem reading lock file rename");
 
     let id = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
     let name = caps.get(2).unwrap().as_str().to_owned();
 
     (id, name)
-}
-
-/// Find the most appropriate release to download. Ie Windows vs Linux, wheel vs source.
-fn find_best_release(
-    data: &[WarehouseRelease],
-    name: &str,
-    version: &Version,
-    os: Os,
-    python_vers: &Version,
-) -> (WarehouseRelease, PackageType) {
-    // Find which release we should download. Preferably wheels, and if so, for the right OS and
-    // Python version.
-    let mut compatible_releases = vec![];
-    // Store source releases as a fallback, for if no wheels are found.
-    let mut source_releases = vec![];
-
-    for rel in data.iter() {
-        let mut compatible = true;
-        match rel.packagetype.as_ref() {
-            "bdist_wheel" => {
-                if let Some(py_ver) = &rel.requires_python {
-                    // If a version constraint exists, make sure it's compatible.
-                    let py_constrs = Constraint::from_str_multiple(&py_ver)
-                        .expect("Problem parsing constraint from requires_python");
-
-                    for constr in py_constrs.iter() {
-                        if !constr.is_compatible(&python_vers) {
-                            compatible = false;
-                        }
-                    }
-                }
-
-                let wheel_os =
-                    os_from_wheel_fname(&rel.filename).expect("Problem getting os from wheel name");
-                if wheel_os != os && wheel_os != Os::Any {
-                    compatible = false;
-                }
-
-                // Packages that use C code(eg numpy) may fail to load C extensions if installing
-                // for the wrong version of python (eg  cp35 when python 3.7 is installed), even
-                // if `requires_python` doesn't indicate an incompatibility. Check `python_version`
-                // instead of `requires_python`.
-                // Note that the result of this parse is an any match.
-                match Constraint::from_wh_py_vers(&rel.python_version) {
-                    Ok(constrs) => {
-                        let mut compat_py_v = false;
-                        for constr in constrs.iter() {
-                            if constr.is_compatible(python_vers) {
-                                compat_py_v = true;
-                            }
-                        }
-                        if !compat_py_v {
-                            compatible = false;
-                        }
-                    }
-                    Err(_) => {
-                        (println!(
-                            "Unable to match python version from python_version: {}",
-                            &rel.python_version
-                        ))
-                    }
-                }
-
-                if compatible {
-                    compatible_releases.push(rel.clone());
-                }
-            }
-            "sdist" => source_releases.push(rel.clone()),
-            // todo: handle dist_egg and bdist_wininst?
-            "bdist_egg" => println!("Found bdist_egg... skipping"),
-            "bdist_wininst" => (), // Don't execute Windows installers
-            "bdist_msi" => (),     // Don't execute Windows installers
-            _ => {
-                println!("Found surprising package type: {}", rel.packagetype);
-                continue;
-            }
-        }
-    }
-
-    let best_release;
-    let package_type;
-    // todo: Sort further / try to match exact python_version if able.
-    if compatible_releases.is_empty() {
-        if source_releases.is_empty() {
-            abort(&format!(
-                "Unable to find a compatible release for {}: {}",
-                name,
-                version.to_string()
-            ));
-            unreachable!()
-        } else {
-            best_release = source_releases[0].clone();
-            package_type = Source;
-        }
-    } else {
-        best_release = compatible_releases[0].clone();
-        package_type = Wheel;
-    }
-
-    (best_release, package_type)
 }
 
 /// Install/uninstall deps as required from the passed list, and re-write the lock file.
@@ -700,7 +532,7 @@ fn sync_deps(
     cache_path: &Path,
     lock_packs: &[LockPackage],
     installed: &[(String, Version, Vec<String>)],
-    os: Os,
+    os: util::Os,
     python_vers: &Version,
 ) {
     let packages: Vec<PackToInstall> = lock_packs
@@ -752,7 +584,7 @@ fn sync_deps(
             .expect("Problem getting warehouse data");
 
         let (best_release, package_type) =
-            find_best_release(&data, &name, &version, os, python_vers);
+            util::find_best_release(&data, &name, &version, os, python_vers);
 
         // Powershell  doesn't like emojis
         // todo format literal issues, so repeating this whole statement.
@@ -804,7 +636,7 @@ fn sync_deps(
     for ((name, version), rename) in to_install.iter() {
         if let Some((id, new)) = rename {
             // Rename in the renamed package
-            install::rename_package_files(&lib_path.join(util::standardize_name(new)), name, &new);
+            install::rename_package_files(&lib_path.join(util::standardize_name(new)), name, new);
 
             // Rename in the parent calling the renamed package. // todo: Multiple parents?
             let parent = lock_packs
@@ -814,14 +646,14 @@ fn sync_deps(
             install::rename_package_files(
                 &lib_path.join(util::standardize_name(&parent.name)),
                 name,
-                &new,
+                new,
             );
 
             // todo: Handle this more generally, in case we don't have proper semvar dist-info paths.
             install::rename_metadata(
                 &lib_path.join(&format!("{}-{}.dist-info", name, version.to_string2())),
                 name,
-                &new,
+                new,
             );
         }
     }
@@ -854,12 +686,11 @@ fn run_cli_tool(
         return;
     }
 
-    let name = match args.get(0) {
-        Some(a) => a.clone(),
-        None => {
-            abort("`run` must be followed by the script to run, eg `pyflow run black`");
-            unreachable!()
-        }
+    let name = if let Some(a) = args.get(0) {
+        a.clone()
+    } else {
+        abort("`run` must be followed by the script to run, eg `pyflow run black`");
+        unreachable!()
     };
 
     // If the script we're calling is specified in `pyproject.toml`, ensure it exists.
@@ -887,7 +718,7 @@ fn run_cli_tool(
                 ];
 
                 args_to_pass.append(&mut specified_args);
-                if commands::run_python(&bin_path, &lib_path, &args_to_pass).is_err() {
+                if commands::run_python(bin_path, lib_path, &args_to_pass).is_err() {
                     abort(&abort_msg);
                 }
             }
@@ -915,7 +746,7 @@ fn run_cli_tool(
         .to_owned()];
 
     args_to_pass.append(&mut specified_args);
-    if commands::run_python(&bin_path, &lib_path, &args_to_pass).is_err() {
+    if commands::run_python(bin_path, lib_path, &args_to_pass).is_err() {
         abort(&abort_msg);
     }
 }
@@ -956,7 +787,7 @@ fn find_deps_from_script(file_path: &Path) -> Vec<String> {
 fn run_script(
     script_env_path: &Path,
     cache_path: &Path,
-    os: Os,
+    os: util::Os,
     args: &mut Vec<String>,
     pyflow_dir: &Path,
 ) {
@@ -1017,7 +848,7 @@ fn run_script(
     // todo DRY
     let pypackages_dir = env_path.join("__pypackages__");
     let (vers_path, py_vers) =
-        util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_dir, cache_path);
+        util::find_venv_info(&cfg_vers, &pypackages_dir, pyflow_dir, cache_path);
 
     let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
@@ -1044,23 +875,20 @@ fn run_script(
                     Version::from_str(&lp.version).expect("Problem getting version"),
                 ),
                 None => {
-                    let vinfo = dep_resolution::get_version_info(&name)
+                    let vinfo = dep_resolution::get_version_info(name)
                         .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
                     (vinfo.0, vinfo.1)
                 }
             };
 
-            Req::new(
-                fmtd_name.clone(),
-                vec![Constraint::new(ReqType::Caret, version)],
-            )
+            Req::new(fmtd_name, vec![Constraint::new(ReqType::Caret, version)])
         })
         .collect();
 
     sync(
         &bin_path,
         &lib_path,
-        &cache_path,
+        cache_path,
         &lockpacks,
         &reqs,
         &[],
@@ -1083,11 +911,11 @@ fn sync(
     lockpacks: &[LockPackage],
     reqs: &[Req],
     dev_reqs: &[Req],
-    os: Os,
+    os: util::Os,
     py_vers: &Version,
     lock_path: &Path,
 ) {
-    let installed = util::find_installed(&lib_path);
+    let installed = util::find_installed(lib_path);
     // We control the lock format, so this regex will always match
     let dep_re = Regex::new(r"^(.*?)\s(.*)\s.*$").unwrap();
 
@@ -1098,7 +926,7 @@ fn sync(
             let mut deps = vec![];
             for dep in lp.dependencies.as_ref().unwrap_or(&vec![]) {
                 let caps = dep_re
-                    .captures(&dep)
+                    .captures(dep)
                     .expect("Problem reading lock file dependencies");
                 let name = caps.get(1).unwrap().as_str().to_owned();
                 let vers = Version::from_str(caps.get(2).unwrap().as_str())
@@ -1133,29 +961,18 @@ fn sync(
         combined_reqs.push(dev_req);
     }
 
-    // todo: For now ommit git reqs here. Make sure to re-add it later, so
-    // todo we can resolve their dependencies. Ie build the wheel, cache it,
-    // todo pass its deps here, then install the already-downloaded/built wheel.
-
-    // todo: Remove this line back in if we handle upstream.
-    combined_reqs = combined_reqs
-        .into_iter()
-        .filter(|r| r.git.is_some())
-        .collect();
-
-    let resolved = match dep_resolution::resolve(&combined_reqs, &locked, os, &py_vers) {
-        Ok(r) => r,
-        Err(_) => {
-            abort("Problem resolving dependencies");
-            unreachable!()
-        }
+    let resolved = if let Ok(r) = dep_resolution::resolve(&combined_reqs, &locked, os, py_vers) {
+        r
+    } else {
+        abort("Problem resolving dependencies");
+        unreachable!()
     };
 
     // Now merge the existing lock packages with new ones from resolved packages.
     // We have a collection of requirements; attempt to merge them with the already-locked ones.
     let mut updated_lock_packs = vec![];
 
-    for package in resolved.iter() {
+    for package in &resolved {
         let dummy_constraints = vec![Constraint::new(ReqType::Exact, package.version)];
         if already_locked(&locked, &package.name, &dummy_constraints) {
             let existing: Vec<&LockPackage> = lockpacks
@@ -1211,13 +1028,13 @@ fn sync(
     // Now that we've confirmed or modified the lock file, we're ready to sync installed
     // depenencies with it.
     sync_deps(
-        &bin_path,
-        &lib_path,
-        &cache_path,
+        bin_path,
+        lib_path,
+        cache_path,
         &updated_lock_packs,
         &installed,
         os,
-        &py_vers,
+        py_vers,
     );
 }
 
@@ -1256,7 +1073,7 @@ fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
     // todo: DRY
     match result.1 {
         ClearChoice::Dependencies => {
-            if let Err(_) = fs::remove_dir_all(&cache_path) {
+            if fs::remove_dir_all(&cache_path).is_err() {
                 abort(&format!(
                     "Problem removing the dependency-cache path: {:?}",
                     cache_path
@@ -1264,7 +1081,7 @@ fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
             }
         }
         ClearChoice::ScriptEnvs => {
-            if let Err(_) = fs::remove_dir_all(&script_env_path) {
+            if fs::remove_dir_all(&script_env_path).is_err() {
                 abort(&format!(
                     "Problem removing the script env path: {:?}",
                     script_env_path
@@ -1273,7 +1090,7 @@ fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
         }
         ClearChoice::PyInstalls => {}
         ClearChoice::All => {
-            if let Err(_) = fs::remove_dir_all(&pyflow_path) {
+            if fs::remove_dir_all(&pyflow_path).is_err() {
                 abort(&format!(
                     "Problem removing the Pyflow path: {:?}",
                     pyflow_path
@@ -1400,31 +1217,30 @@ fn main() {
 
     // Check for environments. Create one if none exist. Set `vers_path`.
 
-    let cfg_vers = match cfg.py_version {
-        Some(v) => v,
-        None => {
-            // Ask the user, and write it to `pyproject.toml`.
-            util::print_color(
-                "Please enter the Python version for this project:",
-                Color::Magenta,
-            );
-            // todo: Utility fn for this type promp? Shared with prompt_alias.
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .expect("Unable to read user input for version");
+    let cfg_vers = if let Some(v) = cfg.py_version {
+        v
+    } else {
+        // Ask the user, and write it to `pyproject.toml`.
+        util::print_color(
+            "Please enter the Python version for this project:",
+            Color::Magenta,
+        );
+        // todo: Utility fn for this type promp? Shared with prompt_alias.
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Unable to read user input for version");
 
-            input.pop(); // Remove trailing newline.
+        input.pop(); // Remove trailing newline.
 
-            let specified = util::fallible_v_parse(&input);
+        let specified = util::fallible_v_parse(&input);
 
-            if !PathBuf::from(cfg_filename).exists() {
-                cfg.write_file(cfg_filename);
-            }
-            files::change_py_vers(&PathBuf::from(&cfg_filename), &specified);
-
-            specified
+        if !PathBuf::from(cfg_filename).exists() {
+            cfg.write_file(cfg_filename);
         }
+        files::change_py_vers(&PathBuf::from(&cfg_filename), &specified);
+
+        specified
     };
 
     let (vers_path, py_vers) =
@@ -1472,6 +1288,15 @@ fn main() {
                     &bin_path,
                 );
             }
+
+            let updated_reqs: Vec<Req> = updated_reqs
+                .into_iter()
+                .filter(|r| r.git.is_none())
+                .collect();
+            let up_dev_reqs: Vec<Req> = up_dev_reqs
+                .into_iter()
+                .filter(|r| r.git.is_none())
+                .collect();
 
             sync(
                 &bin_path,
