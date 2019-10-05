@@ -129,7 +129,6 @@ pub struct Config {
     dev_reqs: Vec<Req>,
     version: Option<Version>,
     authors: Vec<String>,
-    //    author_email: Option<String>,
     license: Option<String>,
     extras: HashMap<String, String>,
     description: Option<String>,
@@ -504,7 +503,10 @@ __pypackages__/
     cfg.write_file(&format!("{}/pyproject.toml", name));
 
     if commands::git_init(Path::new(name)).is_err() {
-        abort("Problem creating a git repo for your project");
+        util::print_color(
+            "Unable to initialize a git repo for your project",
+            Color::DarkYellow,
+        );
     };
 
     Ok(())
@@ -572,7 +574,17 @@ fn sync_deps(
     // Filter by not-already-installed.
     let to_install: Vec<&PackToInstall> = packages
         .iter()
-        .filter(|(pack, _)| !installed.contains(pack))
+        .filter(|(pack, _)| {
+            let mut contains = false;
+            for inst in &installed {
+                if util::compare_names(&pack.0, &inst.0) && pack.1 == inst.1 {
+                    contains = true;
+                    break;
+                }
+            }
+
+            !contains
+        })
         .collect();
 
     // todo: Once you include rename info in installed, you won't need to use the map logic here.
@@ -583,7 +595,15 @@ fn sync_deps(
             // Don't standardize the name here; we need original capitalization to uninstall
             // metadata etc.
             let inst = (inst.0.clone(), inst.1);
-            !packages_only.contains(&&inst)
+            let mut contains = false;
+            // We can't just use the contains method, due to needing compare_names().
+            for pack in &packages_only {
+                if util::compare_names(&pack.0, &inst.0) && pack.1 == inst.1 {
+                    contains = true;
+                    break;
+                }
+            }
+            !contains
         })
         .collect();
 
@@ -649,7 +669,11 @@ fn sync_deps(
     for ((name, version), rename) in &to_install {
         if let Some((id, new)) = rename {
             // Rename in the renamed package
-            install::rename_package_files(&lib_path.join(util::standardize_name(new)), name, new);
+
+            let renamed_path = &lib_path.join(util::standardize_name(new));
+
+            util::wait_for_dirs(&[renamed_path.clone()]).expect("Problem creating renamed path");
+            install::rename_package_files(renamed_path, name, new);
 
             // Rename in the parent calling the renamed package. // todo: Multiple parents?
             let parent = lock_packs

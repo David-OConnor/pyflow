@@ -1,5 +1,4 @@
 use crate::util;
-use crossterm::Color;
 use regex::Regex;
 //use std::process::Stdio;
 use std::{error::Error, fmt};
@@ -122,13 +121,9 @@ pub fn download_git_repo(repo: &str, lib_path: &Path) -> Result<(), Box<dyn Erro
 
 /// Initialize a new git repo.
 pub fn git_init(dir: &Path) -> Result<(), Box<dyn Error>> {
-    if Command::new("git")
+    Command::new("git")
         .current_dir(dir)
         .args(&["init", "--quiet"])
-        .status()
-        .is_err()
-    {
-        util::print_color("Unable to initialize a git repo", Color::DarkRed);
-    }
+        .status()?;
     Ok(())
 }

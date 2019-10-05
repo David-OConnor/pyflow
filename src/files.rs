@@ -67,7 +67,6 @@ pub struct Pyflow {
     pub name: Option<String>,
     pub version: Option<String>,
     pub authors: Option<Vec<String>>,
-    //    pub author_email: Option<String>,
     pub license: Option<String>,
     pub description: Option<String>,
     pub classifiers: Option<Vec<String>>, // https://pypi.org/classifiers/

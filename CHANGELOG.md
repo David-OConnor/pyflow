@@ -7,7 +7,6 @@
 - Fixed a bug with uninstalling packages that use non-standard naming conventions
 - Fixed a bug with installing on Mac
 - Fixed a bug uninstalling packages from the CLI
-- Added support for adding dependencies from git repos
 
 ## v0.1.4
 - Clear now lets the user choose which parts of the cache to clear

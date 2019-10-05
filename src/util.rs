@@ -8,7 +8,6 @@ use crate::{
 use crossterm::{Color, Colored};
 use regex::Regex;
 use serde::Deserialize;
-use std::env::home_dir;
 use std::io::{self, BufRead, BufReader, Read};
 use std::str::FromStr;
 use std::{
@@ -349,7 +348,7 @@ pub fn merge_reqs(
 }
 
 pub fn standardize_name(name: &str) -> String {
-    name.to_lowercase().replace('-', "_")
+    name.to_lowercase().replace('-', "_").replace('.', "_")
 }
 
 // PyPi naming isn't consistent; it capitalization and _ vs -

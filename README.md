@@ -10,8 +10,8 @@ This tool manages Python installations and dependencies.
 
 ![Demonstration](https://raw.githubusercontent.com/david-oconnor/pyflow/master/demo.gif)
 
-**Goals**: Make using and publishing Python projects as simple as possible. Understanding
-Python environments shouldn't be required to use dependencies safely. We're attempting
+**Goals**: Make using and publishing Python projects as simple as possible. Actively
+managing Python environments shouldn't be required to use dependencies safely. We're attempting
 to fix each stumbling block in the Python workflow, so that it's as elegant
 as the language itself.
 
@@ -32,11 +32,11 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 - **Ubuntu, or Debian:** - Download and run 
 [this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow_0.1.4_amd64.deb).
 
-- **A different Linux distro:** - Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow)
+- **A different Linux distro** - Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow)
  and place it somewhere
 accessible by the PATH. For example, `/usr/bin`.
 
-- **Mac:** - Build from source using the instructions near the bottom of this page,
+- **Mac** - Build from source using the instructions near the bottom of this page,
  or install via `cargo`. (If able, please PR the binary.)
  
  - **If you have [Rust](https://www.rust-lang.org) installed** - Run `cargo install pyflow`.
@@ -252,7 +252,8 @@ entry points for somone using the package, regardless of if they're using this t
 If an environment isn't already set up for the version specified in `pyproject.toml`, sets one up. If
 no version is specified, it asks you.
 - `pyflow install requests` - If you specify one or more packages after `install`, those packages will 
-be added to `pyproject.toml` and installed
+be added to `pyproject.toml` and installed. You can use the `--dev` flag to install dev dependencies. eg:
+`pyflow install black --dev`.
 - `pyflow install numpy==1.16.4 matplotlib>=3.1` - Example with multiple dependencies, and specified versions
 - `pyflow uninstall requests` - Remove one or more dependencies
 

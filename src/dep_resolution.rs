@@ -438,11 +438,11 @@ fn make_renamed_packs(
     util::print_color(
         &format!(
             "Installing multiple versions for {}. If this package uses \
-             compiled code or importlib, this may fail when importing. Note that  \
+             compiled code or importlib, this may fail when importing. Note that \
              your package may not be published unless this is resolved...",
             name
         ),
-        Color::DarkRed,
+        Color::DarkYellow,
     );
 
     let dep_display: Vec<String> = deps
