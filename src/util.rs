@@ -587,6 +587,7 @@ pub fn find_best_release(
         let mut compatible = true;
         match rel.packagetype.as_ref() {
             "bdist_wheel" => {
+                // Now determine if this wheel is appropriate for the Os and Python version.
                 if let Some(py_ver) = &rel.requires_python {
                     // If a version constraint exists, make sure it's compatible.
                     let py_constrs = Constraint::from_str_multiple(py_ver)
@@ -635,9 +636,7 @@ pub fn find_best_release(
                 }
             }
             "sdist" => source_releases.push(rel.clone()),
-            // todo: handle dist_egg and bdist_wininst?
-            "bdist_egg" => println!("Found bdist_egg... skipping"),
-            "bdist_wininst" | "bdist_msi" => (), // Don't execute Windows installers
+            "bdist_wininst" | "bdist_msi" | "bdist_egg"=> (), // Don't execute Windows installers
             _ => {
                 println!("Found surprising package type: {}", rel.packagetype);
                 continue;

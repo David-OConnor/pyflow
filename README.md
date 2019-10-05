@@ -27,7 +27,7 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 ## Installation
 - **Windows** - Download and run 
 [this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow-0.1.5-x86_64.msi).
-(Scoop coming soon).
+Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 
 - **Ubuntu, or Debian:** - Download and run 
 [this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow_0.1.5_amd64.deb).
@@ -70,7 +70,7 @@ both when installing and using. Some reasons why this is different:
 are configured.
   
 - It automatically manages Python installations and environments. You specify a Python version
- in `pyproject.toml` (if ommitted, it asks), and ensures that version is used. 
+ in `pyproject.toml` (if ommitted, it asks), and it ensures that version is used. 
  If the version's not installed, Pyflow downloads a binary, and uses that.
  If multiple installations are found for that version, it asks which to use.
  `Pyenv` can be used to install Python, but only if your system is configured in a certain way: 
@@ -269,7 +269,7 @@ package management
 ### Building and publishing:
 - `pyflow package` - Package for distribution (uses setuptools internally, and 
 builds both source and wheel.)
-- `pyflow package --features "test all"` - Package for distribution with features enabled, 
+- `pyflow package --extras "test all"` - Package for distribution with extra features enabled, 
 as defined in `pyproject.toml`
 - `pyflow publish` - Upload to PyPi (Repo specified in `pyproject.toml`. Uses `Twine` internally.)
 

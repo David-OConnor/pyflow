@@ -428,11 +428,11 @@ pub fn create_venv(
     }
 
     #[cfg(target_os = "windows")]
-    println!("Setting up Python environment...");
+    println!("Setting up Python...");
     #[cfg(target_os = "linux")]
-    println!("🐍Setting up Python environment..."); // Beware! Snake may be invisible.
+    println!("🐍 Setting up Python..."); // Beware! Snake may be invisible.
     #[cfg(target_os = "macos")]
-    println!("🐍Setting up Python environment...");
+    println!("🐍 Setting up Python...");
 
     // For an alias on the PATH
     if let Some(alias) = alias {

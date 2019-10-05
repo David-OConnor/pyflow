@@ -256,9 +256,9 @@ pub fn download_and_install_package(
             // Build a wheel from source.
             Command::new(bin_path.join("python"))
                 .current_dir(&extracted_parent)
-                .args(&["setup.py", "bdist_wheel"])
+                .args(&["setup.py", "sdist", "bdist_wheel"])
                 .output()
-                .expect("Problem running setup.py bdist_wheel");
+                .expect("Problem running setup.py sdist bdist_wheel");
 
             // todo: Clippy flags this for not iterating, but I can't get a better way working, ie
             //              let built_wheel_filename = &dist_files.get(0)

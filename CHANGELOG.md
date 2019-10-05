@@ -1,5 +1,7 @@
 # Changelog
 
+## v0.1.6
+
 ## v0.1.5
 - Combined `author` and `author_email` cfg into one field, `authors`, which takes
 - a list. Populates automatically from git. `pyflow new` creates 
