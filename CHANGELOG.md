@@ -1,6 +1,12 @@
 # Changelog
 
 ## v0.1.5
+- Combined `author` and `author_email` cfg into one field, `authors`, which takes
+- a list. Populates automatically from git. `pyflow new` creates 
+ a new git repository. (Breaking)
+- Fixed a bug with uninstalling packages that use non-standard naming conventions
+- Fixed a bug with installing on Mac
+- Fixed a bug uninstalling packages from the CLI
 - Added support for adding dependencies from git repos
 
 ## v0.1.4

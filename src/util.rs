@@ -8,6 +8,7 @@ use crate::{
 use crossterm::{Color, Colored};
 use regex::Regex;
 use serde::Deserialize;
+use std::env::home_dir;
 use std::io::{self, BufRead, BufReader, Read};
 use std::str::FromStr;
 use std::{
@@ -36,23 +37,17 @@ impl FromStr for Os {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
-            "manylinux1_i686" => Os::Linux32,
-            "manylinux2010_i686" => Os::Linux32,
-            "manylinux1_x86_64" => Os::Linux,
-            "manylinux2010_x86_64" => Os::Linux,
-            "cygwin" => Os::Linux, // todo is this right?
-            "linux" => Os::Linux,
-            "linux2" => Os::Linux,
-            "windows" => Os::Windows,
-            "win" => Os::Windows,
-            "win32" => Os::Windows32,
-            "win_amd64" => Os::Windows,
-            "macosx_10_6_intel" => Os::Mac,
-            "darwin" => Os::Mac,
-            "any" => Os::Any,
+            "manylinux1_i686" | "manylinux2010_i686" => Self::Linux32,
+            "cygwin" | "linux" | "linux2" | "manylinux1_x86_64" | "manylinux2010_x86_64" => {
+                Self::Linux
+            }
+            "win32" => Self::Windows32,
+            "windows" | "win" | "win_amd64" => Self::Windows,
+            "macosx_10_6_intel" | "darwin" => Self::Mac,
+            "any" => Self::Any,
             _ => {
                 if s.contains("mac") {
-                    Os::Mac
+                    Self::Mac
                 } else {
                     return Err(DependencyError::new(&format!("Problem parsing Os: {}", s)));
                 }
@@ -207,13 +202,13 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
 
     let mut result = vec![];
 
-    for folder in package_folders.iter() {
+    for folder in &package_folders {
         let folder_name = folder
             .to_str()
             .expect("Problem converting folder name to string");
         let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
 
-        if let Some(caps) = re_dist.captures(&folder_name) {
+        if let Some(caps) = re_dist.captures(folder_name) {
             let name = caps.get(1).unwrap().as_str();
             let vers = Version::from_str(
                 caps.get(2)
@@ -303,14 +298,13 @@ pub fn merge_reqs(
 
     // If no constraints are specified, use a caret constraint with the latest
     // version.
-    for added_req in added_reqs_unique.iter_mut() {
+    for added_req in &mut added_reqs_unique {
         if added_req.constraints.is_empty() {
-            let (_, vers, _) = match dep_resolution::get_version_info(&added_req.name) {
-                Ok(r) => r,
-                Err(_) => {
-                    abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?");
-                    unreachable!()
-                }
+            let (_, vers, _) = if let Ok(r) = dep_resolution::get_version_info(&added_req.name) {
+                r
+            } else {
+                abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?");
+                unreachable!()
             };
 
             added_req.constraints.push(Constraint::new(
@@ -327,7 +321,7 @@ pub fn merge_reqs(
     // use the added req.
     for cr in existing.iter() {
         let mut replaced = false;
-        for added_req in added_reqs_unique.iter() {
+        for added_req in &added_reqs_unique {
             if compare_names(&added_req.name, &cr.name) && added_req.constraints != cr.constraints {
                 result.push(added_req.clone());
                 replaced = true;
@@ -364,7 +358,7 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
 }
 
 /// Extract the wheel or zip.
-/// From this example: https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32
+/// From [this example](https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32)
 pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, String)>) {
     // Separate function, since we use it twice.
     let mut archive = zip::ZipArchive::new(file).unwrap();
@@ -443,7 +437,7 @@ pub fn find_venv_info(
     pyflow_dir: &Path,
     cache_dir: &Path,
 ) -> (PathBuf, Version) {
-    let venvs = find_venvs(&pypackages_dir);
+    let venvs = find_venvs(pypackages_dir);
     // The version's explicitly specified; check if an environment for that version
     let compatible_venvs: Vec<&(u32, u32)> = venvs
         .iter()
@@ -454,7 +448,7 @@ pub fn find_venv_info(
     let py_vers;
     match compatible_venvs.len() {
         0 => {
-            let vers = py_versions::create_venv(&cfg_vers, pypackages_dir, pyflow_dir, cache_dir);
+            let vers = py_versions::create_venv(cfg_vers, pypackages_dir, pyflow_dir, cache_dir);
             vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
             py_vers = Version::new_short(vers.major, vers.minor); // Don't include patch.
         }
@@ -545,15 +539,14 @@ pub fn prompt_list<T: Clone + ToString>(
         unreachable!()
     };
 
-    let (name, content) = match mapping.get(&input) {
-        Some(r) => r,
-        None => {
-            abort(&format!(
-                "Can't find the {} associated with that number. Is it in the list above?",
-                type_
-            ));
-            unreachable!()
-        }
+    let (name, content) = if let Some(r) = mapping.get(&input) {
+        r
+    } else {
+        abort(&format!(
+            "Can't find the {} associated with that number. Is it in the list above?",
+            type_
+        ));
+        unreachable!()
     };
 
     (name.to_string(), content.clone())
@@ -597,11 +590,11 @@ pub fn find_best_release(
             "bdist_wheel" => {
                 if let Some(py_ver) = &rel.requires_python {
                     // If a version constraint exists, make sure it's compatible.
-                    let py_constrs = Constraint::from_str_multiple(&py_ver)
+                    let py_constrs = Constraint::from_str_multiple(py_ver)
                         .expect("Problem parsing constraint from requires_python");
 
-                    for constr in py_constrs.iter() {
-                        if !constr.is_compatible(&python_vers) {
+                    for constr in &py_constrs {
+                        if !constr.is_compatible(python_vers) {
                             compatible = false;
                         }
                     }
@@ -621,7 +614,7 @@ pub fn find_best_release(
                 match Constraint::from_wh_py_vers(&rel.python_version) {
                     Ok(constrs) => {
                         let mut compat_py_v = false;
-                        for constr in constrs.iter() {
+                        for constr in &constrs {
                             if constr.is_compatible(python_vers) {
                                 compat_py_v = true;
                             }
@@ -674,4 +667,31 @@ pub fn find_best_release(
     }
 
     (best_release, package_type)
+}
+
+/// Find the global git config's user and email, and format it to go in the config's `authors` field.
+pub fn get_git_author() -> Vec<String> {
+    let gitcfg = directories::BaseDirs::new()
+        .unwrap()
+        .home_dir()
+        .join(".gitconfig");
+
+    if !gitcfg.exists() {
+        return vec![];
+    }
+
+    let re_name = Regex::new(r"^\s*name\s*=\s*(.*?)\s*$").unwrap();
+    let re_email = Regex::new(r"^\s*email\s*=\s*(.*?)\s*$").unwrap();
+
+    let mut name = "".to_string();
+    let mut email = "".to_string();
+    let data = fs::read_to_string(gitcfg).expect("Problem reading ~/.gitconfig");
+    for line in data.lines() {
+        if let Some(caps) = re_name.captures(line) {
+            name = caps.get(1).unwrap().as_str().into()
+        } else if let Some(caps) = re_email.captures(line) {
+            email = caps.get(1).unwrap().as_str().into()
+        }
+    }
+    vec![format!("{} <{}>", name, email)]
 }

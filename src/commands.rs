@@ -1,4 +1,5 @@
 use crate::util;
+use crossterm::Color;
 use regex::Regex;
 //use std::process::Stdio;
 use std::{error::Error, fmt};
@@ -21,7 +22,7 @@ impl fmt::Display for _ExecutionError {
     }
 }
 
-/// Todo: Dry from find_py_version
+/// Todo: Dry from `find_py_version`
 pub fn find_py_dets(alias: &str) -> Option<String> {
     let output = Command::new(alias).args(&["--version, --version"]).output();
 
@@ -44,7 +45,7 @@ pub fn find_py_dets(alias: &str) -> Option<String> {
     }
 }
 
-/// Find the py_version from the `python --py_version` command. Eg: "Python 3.7".
+/// Find the Python version from the `python --py_version` command. Eg: "Python 3.7".
 pub fn find_py_version(alias: &str) -> Option<crate::Version> {
     let output = Command::new(alias).arg("--version").output();
 
@@ -116,5 +117,18 @@ pub fn download_git_repo(repo: &str, lib_path: &Path) -> Result<(), Box<dyn Erro
         .current_dir(lib_path)
         .args(&["clone", repo])
         .status()?;
+    Ok(())
+}
+
+/// Initialize a new git repo.
+pub fn git_init(dir: &Path) -> Result<(), Box<dyn Error>> {
+    if Command::new("git")
+        .current_dir(dir)
+        .args(&["init", "--quiet"])
+        .status()
+        .is_err()
+    {
+        util::print_color("Unable to initialize a git repo", Color::DarkRed);
+    }
     Ok(())
 }

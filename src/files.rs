@@ -66,8 +66,8 @@ pub struct Pyflow {
     pub py_version: Option<String>,
     pub name: Option<String>,
     pub version: Option<String>,
-    pub author: Option<String>,
-    pub author_email: Option<String>,
+    pub authors: Option<Vec<String>>,
+    //    pub author_email: Option<String>,
     pub license: Option<String>,
     pub description: Option<String>,
     pub classifiers: Option<Vec<String>>, // https://pypi.org/classifiers/
@@ -112,8 +112,8 @@ pub struct Poetry {
     //    pub extras: Option<HashMap<String, String>>,
 }
 
-/// Split from add_reqs_to_cfg to accomodate testing
-fn update_cfg(cfg_data: String, added: &[Req], added_dev: &[Req]) -> String {
+/// Split from `add_reqs_to_cfg` to accomodate testing
+fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
     let mut result = String::new();
     let mut in_dep = false;
     let mut in_dev_dep = false;
@@ -163,7 +163,7 @@ fn update_cfg(cfg_data: String, added: &[Req], added_dev: &[Req]) -> String {
 
     let mut insertion_pt = dep_start;
     if dep_start != 0 {
-        for i in dep_start..dep_end + 1 {
+        for i in dep_start..=dep_end {
             let line = lines_vec[i];
             if !line.is_empty() {
                 insertion_pt = i + 1
@@ -173,7 +173,7 @@ fn update_cfg(cfg_data: String, added: &[Req], added_dev: &[Req]) -> String {
 
     let mut dev_insertion_pt = dev_dep_start;
     if dev_dep_start != 0 {
-        for i in dev_dep_start..dev_dep_end + 1 {
+        for i in dev_dep_start..=dev_dep_end {
             let line = lines_vec[i];
             if !line.is_empty() {
                 dev_insertion_pt = i + 1
@@ -232,18 +232,21 @@ pub fn add_reqs_to_cfg(filename: &str, added: &[Req], added_dev: &[Req]) {
     let data = fs::read_to_string(filename)
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 
-    let updated = update_cfg(data, added, added_dev);
+    let updated = update_cfg(&data, added, added_dev);
     fs::write(filename, updated)
         .expect("Unable to write pyproject.toml while attempting to add a dependency");
 }
 
 /// Remove dependencies from pyproject.toml.
 pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
+    // todo: Handle removing dev deps.
+    // todo: DRY from parsing the config.
     let mut result = String::new();
     let data = fs::read_to_string(filename)
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 
     let mut in_dep = false;
+    let mut _in_dev_dep = false;
     let sect_re = Regex::new(r"^\[.*\]$").unwrap();
 
     for line in data.lines() {
@@ -256,6 +259,15 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
 
         if line == "[tool.pyflow.dependencies]" {
             in_dep = true;
+            _in_dev_dep = false;
+            result.push_str(line);
+            result.push_str("\n");
+            continue;
+        }
+
+        if line == "[tool.pyflow.dev-dependencies]" {
+            in_dep = true;
+            _in_dev_dep = false;
             result.push_str(line);
             result.push_str("\n");
             continue;
@@ -266,15 +278,14 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
                 in_dep = false;
             }
             // todo: handle comments
-            let req_line = match Req::from_str(line, false) {
-                Ok(r) => r,
-                Err(_) => {
-                    util::abort(&format!(
-                        "Can't parse this line in `pyproject.toml`: {}",
-                        line
-                    ));
-                    Req::new(String::new(), vec![]) // todo temp to allow compiling
-                }
+            let req_line = if let Ok(r) = Req::from_str(line, false) {
+                r
+            } else {
+                util::abort(&format!(
+                    "Can't parse this line in `pyproject.toml`: {}",
+                    line
+                ));
+                unreachable!()
             };
 
             if reqs
@@ -444,7 +455,7 @@ dev_a = "^1.17.2"
 
 "#;
 
-    const BASELINE_NO_DEPS: &str = r#"
+    const _BASELINE_NO_DEPS: &str = r#"
 [tool.pyflow]
 name = ""
 

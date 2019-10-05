@@ -222,7 +222,7 @@ fn download(py_install_path: &Path, version: &Version) {
     }
     util::print_color(&format!("Installing Python {}...", vers_to_dl), Color::Cyan);
 
-    util::unpack_tar_xz(&archive_path, &py_install_path);
+    util::unpack_tar_xz(&archive_path, py_install_path);
 
     // Strip the OS tag from the extracted Python folder name
     let extracted_path = py_install_path.join(&format!("python-{}", vers_to_dl));
@@ -356,7 +356,7 @@ pub fn create_venv(
     // If we find both a system alias, and internal version installed, go with the internal.
     // One's this tool installed
     let installed_versions = find_installed_versions(pyflow_dir);
-    for iv in installed_versions.iter() {
+    for iv in &installed_versions {
         if iv.major == cfg_v.major && iv.minor == cfg_v.minor {
             let folder_name = format!("python-{}", iv.to_string2());
             alias_path = Some(pyflow_dir.join(folder_name).join(&py_name));
@@ -394,7 +394,7 @@ pub fn create_venv(
     if py_ver.is_none() {
         // Download and install the appropriate Python binary, if we can't find either a
         // custom install, or on the Path.
-        download(&pyflow_dir, cfg_v);
+        download(pyflow_dir, cfg_v);
         let py_ver2: PyVers = (*cfg_v, os).into();
         py_ver = Some(py_ver2.to_vers());
 

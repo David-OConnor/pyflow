@@ -341,14 +341,14 @@ impl FromStr for ReqType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "==" => Ok(ReqType::Exact),
-            ">=" => Ok(ReqType::Gte),
-            "<=" => Ok(ReqType::Lte),
-            ">" => Ok(ReqType::Gt),
-            "<" => Ok(ReqType::Lt),
-            "!=" => Ok(ReqType::Ne),
-            "^" => Ok(ReqType::Caret),
-            "~" => Ok(ReqType::Tilde),
+            "==" => Ok(Self::Exact),
+            ">=" => Ok(Self::Gte),
+            "<=" => Ok(Self::Lte),
+            ">" => Ok(Self::Gt),
+            "<" => Ok(Self::Lt),
+            "!=" => Ok(Self::Ne),
+            "^" => Ok(Self::Caret),
+            "~" => Ok(Self::Tilde),
             _ => Err(DependencyError::new("Problem parsing ReqType")),
         }
     }
@@ -393,7 +393,7 @@ impl FromStr for Constraint {
 
 /// A single version req. Can be chained together.
 impl Constraint {
-    pub fn new(type_: ReqType, version: Version) -> Self {
+    pub const fn new(type_: ReqType, version: Version) -> Self {
         Self { type_, version }
     }
 
@@ -435,17 +435,14 @@ impl Constraint {
                 match caps.get(2) {
                     Some(mi) => {
                         let minor = mi.as_str().parse::<u32>()?;
-                        result.push(Constraint::new(
-                            ReqType::Exact,
-                            Version::new_short(major, minor),
-                        ));
+                        result.push(Self::new(ReqType::Exact, Version::new_short(major, minor)));
                     }
                     // eg, py2.py3 will add Gte 2.0.0 and Gte 3.0.0
                     None => {
                         if major == 2 {
-                            result.push(Constraint::new(ReqType::Lte, Version::new_short(2, 10)));
+                            result.push(Self::new(ReqType::Lte, Version::new_short(2, 10)));
                         } else {
-                            result.push(Constraint::new(ReqType::Gte, Version::new_short(3, 0)));
+                            result.push(Self::new(ReqType::Gte, Version::new_short(3, 0)));
                         }
                     }
                 };
@@ -465,8 +462,7 @@ impl Constraint {
         };
         if pip_style {
             match self.type_ {
-                ReqType::Caret => type_str.push_str("="),
-                ReqType::Tilde => type_str.push_str("="),
+                ReqType::Caret | ReqType::Tilde => type_str.push_str("="),
                 _ => (),
             }
         }
@@ -675,50 +671,45 @@ fn parse_extras(
     let mut sys_platform = None;
     let mut python_version = None;
 
-    match m {
-        Some(s) => {
-            let extras = s.as_str();
-            // Now that we've extracted extras etc, parse them with a new re.
-            let ex_re = Regex::new(
-                r#"(extra|sys_platform|python_version)\s*(\^|~|==|<=|>=|<|>|!=)\s*['"](.*?)['"]"#,
-            )
-            .unwrap();
+    if let Some(s) = m {
+        let extras = s.as_str();
+        // Now that we've extracted extras etc, parse them with a new re.
+        let ex_re = Regex::new(
+            r#"(extra|sys_platform|python_version)\s*(\^|~|==|<=|>=|<|>|!=)\s*['"](.*?)['"]"#,
+        )
+        .unwrap();
 
-            for caps in ex_re.captures_iter(extras) {
-                let type_ = caps.get(1).unwrap().as_str();
-                let req_type = caps.get(2).unwrap().as_str();
-                let val = caps.get(3).unwrap().as_str();
+        for caps in ex_re.captures_iter(extras) {
+            let type_ = caps.get(1).unwrap().as_str();
+            let req_type = caps.get(2).unwrap().as_str();
+            let val = caps.get(3).unwrap().as_str();
 
-                match type_ {
-                    "extra" => extra = Some(val.to_owned()),
-                    "sys_platform" => {
-                        sys_platform = Some((
-                            ReqType::from_str(req_type).unwrap_or_else(|_| {
-                                panic!("Problem parsing reqtype: {}", req_type)
-                            }),
-                            crate::Os::from_str(val).unwrap_or_else(|_| {
-                                panic!("Problem parsing Os in extras: {}", val)
-                            }),
-                        ))
-                    }
-                    "python_version" => {
-                        // If we parse reqtype and version separately, version will be forced
-                        // to take 3 digits, even if not all 3 are specified.
-                        python_version = Some(
-                            Constraint::from_str(&(req_type.to_owned() + val)).unwrap_or_else(
-                                |_| panic!("Problem parsing constraint: {} {}", req_type, val),
-                            ),
-                        );
-                    }
-                    _ => println!("Found unexpected extra: {}", type_),
+            match type_ {
+                "extra" => extra = Some(val.to_owned()),
+                "sys_platform" => {
+                    sys_platform = Some((
+                        ReqType::from_str(req_type)
+                            .unwrap_or_else(|_| panic!("Problem parsing reqtype: {}", req_type)),
+                        crate::Os::from_str(val)
+                            .unwrap_or_else(|_| panic!("Problem parsing Os in extras: {}", val)),
+                    ))
                 }
+                "python_version" => {
+                    // If we parse reqtype and version separately, version will be forced
+                    // to take 3 digits, even if not all 3 are specified.
+                    python_version = Some(
+                        Constraint::from_str(&(req_type.to_owned() + val)).unwrap_or_else(|_| {
+                            panic!("Problem parsing constraint: {} {}", req_type, val)
+                        }),
+                    );
+                }
+                _ => println!("Found unexpected extra: {}", type_),
             }
         }
-        None => {
-            extra = None;
-            sys_platform = None;
-            python_version = None;
-        }
+    } else {
+        extra = None;
+        sys_platform = None;
+        python_version = None;
     };
     (extra, sys_platform, python_version)
 }
@@ -735,7 +726,7 @@ pub struct Req {
 }
 
 impl Req {
-    pub fn new(name: String, constraints: Vec<Constraint>) -> Self {
+    pub const fn new(name: String, constraints: Vec<Constraint>) -> Self {
         Self {
             name,
             constraints,
@@ -838,12 +829,13 @@ impl Req {
     pub fn to_cfg_string(&self) -> String {
         match self.constraints.len() {
             0 => {
-                let (name, latest_version) = match dep_resolution::get_version_info(&self.name) {
-                    Ok((fmtd_name, version, _)) => (fmtd_name, version),
-                    Err(_) => {
-                        util::abort(&format!("Unable to find version info for {:?}", &self.name));
-                        unreachable!()
-                    }
+                let (name, latest_version) = if let Ok((fmtd_name, version, _)) =
+                    dep_resolution::get_version_info(&self.name)
+                {
+                    (fmtd_name, version)
+                } else {
+                    util::abort(&format!("Unable to find version info for {:?}", &self.name));
+                    unreachable!()
                 };
                 format!(
                     r#"{} = "{}""#,
@@ -882,7 +874,7 @@ impl Req {
 impl fmt::Display for Req {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut constraints = "".to_string();
-        for constr in self.constraints.iter() {
+        for constr in &self.constraints {
             constraints.push_str(&format!("{}", constr));
         }
         write!(

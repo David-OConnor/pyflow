@@ -12,7 +12,7 @@ pub enum PackageType {
     Source,
 }
 
-/// https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
+/// [Cookbook](https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html)
 fn sha256_digest<R: io::Read>(mut reader: R) -> Result<digest::Digest, std::io::Error> {
     let mut context = digest::Context::new(&digest::SHA256);
     let mut buffer = [0; 1024];
@@ -44,7 +44,7 @@ fn replace_distutils(setup_path: &Path) {
 }
 
 /// Remove scripts. Used when uninstalling.
-fn remove_scripts(scripts: Vec<String>, scripts_path: &Path) {
+fn remove_scripts(scripts: &[String], scripts_path: &Path) {
     // todo: Likely not a great approach. QC.
     for entry in
         fs::read_dir(scripts_path).expect("Problem reading dist directory when removing scripts")
@@ -54,7 +54,7 @@ fn remove_scripts(scripts: Vec<String>, scripts_path: &Path) {
             continue;
         }
         let data = fs::read_to_string(entry.path()).unwrap();
-        for script in scripts.iter() {
+        for script in scripts {
             if data.contains(&format!("from {}", script)) {
                 fs::remove_file(entry.path()).expect("Problem removing console script");
                 util::print_color(&format!("Removed console script {}:", script), Color::Green);
@@ -239,7 +239,7 @@ pub fn download_and_install_package(
             // its sub-folders directly in the lib folder, and delete the parent.
             let re = Regex::new(r"^(.*?)(?:\.tar\.gz|\.zip)$").unwrap();
             let folder_name = re
-                .captures(&filename)
+                .captures(filename)
                 .expect("Problem matching extracted folder name")
                 .get(1)
                 .unwrap_or_else(|| panic!("Unable to find extracted folder name: {}", filename))
@@ -372,10 +372,10 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
     };
 
     for folder_name in folder_names {
-        if fs::remove_dir_all(lib_path.join(folder_name)).is_err() {
+        if fs::remove_dir_all(lib_path.join(&folder_name)).is_err() {
             // Some packages include a .py file directly in the lib directory instead of a folder.
             // Check that if removing the folder fails.
-            if fs::remove_file(lib_path.join(&format!("{}.py", name_ins))).is_err() {
+            if fs::remove_file(lib_path.join(&format!("{}.py", folder_name))).is_err() {
                 println!(
                     "{}Problem uninstalling {} {}",
                     Colored::Fg(Color::DarkRed),
@@ -408,7 +408,7 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
         .unwrap_or_else(|_| ());
 
     // Remove console scripts.
-    remove_scripts(vec![name_ins.into()], &lib_path.join("../bin"));
+    remove_scripts(&[name_ins.into()], &lib_path.join("../bin"));
 }
 
 /// Rename files in a package. Assume we already renamed the folder, ie during installation.

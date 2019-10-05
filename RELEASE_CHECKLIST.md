@@ -16,5 +16,6 @@ links to reflect the latest version.
 1. Run `cargo deb` on Ubuntu 16.04 (perhaps earlier; for example, one built on 18.04
 works on 19.04, but not vice-versa) (to build an installer)
 1. Run `cargo wix` on Windows (to build an installer)
+1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`, in order to support `Scoop`.
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
-1. Upload the following binaries to the release page: Windows binary, Linux binary, Msi, Deb
+1. Upload the following binaries to the release page: zipped Windows binary, Linux binary, Msi, Deb.

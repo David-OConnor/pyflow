@@ -1,3 +1,5 @@
+#![allow(clippy::non_ascii_literal)]
+
 use crate::dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version};
 use crate::util::{abort, Os};
 use crossterm::{Color, Colored};
@@ -121,13 +123,13 @@ Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Exampl
 #[derive(Clone, Debug, Default, Deserialize)]
 // todo: Auto-desr some of these
 pub struct Config {
+    name: Option<String>,
     py_version: Option<Version>,
     reqs: Vec<Req>,
     dev_reqs: Vec<Req>,
-    name: Option<String>,
     version: Option<Version>,
-    author: Option<String>,
-    author_email: Option<String>,
+    authors: Vec<String>,
+    //    author_email: Option<String>,
     license: Option<String>,
     extras: HashMap<String, String>,
     description: Option<String>,
@@ -155,15 +157,14 @@ impl Config {
             let mut python_version = None;
             match data {
                 files::DepComponentWrapper::A(constrs) => {
-                    constraints = match Constraint::from_str_multiple(&constrs) {
-                        Ok(c) => c,
-                        Err(_) => {
-                            abort(&format!(
-                                "Problem parsing constraints in `pyproject.toml`: {}",
-                                &constrs
-                            ));
-                            unreachable!()
-                        }
+                    constraints = if let Ok(c) = Constraint::from_str_multiple(&constrs) {
+                        c
+                    } else {
+                        abort(&format!(
+                            "Problem parsing constraints in `pyproject.toml`: {}",
+                            &constrs
+                        ));
+                        unreachable!()
                     };
                 }
                 files::DepComponentWrapper::B(subdata) => {
@@ -221,12 +222,11 @@ impl Config {
             Err(_) => return None,
         };
 
-        let decoded: files::Pyproject = match toml::from_str(&toml_str) {
-            Ok(d) => d,
-            Err(_) => {
-                abort("Problem parsing `pyproject.toml`");
-                unreachable!()
-            }
+        let decoded: files::Pyproject = if let Ok(d) = toml::from_str(&toml_str) {
+            d
+        } else {
+            abort("Problem parsing `pyproject.toml`");
+            unreachable!()
         };
         let mut result = Self::default();
 
@@ -236,7 +236,7 @@ impl Config {
                 result.name = Some(v);
             }
             if let Some(v) = po.authors {
-                result.author = Some(v.join(", "));
+                result.authors = v;
             }
             if let Some(v) = po.license {
                 result.license = Some(v);
@@ -327,11 +327,13 @@ impl Config {
             if let Some(v) = pf.name {
                 result.name = Some(v);
             }
-            if let Some(v) = pf.author {
-                result.author = Some(v);
-            }
-            if let Some(v) = pf.author_email {
-                result.author_email = Some(v);
+
+            if let Some(v) = pf.authors {
+                result.authors = if v.is_empty() {
+                    util::get_git_author()
+                } else {
+                    v
+                };
             }
             if let Some(v) = pf.license {
                 result.license = Some(v);
@@ -422,15 +424,17 @@ impl Config {
             result.push_str("version = \"0.1.0\"");
             result.push_str("\n");
         }
-        if let Some(author) = &self.author {
-            result.push_str(&(format!("author = \"{}\"", author) + "\n"));
-        } else {
-            result.push_str("author = \"\"");
-            result.push_str("\n");
+        if !self.authors.is_empty() {
+            result.push_str("authors = [\"");
+            for (i, author) in self.authors.iter().enumerate() {
+                if i != 0 {
+                    result.push_str(", ");
+                }
+                result.push_str(author);
+            }
+            result.push_str("\"]\n");
         }
-        if let Some(v) = &self.author_email {
-            result.push_str(&(format!("author_email = \"{}\"", v) + "\n"));
-        }
+
         if let Some(v) = &self.description {
             result.push_str(&(format!("description = \"{}\"", v) + "\n"));
         }
@@ -460,9 +464,8 @@ impl Config {
 
         result.push_str("\n"); // trailing newline
 
-        match fs::write(file, result) {
-            Ok(_) => util::print_color("Created `pyproject.toml`", Color::Green),
-            Err(_) => abort("Problem writing `pyproject.toml`"),
+        if fs::write(file, result).is_err() {
+            abort("Problem writing `pyproject.toml`")
         }
     }
 }
@@ -495,7 +498,14 @@ __pypackages__/
 
     fs::write(&format!("{}/.gitignore", name), gitignore_init)?;
     fs::write(&format!("{}/README.md", name), readme_init)?;
-    Config::default().write_file(&format!("{}/pyproject.toml", name));
+
+    let mut cfg = Config::default();
+    cfg.authors = util::get_git_author();
+    cfg.write_file(&format!("{}/pyproject.toml", name));
+
+    if commands::git_init(Path::new(name)).is_err() {
+        abort("Problem creating a git repo for your project");
+    };
 
     Ok(())
 }
@@ -545,7 +555,7 @@ fn sync_deps(
                 ),
                 match &lp.rename {
                     // todo back to our custom type?
-                    Some(rn) => Some(parse_lockpack_rename(&rn)),
+                    Some(rn) => Some(parse_lockpack_rename(rn)),
                     None => None,
                 },
             )
@@ -555,7 +565,8 @@ fn sync_deps(
     // todo shim. Use top-level A/R. We discard it temporarily while working other issues.
     let installed: Vec<(String, Version)> = installed
         .iter()
-        .map(|t| (util::standardize_name(&t.0), t.1))
+        // Don't standardize name here; see note below in to_uninstall.
+        .map(|t| (t.0.clone(), t.1))
         .collect();
 
     // Filter by not-already-installed.
@@ -569,22 +580,24 @@ fn sync_deps(
     let to_uninstall: Vec<&(String, Version)> = installed
         .iter()
         .filter(|inst| {
-            let inst = (util::standardize_name(&inst.0), inst.1);
+            // Don't standardize the name here; we need original capitalization to uninstall
+            // metadata etc.
+            let inst = (inst.0.clone(), inst.1);
             !packages_only.contains(&&inst)
         })
         .collect();
 
-    for (name, version) in to_uninstall.iter() {
+    for (name, version) in &to_uninstall {
         // todo: Deal with renamed. Currently won't work correctly with them.
         install::uninstall(name, version, lib_path)
     }
 
-    for ((name, version), rename) in to_install.iter() {
-        let data = dep_resolution::get_warehouse_release(&name, &version)
+    for ((name, version), rename) in &to_install {
+        let data = dep_resolution::get_warehouse_release(name, version)
             .expect("Problem getting warehouse data");
 
         let (best_release, package_type) =
-            util::find_best_release(&data, &name, &version, os, python_vers);
+            util::find_best_release(&data, name, version, os, python_vers);
 
         // Powershell  doesn't like emojis
         // todo format literal issues, so repeating this whole statement.
@@ -614,8 +627,8 @@ fn sync_deps(
         );
 
         if install::download_and_install_package(
-            &name,
-            &version,
+            name,
+            version,
             &best_release.url,
             &best_release.filename,
             &best_release.digests.sha256,
@@ -633,7 +646,7 @@ fn sync_deps(
     }
     // Perform renames after all packages are installed, or we may attempt to rename a package
     // we haven't yet installed.
-    for ((name, version), rename) in to_install.iter() {
+    for ((name, version), rename) in &to_install {
         if let Some((id, new)) = rename {
             // Rename in the renamed package
             install::rename_package_files(&lib_path.join(util::standardize_name(new)), name, new);
@@ -708,24 +721,21 @@ fn run_cli_tool(
             name,
         );
 
-        match re.captures(s) {
-            Some(caps) => {
-                let module = caps.get(1).unwrap().as_str();
-                let function = caps.get(2).unwrap().as_str();
-                let mut args_to_pass = vec![
-                    "-c".to_owned(),
-                    format!(r#"import {}; {}.{}()"#, module, module, function),
-                ];
+        if let Some(caps) = re.captures(s) {
+            let module = caps.get(1).unwrap().as_str();
+            let function = caps.get(2).unwrap().as_str();
+            let mut args_to_pass = vec![
+                "-c".to_owned(),
+                format!(r#"import {}; {}.{}()"#, module, module, function),
+            ];
 
-                args_to_pass.append(&mut specified_args);
-                if commands::run_python(bin_path, lib_path, &args_to_pass).is_err() {
-                    abort(&abort_msg);
-                }
+            args_to_pass.append(&mut specified_args);
+            if commands::run_python(bin_path, lib_path, &args_to_pass).is_err() {
+                abort(&abort_msg);
             }
-            None => {
-                abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", s));
-                unreachable!()
-            }
+        } else {
+            abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", s));
+            unreachable!()
         }
         return;
     }
@@ -792,12 +802,11 @@ fn run_script(
     pyflow_dir: &Path,
 ) {
     // todo: DRY with run_cli_tool and subcommand::Install
-    let filename = match args.get(0) {
-        Some(a) => a.clone(),
-        None => {
-            abort("`run` must be followed by the script to run, eg `pyflow script myscript.py`");
-            unreachable!()
-        }
+    let filename = if let Some(a) = args.get(0) {
+        a.clone()
+    } else {
+        abort("`run` must be followed by the script to run, eg `pyflow script myscript.py`");
+        unreachable!()
     };
 
     let filename = util::standardize_name(&filename);
@@ -866,19 +875,18 @@ fn run_script(
     let reqs: Vec<Req> = deps
         .iter()
         .map(|name| {
-            let (fmtd_name, version) = match lockpacks
+            let (fmtd_name, version) = if let Some(lp) = lockpacks
                 .iter()
                 .find(|lp| util::compare_names(&lp.name, name))
             {
-                Some(lp) => (
+                (
                     lp.name.clone(),
                     Version::from_str(&lp.version).expect("Problem getting version"),
-                ),
-                None => {
-                    let vinfo = dep_resolution::get_version_info(name)
-                        .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
-                    (vinfo.0, vinfo.1)
-                }
+                )
+            } else {
+                let vinfo = dep_resolution::get_version_info(name)
+                    .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
+                (vinfo.0, vinfo.1)
             };
 
             Req::new(fmtd_name, vec![Constraint::new(ReqType::Caret, version)])
@@ -1148,18 +1156,19 @@ fn main() {
         .expect("Can't find current path")
         .join("__pypackages__");
 
+    if let SubCommand::New { name } = subcmd {
+        new(&name).expect("Problem creating project");
+        util::print_color(
+            &format!("Created a new Python project named {}", name),
+            Color::Green,
+        );
+        return;
+    }
+
     let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
 
     // Run subcommands that don't require info about the environment.
     match subcmd {
-        SubCommand::New { name } => {
-            new(&name).expect("Problem creating project");
-            util::print_color(
-                &format!("Created a new Python project named {}", name),
-                Color::Green,
-            );
-            return;
-        }
         SubCommand::Init {} => {
             files::parse_req_dot_text(&mut cfg);
             files::parse_pipfile(&mut cfg);
@@ -1168,6 +1177,7 @@ fn main() {
                 abort("pyproject.toml already exists - not overwriting.")
             }
             cfg.write_file(cfg_filename);
+            util::print_color("Created `pyproject.toml`", Color::Green);
             // Don't return here; let the normal logic create the venv now.
         }
         SubCommand::Reset {} => {
@@ -1275,6 +1285,7 @@ fn main() {
             if found_lock {
                 util::print_color("Found lockfile", Color::Green);
             }
+
             // Merge reqs added via cli with those in `pyproject.toml`.
             let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, cfg_filename);
 
@@ -1324,7 +1335,6 @@ fn main() {
                         .name
                 })
                 .collect();
-            println!("(dbg) to remove {:#?}", &removed_reqs);
 
             files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
 
@@ -1355,7 +1365,7 @@ fn main() {
             }
         }
         SubCommand::Package { extras } => {
-            build::build(&lockpacks, &bin_path, &lib_path, &cfg, extras)
+            build::build(&lockpacks, &bin_path, &lib_path, &cfg, &extras)
         }
         SubCommand::Publish {} => build::publish(&bin_path, &cfg),
         SubCommand::Run { args } => {

@@ -25,21 +25,21 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 
 ## Installation
-- **Windows** Download and run 
+- **Windows** - Download and run 
 [this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow-0.1.4-x86_64.msi).
 (Scoop coming soon).
 
-Ubuntu, or Debian:** Download and run 
+- **Ubuntu, or Debian:** - Download and run 
 [this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow_0.1.4_amd64.deb).
 
-- **A different Linux distro:** Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow)
+- **A different Linux distro:** - Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.4/pyflow)
  and place it somewhere
-accessible by the system PATH. For example, `/usr/bin`.
+accessible by the PATH. For example, `/usr/bin`.
 
-- **Mac:**  Build from source using the instructions near the bottom of this page,
+- **Mac:** - Build from source using the instructions near the bottom of this page,
  or install via `cargo`. (If able, please PR the binary.)
  
- - **If you have [Rust](https://www.rust-lang.org) installed** Run `cargo install pyflow`.
+ - **If you have [Rust](https://www.rust-lang.org) installed** - Run `cargo install pyflow`.
 
 
 ## Quickstart
@@ -181,7 +181,7 @@ Example contents:
 py_version = "3.7"
 name = "runcible"
 version = "0.1.0"
-author = "John Hackworth"
+authors = ["John Hackworth <jhackworth@vic.org>"]
 
 
 [tool.pyflow.dependencies]
@@ -217,6 +217,8 @@ To install from a `git` repo instead of `pypi`, use syntax like this:
 [tool.pyflow.dependencies]
 saturn = { git = "https://github.com/david-oconnor/saturn.git" }  # The trailing `.git` here is optional.
 ```
+
+To install a package that includes a `.` in its name, enclose the name in quotes.
 
 For details on 
 how to specify dependencies in this `Cargo.toml`-inspired 
@@ -350,8 +352,7 @@ In order to build and publish your project, additional info is needed in
 name = "everythingkiller"
 py_version = "3.6"
 version = "0.1.0"
-author = "Fraa Erasmas"
-author_email = "raz@edhar.math"
+authors = ["Fraa Erasmas <raz@edhar.math>"]
 description = "Small, but packs a punch!"
 homepage = "https://everything.math"
 repository = "https://github.com/raz/everythingkiller"
@@ -373,7 +374,7 @@ activate = "jeejah:activate"
 
 [tool.pyflow.dependencies]
 numpy = "^1.16.4"
-manim = "0.1.8"
+manimlib = "0.1.8"
 ipython = {version = "^7.7.0", extras=["qtconsole"]}
 
 

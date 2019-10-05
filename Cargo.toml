@@ -14,19 +14,19 @@ categories = ["development-tools::build-utils"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crossterm = "^0.10.2"
+crossterm = "^0.11.1"
 data-encoding = "^2.1.2"
 directories = "^2.0.2"
-flate2 = "1.0.9"
+flate2 = "1.0.12"
 fs_extra = "^1.1.0"
 xz2 = "^0.1.6"
 regex = "^1.1.9"
-reqwest = "^0.9.19"
-ring = "^0.16.5"
+reqwest = "^0.9.21"
+ring = "^0.16.9"
 # We disable, by ommission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
 # of `pyflow python`.
-structopt = { version = "0.3.1", default_features = false, features = ["color", "wrap_help", "doc"] }
-serde = {version = "^1.0.92", features = ["derive"]}
+structopt = { version = "0.3.2", default_features = false, features = ["color", "wrap_help", "doc"] }
+serde = {version = "^1.0.101", features = ["derive"]}
 tar = "^0.4.26"
 toml = "^0.5.1"
 zip = "^0.5.2"

@@ -1,16 +1,23 @@
-use crate::util;
+use crate::{dep_types::Req, util};
 use crossterm::Color;
+use regex::Regex;
 use std::collections::HashMap;
 use std::{env, fs, path::PathBuf, process::Command};
 
 // https://packaging.python.org/tutorials/packaging-projects/
 
 /// Serialize to a python list of strings.
-fn serialize_py_list(items: &[String]) -> String {
+fn serialize_py_list(items: &[String], indent_level: u8) -> String {
+    let mut pad = "".to_string();
+    for _ in 0..indent_level {
+        pad.push_str("    ");
+    }
+
     let mut result = "[\n".to_string();
     for item in items.iter() {
-        result.push_str(&format!("    \"{}\",\n", item));
+        result.push_str(&format!("{}    \"{}\",\n", &pad, item));
     }
+    result.push_str(&pad);
     result.push(']');
     result
 }
@@ -19,7 +26,7 @@ fn serialize_py_list(items: &[String]) -> String {
 fn _serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
     let mut result = "{\n".to_string();
     for (key, val) in hm.iter() {
-        result.push_str(&format!("    \"{}\": {}\n", key, serialize_py_list(val)));
+        result.push_str(&format!("    \"{}\": {}\n", key, serialize_py_list(val, 0)));
     }
     result.push('}');
     result
@@ -46,8 +53,7 @@ fn _serialize_py_dict(hm: &HashMap<String, Vec<String>>) -> String {
 //    result
 //}
 
-/// Creates a temporary file which imitates setup.py
-fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
+fn cfg_to_setup(cfg: &crate::Config) -> String {
     let cfg = cfg.clone();
 
     let version = match cfg.version {
@@ -56,16 +62,37 @@ fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
     };
 
     let mut keywords = String::new();
-    for kw in &cfg.keywords {
-        keywords.push_str(" ");
+    for (i, kw) in cfg.keywords.iter().enumerate() {
+        if i != 0 {
+            keywords.push_str(" ");
+        }
         keywords.push_str(kw);
     }
 
-    let deps: Vec<String> = cfg.reqs.iter().map(|r| r.to_setup_py_string()).collect();
+    let author_re = Regex::new(r"^(.*?)\s*(?:<(.*?)>)?\s*$").unwrap();
 
-    let data = format!(
+    let mut author = "".to_string();
+    let mut author_email = "".to_string();
+    if let Some(first) = cfg.authors.get(0) {
+        let caps = if let Some(c) = author_re.captures(first) {
+            c
+        } else {
+            util::abort(&format!(
+                "Problem parsing the `authors` field in `pyproject.toml`: {:?}",
+                &cfg.authors
+            ));
+            unreachable!()
+        };
+        author = caps.get(1).unwrap().as_str().to_owned();
+        author_email = caps.get(2).unwrap().as_str().to_owned();
+    }
+
+    let deps: Vec<String> = cfg.reqs.iter().map(Req::to_setup_py_string).collect();
+
+    // todo: Entry pts!
+    format!(
         r#"import setuptools
- 
+
 with open("{}", "r") as fh:
     long_description = fh.read()
 
@@ -92,25 +119,28 @@ setuptools.setup(
         cfg.readme_filename.unwrap_or_else(|| "README.md".into()),
         cfg.name.unwrap_or_else(|| "".into()),
         version,
-        cfg.author.unwrap_or_else(|| "".into()),
-        cfg.author_email.unwrap_or_else(|| "".into()),
+        author,
+        author_email,
         cfg.license.unwrap_or_else(|| "".into()),
         cfg.description.unwrap_or_else(|| "".into()),
         cfg.homepage.unwrap_or_else(|| "".into()),
         keywords,
-        serialize_py_list(&cfg.classifiers),
+        serialize_py_list(&cfg.classifiers, 1),
         //        serialize_py_list(&cfg.console_scripts),
         cfg.python_requires.unwrap_or_else(|| "".into()),
-        serialize_py_list(&deps),
+        serialize_py_list(&deps, 1),
         // todo:
         //            extras_require="{}",
         //        match cfg.extras {
         //            Some(e) => serialize_py_dict(&e),
         //            None => "".into(),
         //        }
-    );
+    )
+}
 
-    fs::write(filename, data).expect("Problem writing dummy setup.py");
+/// Creates a temporary file which imitates setup.py
+fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
+    fs::write(filename, cfg_to_setup(cfg)).expect("Problem writing dummy setup.py");
     if util::wait_for_dirs(&[env::current_dir()
         .expect("Problem finding current dir")
         .join(filename)])
@@ -125,7 +155,7 @@ pub(crate) fn build(
     bin_path: &PathBuf,
     lib_path: &PathBuf,
     cfg: &crate::Config,
-    _extras: Vec<String>,
+    _extras: &[String],
 ) {
     for lp in lockpacks.iter() {
         if lp.rename.is_some() {
@@ -184,6 +214,89 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
 #[cfg(test)]
 pub mod test {
     use super::*;
+    use crate::dep_types::{
+        Constraint, Req,
+        ReqType::{Caret, Exact},
+        Version,
+    };
+
+    #[test]
+    fn setup_creation() {
+        let mut scripts = HashMap::new();
+        scripts.insert("activate".into(), "jeejah:activate".into());
+
+        let cfg = crate::Config {
+            name: Some("everythingkiller".into()),
+            py_version: Some(Version::new_short(3, 6)),
+            version: Some(Version::new_short(0, 1)),
+            authors: vec!["Fraa Erasmas <raz@edhar.math>".into()],
+            homepage: Some("https://everything.math".into()),
+            description: Some("Small, but packs a punch!".into()),
+            repository: Some("https://github.com/raz/everythingkiller".into()),
+            license: Some("MIT".into()),
+            keywords: vec!["nanotech".into(), "weapons".into()],
+            classifiers: vec![
+                "Topic :: System :: Hardware".into(),
+                "Topic :: Scientific/Engineering :: Human Machine Interfaces".into(),
+            ],
+            python_requires: Some(">=3.6".into()),
+            package_url: Some("https://upload.pypi.org/legacy/".into()),
+            scripts,
+            readme_filename: Some("README.md".into()),
+            reqs: vec![
+                Req::new(
+                    "numpy".into(),
+                    vec![Constraint::new(Caret, Version::new(1, 16, 4))],
+                ),
+                Req::new(
+                    "manimlib".into(),
+                    vec![Constraint::new(Exact, Version::new(0, 1, 8))],
+                ),
+                Req::new(
+                    "ipython".into(),
+                    vec![Constraint::new(Caret, Version::new(7, 7, 0))],
+                ),
+            ],
+            dev_reqs: vec![Req::new(
+                "black".into(),
+                vec![Constraint::new(Caret, Version::new(18, 0, 0))],
+            )],
+            extras: HashMap::new(),
+            repo_url: None,
+        };
+
+        let expected = r#"import setuptools
+
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+setuptools.setup(
+    name="everythingkiller",
+    version="0.1.0",
+    author="Fraa Erasmas",
+    author_email="raz@edhar.math",
+    license="MIT",
+    description="Small, but packs a punch!",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://everything.math",
+    packages=setuptools.find_packages(),
+    keywords="nanotech weapons",
+    classifiers=[
+        "Topic :: System :: Hardware",
+        "Topic :: Scientific/Engineering :: Human Machine Interfaces",
+    ],
+    python_requires=">=3.6",
+    install_requires=[
+        "numpy>=1.16.4",
+        "manimlib==0.1.8",
+        "ipython>=7.7.0",
+    ],
+)
+"#;
+
+        assert_eq!(expected, &cfg_to_setup(&cfg));
+    }
 
     #[test]
     fn py_list() {
@@ -193,11 +306,14 @@ pub mod test {
     "Operating System :: OS Independent",
 ]"#;
 
-        let actual = serialize_py_list(&vec![
-            "Programming Language :: Python :: 3".into(),
-            "License :: OSI Approved :: MIT License".into(),
-            "Operating System :: OS Independent".into(),
-        ]);
+        let actual = serialize_py_list(
+            &vec![
+                "Programming Language :: Python :: 3".into(),
+                "License :: OSI Approved :: MIT License".into(),
+                "Operating System :: OS Independent".into(),
+            ],
+            0,
+        );
 
         assert_eq!(expected, actual);
     }
