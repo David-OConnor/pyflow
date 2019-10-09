@@ -360,7 +360,15 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
 /// From [this example](https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32)
 pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, String)>) {
     // Separate function, since we use it twice.
-    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut archive = if let Ok(a) = zip::ZipArchive::new(file) {
+        a
+    } else {
+        abort(&format!(
+            "Problem reading the wheel archive: {:?}. Is it corrupted?",
+            &file
+        ));
+        unreachable!()
+    };
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
@@ -636,7 +644,7 @@ pub fn find_best_release(
                 }
             }
             "sdist" => source_releases.push(rel.clone()),
-            "bdist_wininst" | "bdist_msi" | "bdist_egg"=> (), // Don't execute Windows installers
+            "bdist_wininst" | "bdist_msi" | "bdist_egg" => (), // Don't execute Windows installers
             _ => {
                 println!("Found surprising package type: {}", rel.packagetype);
                 continue;

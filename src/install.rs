@@ -77,7 +77,7 @@ if __name__ == '__main__':
     );
 
     fs::write(path, contents)
-        .unwrap_or_else(|_| panic!("Problem creating script file for {}", name));
+        .unwrap_or_else(|_| util::abort(&format!("Problem creating script file for {}", name)));
 }
 
 /// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
@@ -183,12 +183,24 @@ pub fn download_and_install_package(
         io::copy(&mut resp, &mut out).expect("failed to copy content");
     }
 
-    let file = fs::File::open(&archive_path).unwrap();
+    // todo DRY on this abort code in this file.
+    let file = if let Ok(f) = fs::File::open(&archive_path) {
+        f
+    } else {
+        util::abort(&format!(
+            "Problem opening the archive file: {:?}. Was there a problem while
+        downloading it?",
+            &archive_path
+        ));
+        unreachable!()
+    };
 
     // https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
     let reader = io::BufReader::new(&file);
-    let file_digest =
-        sha256_digest(reader).unwrap_or_else(|_| panic!("Problem reading hash for {}", filename));
+    let file_digest = sha256_digest(reader).unwrap_or_else(|_| {
+        util::abort(&format!("Problem reading hash for {}", filename));
+        unreachable!()
+    });
 
     let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
     if file_digest_str.to_lowercase() != expected_digest.to_lowercase() {
@@ -212,7 +224,16 @@ pub fn download_and_install_package(
     }
 
     // We must re-open the file after computing the hash.
-    let archive_file = fs::File::open(&archive_path).unwrap();
+    let archive_file = if let Ok(f) = fs::File::open(&archive_path) {
+        f
+    } else {
+        util::abort(&format!(
+            "Problem opening the archive file: {:?}. Was there a problem while
+        downloading it?",
+            &archive_path
+        ));
+        unreachable!()
+    };
 
     let rename = match rename.as_ref() {
         Some((_, new)) => Some((name.to_owned(), new.to_owned())),
@@ -242,7 +263,13 @@ pub fn download_and_install_package(
                 .captures(filename)
                 .expect("Problem matching extracted folder name")
                 .get(1)
-                .unwrap_or_else(|| panic!("Unable to find extracted folder name: {}", filename))
+                .unwrap_or_else(|| {
+                    util::abort(&format!(
+                        "Unable to find extracted folder name: {}",
+                        filename
+                    ));
+                    unreachable!()
+                })
                 .as_str();
 
             // todo: This fs_extras move does a full copy. Normal fs lib doesn't include
@@ -256,9 +283,9 @@ pub fn download_and_install_package(
             // Build a wheel from source.
             Command::new(bin_path.join("python"))
                 .current_dir(&extracted_parent)
-                .args(&["setup.py", "sdist", "bdist_wheel"])
+                .args(&["setup.py", "bdist_wheel"])
                 .output()
-                .expect("Problem running setup.py sdist bdist_wheel");
+                .expect("Problem running setup.py bdist_wheel");
 
             // todo: Clippy flags this for not iterating, but I can't get a better way working, ie
             //              let built_wheel_filename = &dist_files.get(0)
@@ -271,10 +298,15 @@ pub fn download_and_install_package(
             //                .unwrap()
             //                .to_owned();
             let mut built_wheel_filename = String::new();
-            for entry in fs::read_dir(extracted_parent.join("dist")).expect(
-                "Problem reading the dist directory of a package built from source. \
-                 The `wheel` package have not have been installed in this environment.",
-            ) {
+
+            let dist = if let Ok(d) = fs::read_dir(extracted_parent.join("dist")) {
+                d} else {
+                util::abort(&format!("Problem building {} from source. \
+                 This may occur on WSL if installing to a mounted directory.", name));
+                unreachable!();
+            };
+
+            for entry in dist {
                 let entry = entry.unwrap();
                 built_wheel_filename = entry
                     .path()
@@ -443,11 +475,6 @@ pub fn rename_package_files(top_path: &Path, old: &str, new: &str) {
 
         fs::write(path, data).expect("Problem writing file while renaming");
     }
-
-    //     if let Ok(entry) = entry {
-    //            if entry.file_type().unwrap().is_dir() {
-    //                package_folders.push(entry.file_name())
-    //            }
 }
 
 /// Rename metadata files.
@@ -483,7 +510,16 @@ pub fn download_git_repo(name: &str, url: &str, lib_path: &Path, bin_path: &Path
 
     let wheel_fname = "siunits-0.0.6-py3-none-any.whl"; // todo temp!!
     let archive_path = &lib_path.join(folder_name).join("dist").join(wheel_fname);
-    let archive_file = fs::File::open(&archive_path).unwrap();
+    let archive_file = if let Ok(f) = fs::File::open(&archive_path) {
+        f
+    } else {
+        util::abort(&format!(
+            "Problem opening the archive file: {:?}. Was there a problem while
+        downloading it?",
+            &archive_path
+        ));
+        unreachable!()
+    };
 
     util::extract_zip(&archive_file, lib_path, &None);
 }

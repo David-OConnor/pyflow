@@ -153,7 +153,7 @@ fn get_req_cache_multiple(
     }
 
     let url = "https://pydeps.herokuapp.com/multiple/";
-//                let url = "http://localhost:8000/multiple/";
+    //                let url = "http://localhost:8000/multiple/";
 
     Ok(reqwest::Client::new()
         .post(url)
@@ -311,8 +311,10 @@ fn guess_graph(
     let mut query_data = match fetch_req_data(&non_locked_reqs, vers_cache) {
         Ok(d) => d,
         Err(_) => {
-            util::abort(&format!("Problem getting dependency data - this is\
-            likely a bug in the cacheing process. Please try again in a few minutes."));
+            util::abort(&format!(
+                "Problem getting dependency data - this is\
+                 likely a bug in the cacheing process. Please try again in a few minutes."
+            ));
             unreachable!()
         }
     };
