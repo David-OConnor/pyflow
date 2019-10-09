@@ -23,8 +23,8 @@ fs_extra = "^1.1.0"
 #openssl = { version = "^0.10.25", features = ["vendored"] }
 xz2 = "^0.1.6"
 regex = "^1.1.9"
-#reqwest = "^0.9.21"
-reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
+reqwest = "^0.9.21"
+#reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
 ring = "^0.16.9"
 # We disable, by ommission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
 # of `pyflow python`.
