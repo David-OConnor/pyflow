@@ -1,9 +1,9 @@
-use crate::{commands, dep_types::Version, util};
+use crate::{commands, dep_types::Version, util::{self, GitPath}};
 use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
-use std::{fs, io, io::BufRead, path::Path, process::Command};
+use std::{fs, io, io::BufRead, path::Path, path::PathBuf, process::Command};
 use tar::Archive;
 
 #[derive(Copy, Clone, Debug)]
@@ -48,19 +48,19 @@ fn remove_scripts(scripts: &[String], scripts_path: &Path) {
     // todo: Likely not a great approach. QC.
     for entry in
         fs::read_dir(scripts_path).expect("Problem reading dist directory when removing scripts")
-    {
-        let entry = entry.unwrap();
-        if !entry.file_type().unwrap().is_file() {
-            continue;
-        }
-        let data = fs::read_to_string(entry.path()).unwrap();
-        for script in scripts {
-            if data.contains(&format!("from {}", script)) {
-                fs::remove_file(entry.path()).expect("Problem removing console script");
-                util::print_color(&format!("Removed console script {}:", script), Color::Green);
+        {
+            let entry = entry.unwrap();
+            if !entry.file_type().unwrap().is_file() {
+                continue;
+            }
+            let data = fs::read_to_string(entry.path()).unwrap();
+            for script in scripts {
+                if data.contains(&format!("from {}", script)) {
+                    fs::remove_file(entry.path()).expect("Problem removing console script");
+                    util::print_color(&format!("Removed console script {}:", script), Color::Green);
+                }
             }
         }
-    }
 }
 
 pub fn make_script(path: &Path, name: &str, module: &str, func: &str) {
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 /// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
 /// Alternatively, we could just parse all `dist-info` folders every run; this should
 /// be faster.
-fn setup_scripts(name: &str, version: &Version, lib_path: &Path, script_path: &Path) {
+pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, script_path: &Path) {
     let mut scripts = vec![];
     // todo: Sep fn for dist_info path, to avoid repetition between here and uninstall?
     let mut dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
@@ -183,17 +183,7 @@ pub fn download_and_install_package(
         io::copy(&mut resp, &mut out).expect("failed to copy content");
     }
 
-    // todo DRY on this abort code in this file.
-    let file = if let Ok(f) = fs::File::open(&archive_path) {
-        f
-    } else {
-        util::abort(&format!(
-            "Problem opening the archive file: {:?}. Was there a problem while
-        downloading it?",
-            &archive_path
-        ));
-        unreachable!()
-    };
+    let file = util::open_archive(&archive_path);
 
     // https://rust-lang-nursery.github.io/rust-cookbook/cryptography/hashing.html
     let reader = io::BufReader::new(&file);
@@ -224,16 +214,7 @@ pub fn download_and_install_package(
     }
 
     // We must re-open the file after computing the hash.
-    let archive_file = if let Ok(f) = fs::File::open(&archive_path) {
-        f
-    } else {
-        util::abort(&format!(
-            "Problem opening the archive file: {:?}. Was there a problem while
-        downloading it?",
-            &archive_path
-        ));
-        unreachable!()
-    };
+    let archive_file = util::open_archive(&archive_path);
 
     let rename = match rename.as_ref() {
         Some((_, new)) => Some((name.to_owned(), new.to_owned())),
@@ -300,9 +281,13 @@ pub fn download_and_install_package(
             let mut built_wheel_filename = String::new();
 
             let dist = if let Ok(d) = fs::read_dir(extracted_parent.join("dist")) {
-                d} else {
-                util::abort(&format!("Problem building {} from source. \
-                 This may occur on WSL if installing to a mounted directory.", name));
+                d
+            } else {
+                util::abort(&format!(
+                    "Problem building {} from source. \
+                     This may occur on WSL if installing to a mounted directory.",
+                    name
+                ));
                 unreachable!();
             };
 
@@ -330,7 +315,7 @@ pub fn download_and_install_package(
                 lib_path.join(built_wheel_filename),
                 &options,
             )
-            .expect("Problem copying wheel built from source");
+                .expect("Problem copying wheel built from source");
 
             let file_created = fs::File::open(&lib_path.join(built_wheel_filename))
                 .expect("Can't find created wheel.");
@@ -490,36 +475,76 @@ pub fn rename_metadata(path: &Path, _old: &str, new: &str) {
     // todo: Modify other files like entry_points.txt, perhaps.
 }
 
-/// Clone a git repo of a Python package, and build a wheel from it
-pub fn download_git_repo(name: &str, url: &str, lib_path: &Path, bin_path: &Path) {
-        if commands::download_git_repo(url, lib_path).is_err() {
-            util::abort(&format!("Problem cloning this repo: {}", url));
-        }; // todo to keep dl small while troubleshooting.
+/// Clone a git repo of a Python package, and build/install a wheel from it.
+/// Or do the same, but with a path instead of git.
+pub fn download_and_install_git(
+    name: &str,
+    url: GitPath,
+    lib_path: &Path,
+    script_path: &Path,
+    bin_path: &Path,
+) -> util::Metadata {
 
-    let folder_name = util::standardize_name(name);  // todo: Will this always work?
+    match url {
+        GitPath::Git(url) => {
+            if commands::download_git_repo(&url, lib_path).is_err() {
+                util::abort(&format!("Problem cloning this repo: {}", url));
+            } // todo to keep dl small while troubleshooting.
+        }
+            GitPath::Path(path) => {
+                fs::copy(PathBuf::from(path), lib_path).expect("Problem copying path requirement to lib folder");
+            }
+        }
 
-    // Build a wheel from the repo
-    Command::new(bin_path.join("python"))
-        // We assume that the module code is in the repo's immediate subfolder that has
-        // the package's name.
-        .current_dir(&lib_path.join(&folder_name))
-        .args(&["setup.py", "bdist_wheel"])
-        .output()
-        .expect("Problem running setup.py bdist_wheel");
+        let folder_name = util::standardize_name(name); // todo: Will this always work?
 
-    let wheel_fname = "siunits-0.0.6-py3-none-any.whl"; // todo temp!!
+        // Build a wheel from the repo
+        Command::new(bin_path.join("python"))
+            // We assume that the module code is in the repo's immediate subfolder that has
+            // the package's name.
+            .current_dir(&lib_path.join(&folder_name))
+            .args(&["setup.py", "bdist_wheel"])
+            .output()
+            .expect("Problem running setup.py bdist_wheel");
 
-    let archive_path = &lib_path.join(folder_name).join("dist").join(wheel_fname);
-    let archive_file = if let Ok(f) = fs::File::open(&archive_path) {
-        f
+        let archive_path = util::find_first_file(&lib_path.join(folder_name).join("dist"));
+        let filename = archive_path.file_name().expect("Problem pulling filename from archive path");
+
+        // We've built the wheel; now move it into the lib path, as we would for a wheel download
+        // from Pypi.
+        let options = fs_extra::file::CopyOptions::new();
+        fs_extra::file::move_file(&archive_path, lib_path.join(&filename), &options)
+            .expect("Problem moving the wheel.");
+
+        let archive_path = &lib_path.join(&filename);
+        let archive_file = util::open_archive(&archive_path);
+
+        util::extract_zip(&archive_file, &lib_path, &None);
+
+        // Use the wheel's name to find the dist-info path, to avoid the chicken-egg scenario
+        // of need the dist-info path to find the version.
+        let re = Regex::new(r"^(.*?)-(.*?)-.*$").unwrap();
+        let dist_info = if let Some(caps) = re.captures(filename.to_str().unwrap()) {
+        format!(
+            "{}-{}.dist-info",
+            caps.get(1).unwrap().as_str(),
+            caps.get(2).unwrap().as_str()
+        )
     } else {
-        util::abort(&format!(
-            "Problem opening the archive file: {:?}. Was there a problem while
-        downloading it?",
-            &archive_path
-        ));
-        unreachable!()
+        util::abort("Unable to find the dist info path from wheel filename");
+        unreachable!();
     };
 
-    util::extract_zip(&archive_file, lib_path, &None);
+    let metadata = util::parse_metadata(&lib_path.join(dist_info).join("METADATA")); // todo temp!
+
+    setup_scripts(&name, &metadata.version, &lib_path, &script_path);
+
+    // Remove the created and moved wheel
+    if fs::remove_file(&archive_path).is_err() {
+        util::abort(&format!(
+            "Problem removing this wheel built from a git repo: {:?}",
+            archive_path
+        ));
+    }
+    metadata
 }

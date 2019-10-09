@@ -212,7 +212,13 @@ If you'd like to an install a dependency with extras, use syntax like this:
 ipython = { version = "^7.7.0", extras = ["qtconsole"] }
 ```
 
-To install from a `git` repo instead of `pypi`, use syntax like this:
+To install from a local pathinstead of `pypi`, use syntax like this:
+```toml
+[tool.pyflow.dependencies]
+numpy= { path = "../numpy" }
+```
+
+To install from a `git` repo, use syntax like this:
 ```toml
 [tool.pyflow.dependencies]
 saturn = { git = "https://github.com/david-oconnor/saturn.git" }  # The trailing `.git` here is optional.

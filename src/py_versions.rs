@@ -110,8 +110,8 @@ impl PyVers {
 #[derive(Clone, Copy, Debug)]
 enum Os {
     // Don't confuse with crate::Os
-    Ubuntu, // Builds on Ubuntu 18.04 work on Ubuntu 19.04, Debian, and Kali
-    Centos, // Will this work on Red Hat as well?
+    Ubuntu, // Builds on Ubuntu 18.04 work on Ubuntu 19.04, Debian, Arch, and Kali
+    Centos, // Will this work on Red Hat and Fedora as well?
     Windows,
     Mac,
 }
@@ -163,11 +163,11 @@ fn download(py_install_path: &Path, version: &Version) {
             "Linux distro",
             &[
                 (
-                    "2018 or newer (Ubuntu≥18.04, Debian≥10, SUSE≥15, Arch, Kali, etc)".to_owned(),
+                    "2018 or newer (Ubuntu≥16.04, Debian≥9, SUSE≥15, Arch, Kali, etc)".to_owned(),
                     Os::Ubuntu,
                 ),
                 (
-                    "Older (Centos, Redhat, older versions of distros listed in option 1)"
+                    "Older (Centos, Redhat, Fedora, older versions of distros listed in option 1)"
                         .to_owned(),
                     Os::Centos,
                 ),

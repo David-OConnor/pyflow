@@ -42,6 +42,7 @@ pub struct DepComponent {
     #[serde(rename = "version")]
     pub constrs: Option<String>,
     pub extras: Option<Vec<String>>,
+    pub path: Option<String>,
     pub git: Option<String>,
     pub branch: Option<String>,
     pub service: Option<String>,
@@ -280,11 +281,14 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
             let req_line = if let Ok(r) = Req::from_str(line, false) {
                 r
             } else {
-                util::abort(&format!(
-                    "Can't parse this line in `pyproject.toml`: {}",
-                    line
-                ));
-                unreachable!()
+                result.push_str(line);
+                result.push_str("\n");
+                continue; // Could be caused by a git etc req.
+                          //                util::abort(&format!(
+                          //                    "Can't parse this line in `pyproject.toml`: {}",
+                          //                    line
+                          //                ));
+                          //                unreachable!()
             };
 
             if reqs

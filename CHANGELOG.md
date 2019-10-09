@@ -1,6 +1,8 @@
 # Changelog
 
 ## v0.1.6
+- Added installation from Git repos
+- Improved various error messages
 
 ## v0.1.5
 - Combined `author` and `author_email` cfg into one field, `authors`, which takes

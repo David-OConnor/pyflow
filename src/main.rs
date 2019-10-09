@@ -23,10 +23,11 @@ mod util;
 
 // todo:
 // Custom build system
-// path and git dependencies
 // Fix pydeps caching timeout
 // Make binaries work on any linux distro
 // Mac binaries for pyflow and python
+// "fatal: destination path exists" when using git deps
+// add hash and git/path info to locks
 
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
 
@@ -161,6 +162,7 @@ impl Config {
             let constraints;
             let mut extras = None;
             let mut git = None;
+            let mut path = None;
             let mut python_version = None;
             match data {
                 files::DepComponentWrapper::A(constrs) => {
@@ -192,6 +194,9 @@ impl Config {
                     if let Some(ex) = subdata.extras {
                         extras = Some(ex);
                     }
+                    if let Some(p) = subdata.path {
+                        path = Some(p);
+                    }
                     if let Some(repo) = subdata.git {
                         git = Some(repo);
                     }
@@ -201,10 +206,8 @@ impl Config {
                                 .expect("Problem parsing python version in dependency"),
                         );
                     }
-                    // todo path
                 }
             }
-            //                    let
 
             result.push(Req {
                 name,
@@ -213,6 +216,7 @@ impl Config {
                 sys_platform: None,
                 python_version,
                 install_with_extras: extras,
+                path,
                 git,
             });
         }
@@ -323,6 +327,7 @@ impl Config {
                             sys_platform: None,
                             python_version,
                             install_with_extras: extras,
+                            path: None,
                             git: None,
                         });
                     }
@@ -549,8 +554,10 @@ fn parse_lockpack_rename(rename: &str) -> (u32, String) {
 fn sync_deps(
     bin_path: &Path,
     lib_path: &Path,
+    script_path: &Path,
     cache_path: &Path,
     lock_packs: &[LockPackage],
+    dont_uninstall: &[String],
     installed: &[(String, Version, Vec<String>)],
     os: util::Os,
     python_vers: &Version,
@@ -611,6 +618,14 @@ fn sync_deps(
                     break;
                 }
             }
+
+            for name in dont_uninstall {
+                if util::compare_names(name, &inst.0) {
+                    contains = true;
+                    break;
+                }
+            }
+
             !contains
         })
         .collect();
@@ -662,7 +677,7 @@ fn sync_deps(
             &best_release.digests.sha256,
             lib_path,
             bin_path,
-            &lib_path.join("../bin"),
+            script_path,
             cache_path,
             package_type,
             rename,
@@ -893,6 +908,7 @@ fn run_script(
 
     let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
+    let script_path = vers_path.join("bin");
     let lock_path = env_path.join("pyproject.lock");
 
     let deps = find_deps_from_script(&PathBuf::from(&filename));
@@ -928,9 +944,11 @@ fn run_script(
     sync(
         &bin_path,
         &lib_path,
+        &script_path,
         cache_path,
         &lockpacks,
         &reqs,
+        &[],
         &[],
         os,
         &py_vers,
@@ -947,10 +965,12 @@ fn run_script(
 fn sync(
     bin_path: &Path,
     lib_path: &Path,
+    script_path: &Path,
     cache_path: &Path,
     lockpacks: &[LockPackage],
     reqs: &[Req],
     dev_reqs: &[Req],
+    dont_uninstall: &[String],
     os: util::Os,
     py_vers: &Version,
     lock_path: &Path,
@@ -1070,8 +1090,10 @@ fn sync(
     sync_deps(
         bin_path,
         lib_path,
+        script_path,
         cache_path,
         &updated_lock_packs,
+        dont_uninstall,
         &installed,
         os,
         py_vers,
@@ -1289,6 +1311,7 @@ fn main() {
         util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_path, &cache_path);
 
     let lib_path = vers_path.join("lib");
+    let script_path = vers_path.join("bin");
     let bin_path = util::find_bin_path(&vers_path);
 
     let mut found_lock = false;
@@ -1321,34 +1344,100 @@ fn main() {
             // Merge reqs added via cli with those in `pyproject.toml`.
             let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, cfg_filename);
 
-            println!("UPD: {:#?}", &updated_reqs);
-            // Todo: Do for dev reqs too.
+            let mut git_reqs = vec![];  // For path reqs too.
+            let mut git_reqs_dev = vec![];
             for req in updated_reqs.iter().filter(|r| r.git.is_some()) {
                 // todo: as_ref() would be better than clone, if we can get it working.
-                install::download_git_repo(
+                let mut metadata = install::download_and_install_git(
                     &req.name,
-                    &req.git.clone().unwrap(),
+                    util::GitPath::Path(req.git.clone().unwrap()),
                     &lib_path,
+                    &script_path,
                     &bin_path,
                 );
+
+                git_reqs.append(&mut metadata.requires_dist);
             }
 
-            let updated_reqs: Vec<Req> = updated_reqs
+            // todo: lots of DRY between reqs and dev reqs, and git and path
+            for req in up_dev_reqs.iter().filter(|r| r.git.is_some()) {
+                let mut metadata = install::download_and_install_git(
+                    &req.name,
+                    util::GitPath::Git(req.git.clone().unwrap()),
+                    &lib_path,
+                    &script_path,
+                    &bin_path,
+                );
+
+                git_reqs_dev.append(&mut metadata.requires_dist);
+            }
+
+            for req in updated_reqs.iter().filter(|r| r.path.is_some()) {
+                let mut metadata = install::download_and_install_git(
+                    &req.name,
+                    util::GitPath::Path(req.path.clone().unwrap()),
+                    &lib_path,
+                    &script_path,
+                    &bin_path,
+                );
+
+                git_reqs.append(&mut metadata.requires_dist);
+            }
+
+            for req in up_dev_reqs.iter().filter(|r| r.path.is_some()) {
+                let mut metadata = install::download_and_install_git(
+                    &req.name,
+                    util::GitPath::Path(req.path.clone().unwrap()),
+                    &lib_path,
+                    &script_path,
+                    &bin_path,
+                );
+
+                git_reqs.append(&mut metadata.requires_dist);
+            }
+
+            // We've removed the git repos from packages to install form pypi, but make
+            // sure we flag them as not-to-uninstall.
+            let mut dont_uninstall: Vec<String> = updated_reqs
+                .clone()
                 .into_iter()
-                .filter(|r| r.git.is_none())
+                .filter(|r| r.git.is_some() || r.path.is_some())
+                .map(|r| r.name.to_owned())
                 .collect();
-            let up_dev_reqs: Vec<Req> = up_dev_reqs
+
+            for r in &up_dev_reqs {
+                if r.git.is_some() || r.path.is_some() {
+                    dont_uninstall.push(r.name.to_owned());
+                }
+            }
+
+            // We don't pass the git requirement itself, since we've directly installed it,
+            // but we do pass its requirements.
+            let mut updated_reqs: Vec<Req> = updated_reqs
                 .into_iter()
-                .filter(|r| r.git.is_none())
+                .filter(|r| r.git.is_none() && r.path.is_none())
                 .collect();
+            let mut up_dev_reqs: Vec<Req> = up_dev_reqs
+                .into_iter()
+                .filter(|r| r.git.is_none() && r.path.is_none())
+                .collect();
+
+            for r in git_reqs.into_iter() {
+                updated_reqs.push(r);
+            }
+            for r in git_reqs_dev.into_iter() {
+                up_dev_reqs.push(r);
+            }
 
             sync(
                 &bin_path,
                 &lib_path,
+                &script_path,
                 &cache_path,
                 &lockpacks,
                 &updated_reqs,
                 &up_dev_reqs,
+                &dont_uninstall,
                 os,
                 &py_vers,
                 &PathBuf::from(lock_filename),
@@ -1381,10 +1470,12 @@ fn main() {
             sync(
                 &bin_path,
                 &lib_path,
+                &script_path,
                 &cache_path,
                 &lockpacks,
                 &updated_reqs,
                 &cfg.dev_reqs.clone(),
+                &[],
                 os,
                 &py_vers,
                 &PathBuf::from(lock_filename),

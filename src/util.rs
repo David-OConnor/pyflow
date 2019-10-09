@@ -19,6 +19,25 @@ use std::{
 use tar::Archive;
 use xz2::read::XzDecoder;
 
+pub enum GitPath {
+    Git(String),
+    Path(String),
+}
+
+/// Used to store a Wheel's metadata, from dist-info/METADATA
+#[derive(Debug, Default)]
+pub struct Metadata {
+    pub name: String,
+    pub summary: Option<String>,
+    pub version: Version,
+    pub author: Option<String>,
+    pub author_email: Option<String>,
+    pub license: Option<String>,
+    pub keywords: Vec<String>,
+    pub platform: Option<String>,
+    pub requires_dist: Vec<Req>,
+}
+
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
 /// Used to determine which version of a binary package to download. Assume 64-bit.
 pub enum Os {
@@ -700,4 +719,65 @@ pub fn get_git_author() -> Vec<String> {
         }
     }
     vec![format!("{} <{}>", name, email)]
+}
+
+pub fn find_first_file(path: &Path) -> PathBuf {
+    // todo: Propogate errors rather than abort here?
+    {
+        // There should only be one file in this dist folder: The wheel we're looking for.
+        for entry in path
+            .read_dir()
+            .expect("Trouble opening the dist path of the cloned repo")
+        {
+            if let Ok(entry) = entry {
+                if entry.file_type().unwrap().is_file() {
+                    return entry.path();
+                }
+            }
+        }
+        abort(&format!(
+            "Problem the first file in the directory: {:?}",
+            path
+        ));
+        unreachable!()
+    };
+}
+
+/// Mainly to avoid repeating error-handling code.
+pub fn open_archive(path: &Path) -> fs::File {
+    // We must re-open the file after computing the hash.
+    if let Ok(f) = fs::File::open(&path) {
+        f
+    } else {
+        abort(&format!(
+            "Problem opening the archive file: {:?}. Was there a problem while
+        downloading it?",
+            &path
+        ));
+        unreachable!()
+    }
+}
+
+/// Parse a wheel's `METADATA` file.
+pub fn parse_metadata(path: &Path) -> Metadata {
+    let re = |key: &str| Regex::new(&format!(r"^{}:\s*(.*)$", key)).unwrap();
+
+    let mut result = Metadata::default();
+
+    let data = fs::read_to_string(path).expect("Problem reading METADATA");
+    for line in data.lines() {
+        if let Some(caps) = re("Version").captures(line) {
+            let val = caps.get(1).unwrap().as_str();
+            result.version =
+                Version::from_str(val).expect("Problem parsing version from `METADATA`");
+        }
+        if let Some(caps) = re("Requires-Dist").captures(line) {
+            let val = caps.get(1).unwrap().as_str();
+            let req =
+                Req::from_str(val, true).expect("Problem parsing requirement from `METADATA`");
+            result.requires_dist.push(req);
+        }
+    }
+    // todo: For now, just pull version and requires_dist. Add more as-required.
+    result
 }

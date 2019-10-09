@@ -722,6 +722,7 @@ pub struct Req {
     pub sys_platform: Option<(ReqType, util::Os)>,
     pub python_version: Option<Constraint>,
     pub install_with_extras: Option<Vec<String>>,
+    pub path: Option<String>,
     pub git: Option<String>, // String is the git repo. // todo: Branch
 }
 
@@ -734,6 +735,7 @@ impl Req {
             sys_platform: None,
             python_version: None,
             install_with_extras: None,
+            path: None,
             git: None,
         }
     }
@@ -767,6 +769,7 @@ impl Req {
                 sys_platform,
                 python_version,
                 install_with_extras: None,
+                path: None,
                 git: None,
             });
         };
@@ -789,6 +792,7 @@ impl Req {
                 sys_platform,
                 python_version,
                 install_with_extras: None,
+                path: None,
                 git: None,
             });
         }
@@ -1143,6 +1147,7 @@ pub mod tests {
             sys_platform: None,
             python_version: None,
             install_with_extras: None,
+            path: None,
             git: None,
         };
 
@@ -1159,6 +1164,7 @@ pub mod tests {
             sys_platform: None,
             python_version: Some(Constraint::new(Exact, Version::new(2, 7, 0))),
             install_with_extras: None,
+            path: None,
             git: None,
         };
 
@@ -1175,6 +1181,7 @@ pub mod tests {
             sys_platform: Some((Exact, crate::Os::Windows32)),
             python_version: Some(Constraint::new(Lt, Version::new(3, 6, 0))),
             install_with_extras: None,
+            path: None,
             git: None,
         };
 
@@ -1199,6 +1206,7 @@ pub mod tests {
             sys_platform: None,
             python_version: None,
             install_with_extras: None,
+            path: None,
             git: None,
         };
 
@@ -1212,6 +1220,7 @@ pub mod tests {
             sys_platform: None,
             python_version: None,
             install_with_extras: None,
+            path: None,
             git: None,
         };
 
