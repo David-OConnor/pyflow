@@ -26,17 +26,17 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 ## Installation
 - **Windows** - Download and run 
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow-0.1.5-x86_64.msi).
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.6/pyflow-0.1.6-x86_64.msi).
 Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 
 - **Ubuntu or Debian** - Download and run 
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow_0.1.5_amd64.deb).
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.6/pyflow_0.1.6_amd64.deb).
 
 - **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run 
-[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow-0.1.6.x86_64.rpm).
+[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.1.6/pyflow-0.1.6.x86_64.rpm).
 
 - **A different Linux distro** - Download this 
-[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow)
+[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.6/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
 - **Mac** - Build from source using the instructions near the bottom of this page,
@@ -226,6 +226,9 @@ To install from a `git` repo, use syntax like this:
 [tool.pyflow.dependencies]
 saturn = { git = "https://github.com/david-oconnor/saturn.git" }  # The trailing `.git` here is optional.
 ```
+
+`git` and `path` dependencies are currently experimental. If you run into problems with them,
+please submit an issue.
 
 To install a package that includes a `.` in its name, enclose the name in quotes.
 
