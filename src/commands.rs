@@ -107,6 +107,7 @@ pub fn run_python(bin_path: &Path, lib_path: &Path, args: &[String]) -> Result<(
 }
 
 pub fn download_git_repo(repo: &str, lib_path: &Path) -> Result<(), Box<dyn Error>> {
+    // todo: Download directly instead of using git clone?
     // todo: Suppress this output.
     if Command::new("git").arg("--version").status().is_err() {
         util::abort("Can't find Git on the PATH. Is it installed?");

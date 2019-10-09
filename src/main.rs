@@ -12,7 +12,7 @@ use std::path::Path;
 use structopt::StructOpt;
 
 mod build;
-mod build_new;
+//mod build_new;
 mod commands;
 mod dep_resolution;
 mod dep_types;
@@ -25,6 +25,8 @@ mod util;
 // Custom build system
 // path and git dependencies
 // Fix pydeps caching timeout
+// Make binaries work on any linux distro
+// Mac binaries for pyflow and python
 
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
 
@@ -1319,6 +1321,7 @@ fn main() {
             // Merge reqs added via cli with those in `pyproject.toml`.
             let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, cfg_filename);
 
+            println!("UPD: {:#?}", &updated_reqs);
             // Todo: Do for dev reqs too.
             for req in updated_reqs.iter().filter(|r| r.git.is_some()) {
                 // todo: as_ref() would be better than clone, if we can get it working.

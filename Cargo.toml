@@ -1,6 +1,6 @@
 [package]
 name = "pyflow"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 description = "A modern Python installation and dependency manager"
 license = "MIT"
@@ -19,11 +19,12 @@ data-encoding = "^2.1.2"
 directories = "^2.0.2"
 flate2 = "1.0.12"
 fs_extra = "^1.1.0"
-# Perhaps this will prevent problems between linux distros
-openssl = { version = "^0.10.25", features = ["vendored"] }
+# Perhaps this will prevent problems between linux distros  // edit: Appears not to.
+#openssl = { version = "^0.10.25", features = ["vendored"] }
 xz2 = "^0.1.6"
 regex = "^1.1.9"
-reqwest = "^0.9.21"
+#reqwest = "^0.9.21"
+reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
 ring = "^0.16.9"
 # We disable, by ommission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
 # of `pyflow python`.
