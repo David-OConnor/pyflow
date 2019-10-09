@@ -102,11 +102,11 @@ impl ToString for VersionModifier {
 impl VersionModifier {
     fn orderval(self) -> u8 {
         match self {
-            VersionModifier::Null => 4,
-            VersionModifier::ReleaseCandidate => 3,
-            VersionModifier::Beta => 2,
-            VersionModifier::Alpha => 1,
-            VersionModifier::Dep => 0,
+            Self::Null => 4,
+            Self::ReleaseCandidate => 3,
+            Self::Beta => 2,
+            Self::Alpha => 1,
+            Self::Dep => 0,
         }
     }
 }
@@ -134,7 +134,7 @@ pub struct Version {
 }
 
 impl Version {
-    pub fn new(major: u32, minor: u32, patch: u32) -> Self {
+    pub const fn new(major: u32, minor: u32, patch: u32) -> Self {
         Self {
             major,
             minor,
@@ -145,7 +145,7 @@ impl Version {
     }
 
     /// No patch specified.
-    pub fn new_short(major: u32, minor: u32) -> Self {
+    pub const fn new_short(major: u32, minor: u32) -> Self {
         Self {
             major,
             minor,
@@ -324,14 +324,14 @@ impl ToString for ReqType {
     /// These show immediately before the version numbers
     fn to_string(&self) -> String {
         match self {
-            ReqType::Exact => "==".into(),
-            ReqType::Gte => ">=".into(),
-            ReqType::Lte => "<=".into(),
-            ReqType::Gt => ">".into(),
-            ReqType::Lt => "<".into(),
-            ReqType::Ne => "!=".into(),
-            ReqType::Caret => "^".into(),
-            ReqType::Tilde => "~".into(),
+            Self::Exact => "==".into(),
+             Self::Gte => ">=".into(),
+             Self::Lte => "<=".into(),
+             Self::Gt => ">".into(),
+             Self::Lt => "<".into(),
+            Self::Ne => "!=".into(),
+             Self::Caret => "^".into(),
+             Self::Tilde => "~".into(),
         }
     }
 }
@@ -614,16 +614,13 @@ pub fn intersection_many(constrs: &[Constraint]) -> Vec<(Version, Version)> {
         // rngs will be len 2 for Ne, else 1. Or logic within rngs.
         let rng = &constr.compatible_range();
         let rng2;
-        match constr.type_ {
-            ReqType::Ne => {
+        if let ReqType::Ne = constr.type_ {
                 rng2 = (Version::new(0, 0, 0), Version::_max());
                 // We'll remove nes at the end.
                 nes.push(constr.version);
-            }
-            _ => {
+            } else {
                 rng2 = rng[0]; // If not Ne, there will be exactly 1.
             }
-        }
         ranges.push(rng2);
     }
     // todo: We haven't included nes!

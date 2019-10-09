@@ -638,8 +638,7 @@ pub fn find_best_release(
                 // if `requires_python` doesn't indicate an incompatibility. Check `python_version`
                 // instead of `requires_python`.
                 // Note that the result of this parse is an any match.
-                match Constraint::from_wh_py_vers(&rel.python_version) {
-                    Ok(constrs) => {
+                if let Ok(constrs) = Constraint::from_wh_py_vers(&rel.python_version) {
                         let mut compat_py_v = false;
                         for constr in &constrs {
                             if constr.is_compatible(python_vers) {
@@ -649,14 +648,12 @@ pub fn find_best_release(
                         if !compat_py_v {
                             compatible = false;
                         }
-                    }
-                    Err(_) => {
+                    } else {
                         (println!(
                             "Unable to match python version from python_version: {}",
                             &rel.python_version
                         ))
-                    }
-                }
+                    };
 
                 if compatible {
                     compatible_releases.push(rel.clone());
@@ -727,7 +724,7 @@ pub fn find_first_file(path: &Path) -> PathBuf {
         // There should only be one file in this dist folder: The wheel we're looking for.
         for entry in path
             .read_dir()
-            .expect("Trouble opening the dist path of the cloned repo")
+            .expect("Trouble reading the directory when finding the first file.")
         {
             if let Ok(entry) = entry {
                 if entry.file_type().unwrap().is_file() {

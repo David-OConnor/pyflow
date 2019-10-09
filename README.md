@@ -32,9 +32,12 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 - **Ubuntu or Debian** - Download and run 
 [this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow_0.1.5_amd64.deb).
 
-- **A different Linux distro** - Download this [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow)
- and place it somewhere
-accessible by the PATH. For example, `/usr/bin`.
+- **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run 
+[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow-0.1.6.x86_64.rpm).
+
+- **A different Linux distro** - Download this 
+[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.5/pyflow)
+ and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
 - **Mac** - Build from source using the instructions near the bottom of this page,
  or install via `cargo`. (If able, please PR the binary.)

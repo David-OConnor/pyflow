@@ -1,4 +1,8 @@
-use crate::{commands, dep_types::Version, util::{self, GitPath}};
+use crate::{
+    commands,
+    dep_types::Version,
+    util::{self, GitPath},
+};
 use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
 use regex::Regex;
@@ -480,51 +484,67 @@ pub fn rename_metadata(path: &Path, _old: &str, new: &str) {
 pub fn download_and_install_git(
     name: &str,
     url: GitPath,
+    git_path: &Path,
     lib_path: &Path,
     script_path: &Path,
     bin_path: &Path,
 ) -> util::Metadata {
+    if !git_path.exists() {
+        fs::create_dir_all(git_path).expect("Problem creating git path");
+    }
 
+    let folder_name = util::standardize_name(name); // todo: Will this always work?
     match url {
         GitPath::Git(url) => {
-            if commands::download_git_repo(&url, lib_path).is_err() {
-                util::abort(&format!("Problem cloning this repo: {}", url));
-            } // todo to keep dl small while troubleshooting.
-        }
-            GitPath::Path(path) => {
-                fs::copy(PathBuf::from(path), lib_path).expect("Problem copying path requirement to lib folder");
+            // Download the repo into the pyflow folder.
+            // todo: Handle checking if it's current and correct; not just a matching folder
+            // todo name.
+            if !&git_path.join(&folder_name).exists() {
+                if commands::download_git_repo(&url, git_path).is_err() {
+                    util::abort(&format!("Problem cloning this repo: {}", url));
+                } // todo to keep dl small while troubleshooting.
             }
         }
+        GitPath::Path(path) => {
+            let f = &git_path.join(&folder_name);
+            if !&f.exists() {
+                fs::create_dir(f).expect("Problem creating dir for a path dependency");
+                let options = fs_extra::dir::CopyOptions::new();
+                fs_extra::dir::copy(PathBuf::from(path), &git_path, &options)
+                    .expect("Problem copying path requirement to lib folder");
+            }
+        }
+    }
 
-        let folder_name = util::standardize_name(name); // todo: Will this always work?
+    // Build a wheel from the repo
+    Command::new(bin_path.join("python"))
+        // We assume that the module code is in the repo's immediate subfolder that has
+        // the package's name.
+        .current_dir(&git_path.join(&folder_name))
+        .args(&["setup.py", "bdist_wheel"])
+        .output()
+        .expect("Problem running setup.py bdist_wheel");
 
-        // Build a wheel from the repo
-        Command::new(bin_path.join("python"))
-            // We assume that the module code is in the repo's immediate subfolder that has
-            // the package's name.
-            .current_dir(&lib_path.join(&folder_name))
-            .args(&["setup.py", "bdist_wheel"])
-            .output()
-            .expect("Problem running setup.py bdist_wheel");
+    let archive_path = util::find_first_file(&git_path.join(folder_name).join("dist"));
+    let filename = archive_path
+        .file_name()
+        .expect("Problem pulling filename from archive path");
 
-        let archive_path = util::find_first_file(&lib_path.join(folder_name).join("dist"));
-        let filename = archive_path.file_name().expect("Problem pulling filename from archive path");
+    // We've built the wheel; now move it into the lib path, as we would for a wheel download
+    // from Pypi.
+     let options = fs_extra::file::CopyOptions::new();
+    fs_extra::file::move_file(&archive_path, lib_path.join(&filename), &options)
+        .expect("Problem moving the wheel.");
 
-        // We've built the wheel; now move it into the lib path, as we would for a wheel download
-        // from Pypi.
-        let options = fs_extra::file::CopyOptions::new();
-        fs_extra::file::move_file(&archive_path, lib_path.join(&filename), &options)
-            .expect("Problem moving the wheel.");
+    let archive_path = &lib_path.join(&filename);
+    let archive_file = util::open_archive(archive_path);
 
-        let archive_path = &lib_path.join(&filename);
-        let archive_file = util::open_archive(&archive_path);
+    util::extract_zip(&archive_file, lib_path, &None);
 
-        util::extract_zip(&archive_file, &lib_path, &None);
-
-        // Use the wheel's name to find the dist-info path, to avoid the chicken-egg scenario
-        // of need the dist-info path to find the version.
-        let re = Regex::new(r"^(.*?)-(.*?)-.*$").unwrap();
-        let dist_info = if let Some(caps) = re.captures(filename.to_str().unwrap()) {
+    // Use the wheel's name to find the dist-info path, to avoid the chicken-egg scenario
+    // of need the dist-info path to find the version.
+    let re = Regex::new(r"^(.*?)-(.*?)-.*$").unwrap();
+    let dist_info = if let Some(caps) = re.captures(filename.to_str().unwrap()) {
         format!(
             "{}-{}.dist-info",
             caps.get(1).unwrap().as_str(),
@@ -537,7 +557,7 @@ pub fn download_and_install_git(
 
     let metadata = util::parse_metadata(&lib_path.join(dist_info).join("METADATA")); // todo temp!
 
-    setup_scripts(&name, &metadata.version, &lib_path, &script_path);
+    setup_scripts(name, &metadata.version, lib_path, script_path);
 
     // Remove the created and moved wheel
     if fs::remove_file(&archive_path).is_err() {

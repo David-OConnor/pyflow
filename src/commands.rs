@@ -106,7 +106,7 @@ pub fn run_python(bin_path: &Path, lib_path: &Path, args: &[String]) -> Result<(
     Ok(())
 }
 
-pub fn download_git_repo(repo: &str, lib_path: &Path) -> Result<(), Box<dyn Error>> {
+pub fn download_git_repo(repo: &str, dest_path: &Path) -> Result<(), Box<dyn Error>> {
     // todo: Download directly instead of using git clone?
     // todo: Suppress this output.
     if Command::new("git").arg("--version").status().is_err() {
@@ -114,7 +114,7 @@ pub fn download_git_repo(repo: &str, lib_path: &Path) -> Result<(), Box<dyn Erro
     }
 
     Command::new("git")
-        .current_dir(lib_path)
+        .current_dir(dest_path)
         .args(&["clone", repo])
         .status()?;
     Ok(())

@@ -28,6 +28,7 @@ mod util;
 // Mac binaries for pyflow and python
 // "fatal: destination path exists" when using git deps
 // add hash and git/path info to locks
+// clear download git source as an option. In general, git install is a mess
 
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
 
@@ -178,16 +179,14 @@ impl Config {
                 }
                 files::DepComponentWrapper::B(subdata) => {
                     constraints = match subdata.constrs {
-                        Some(constrs) => match Constraint::from_str_multiple(&constrs) {
-                            Ok(c) => c,
-                            Err(_) => {
+                        Some(constrs) => if let Ok(c) = Constraint::from_str_multiple(&constrs) {
+                            c } else {
                                 abort(&format!(
                                     "Problem parsing constraints in `pyproject.toml`: {}",
                                     &constrs
                                 ));
                                 unreachable!()
                             }
-                        },
                         None => vec![],
                     };
 
@@ -1177,6 +1176,8 @@ fn main() {
 
     let cache_path = pyflow_path.join("dependency-cache");
     let script_env_path = pyflow_path.join("script-envs");
+    // git_cache_path is where we clone git repos into, to build wheels from
+    let git_path = pyflow_path.join("git");
 
     #[cfg(target_os = "windows")]
     let os = Os::Windows;
@@ -1344,13 +1345,30 @@ fn main() {
             // Merge reqs added via cli with those in `pyproject.toml`.
             let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, cfg_filename);
 
-            let mut git_reqs = vec![];  // For path reqs too.
+            // We've removed the git repos from packages to install form pypi, but make
+            // sure we flag them as not-to-uninstall.
+            let mut dont_uninstall: Vec<String> = updated_reqs
+                .clone()
+                .into_iter()
+                .filter(|r| r.git.is_some() || r.path.is_some())
+                .map(|r| r.name)
+                .collect();
+
+            for r in &up_dev_reqs {
+                if r.git.is_some() || r.path.is_some() {
+                    dont_uninstall.push(r.name.to_owned());
+                }
+            }
+
+            // git_reqs is used to store requirements from packages installed via git.
+            let mut git_reqs = vec![]; // For path reqs too.
             let mut git_reqs_dev = vec![];
             for req in updated_reqs.iter().filter(|r| r.git.is_some()) {
                 // todo: as_ref() would be better than clone, if we can get it working.
                 let mut metadata = install::download_and_install_git(
                     &req.name,
-                    util::GitPath::Path(req.git.clone().unwrap()),
+                    util::GitPath::Git(req.git.clone().unwrap()),
+                    &git_path,
                     &lib_path,
                     &script_path,
                     &bin_path,
@@ -1364,6 +1382,7 @@ fn main() {
                 let mut metadata = install::download_and_install_git(
                     &req.name,
                     util::GitPath::Git(req.git.clone().unwrap()),
+                    &git_path,
                     &lib_path,
                     &script_path,
                     &bin_path,
@@ -1376,6 +1395,7 @@ fn main() {
                 let mut metadata = install::download_and_install_git(
                     &req.name,
                     util::GitPath::Path(req.path.clone().unwrap()),
+                    &git_path,
                     &lib_path,
                     &script_path,
                     &bin_path,
@@ -1388,27 +1408,13 @@ fn main() {
                 let mut metadata = install::download_and_install_git(
                     &req.name,
                     util::GitPath::Path(req.path.clone().unwrap()),
+                    &git_path,
                     &lib_path,
                     &script_path,
                     &bin_path,
                 );
 
                 git_reqs.append(&mut metadata.requires_dist);
-            }
-
-            // We've removed the git repos from packages to install form pypi, but make
-            // sure we flag them as not-to-uninstall.
-            let mut dont_uninstall: Vec<String> = updated_reqs
-                .clone()
-                .into_iter()
-                .filter(|r| r.git.is_some() || r.path.is_some())
-                .map(|r| r.name.to_owned())
-                .collect();
-
-            for r in &up_dev_reqs {
-                if r.git.is_some() || r.path.is_some() {
-                    dont_uninstall.push(r.name.to_owned());
-                }
             }
 
             // We don't pass the git requirement itself, since we've directly installed it,
@@ -1422,10 +1428,10 @@ fn main() {
                 .filter(|r| r.git.is_none() && r.path.is_none())
                 .collect();
 
-            for r in git_reqs.into_iter() {
+            for r in git_reqs {
                 updated_reqs.push(r);
             }
-            for r in git_reqs_dev.into_iter() {
+            for r in git_reqs_dev {
                 up_dev_reqs.push(r);
             }
 

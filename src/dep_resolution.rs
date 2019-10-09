@@ -604,8 +604,7 @@ pub fn resolve(
                 })
                 .max_by(|a, b| a.version.cmp(&b.version));
 
-            match newest_compatible {
-                Some(best) => {
+            if let Some(best) = newest_compatible {
                     result_cleaned.push(Package {
                         id: best.id,
                         parent: best.parent,
@@ -626,7 +625,7 @@ pub fn resolve(
                     }
                 }
 
-                None => {
+                else {
                     // We consider the possibility there's a compatible version
                     // that wasn't one of the best-per-req we queried.
                     println!("⛏️ Digging deeper to resolve dependencies for {}...", name);
@@ -637,7 +636,7 @@ pub fn resolve(
                     if versions.is_empty() {
                         result_cleaned.append(&mut make_renamed_packs(
                             &version_cache,
-                            &deps,
+                            deps,
                             //                            &result,
                             &fmtd_name,
                         ));
@@ -680,7 +679,6 @@ pub fn resolve(
                         updated_ids.insert(dep.id, newest_unresolved.id);
                     }
                 }
-            }
         } else {
             panic!("We shouldn't be seeing this!")
         }
