@@ -178,7 +178,7 @@ pub(crate) fn build(
 
     create_dummy_setup(cfg, dummy_setup_fname);
 
-    util::set_pythonpath(lib_path);
+    util::set_pythonpath(&[lib_path.to_owned()]);
     println!("🛠️️ Building the package...");
     Command::new(bin_path.join("python"))
         .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])

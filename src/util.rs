@@ -19,9 +19,12 @@ use std::{
 use tar::Archive;
 use xz2::read::XzDecoder;
 
-pub enum GitPath {
-    Git(String),
-    Path(String),
+#[derive(Debug)]
+pub struct Paths {
+    pub bin: PathBuf,
+    pub lib: PathBuf,
+    pub entry_pt: PathBuf,
+    pub cache: PathBuf,
 }
 
 /// Used to store a Wheel's metadata, from dist-info/METADATA
@@ -166,35 +169,53 @@ pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::py_versions::AliasEr
 
 /// Sets the `PYTHONPATH` environment variable, causing Python to look for
 /// dependencies in `__pypackages__`,
-pub fn set_pythonpath(lib_path: &Path) {
-    env::set_var(
-        "PYTHONPATH",
-        lib_path
-            .to_str()
-            .expect("Problem converting current path to string"),
-    );
+pub fn set_pythonpath(paths: &[PathBuf]) {
+    let formatted_paths = paths
+        .iter()
+        .map(|p| p.to_str().unwrap())
+        .collect::<Vec<&str>>()
+        .join(":");
+    env::set_var("PYTHONPATH", formatted_paths);
 }
 
 /// List all installed dependencies and console scripts, by examining the `libs` and `bin` folders.
-pub fn show_installed(lib_path: &Path) {
+/// Also include path requirements, which won't appear in the `lib` folder.
+pub fn show_installed(lib_path: &Path, path_reqs: &[Req]) {
     let installed = find_installed(lib_path);
     let scripts = find_console_scripts(&lib_path.join("../bin"));
 
-    print_color("These packages are installed:", Color::DarkBlue);
-    for (name, version, _tops) in installed {
-        //        print_color(&format!("{} == \"{}\"", name, version.to_string()), Color::Magenta);
-        println!(
-            "{}{}{} == {}",
-            Colored::Fg(Color::Cyan),
-            name,
-            Colored::Fg(Color::Reset),
-            version
-        );
+    if installed.is_empty() {
+        print_color("No packages are installed.", Color::DarkBlue);
+    } else {
+        print_color("These packages are installed:", Color::DarkBlue);
+        for (name, version, _tops) in installed {
+            //        print_color(&format!("{} == \"{}\"", name, version.to_string()), Color::Magenta);
+            println!(
+                "{}{}{} == {}",
+                Colored::Fg(Color::Cyan),
+                name,
+                Colored::Fg(Color::Reset),
+                version
+            );
+        }
+        for req in path_reqs {
+            println!(
+                "{}{}{}, at path: {}",
+                Colored::Fg(Color::Cyan),
+                req.name,
+                Colored::Fg(Color::Reset),
+                req.path.as_ref().unwrap(),
+            );
+        }
     }
 
-    print_color("\nThese console scripts are installed:", Color::DarkBlue);
-    for script in scripts {
-        print_color(&script, Color::DarkCyan);
+    if scripts.is_empty() {
+        print_color("\nNo console scripts are installed.", Color::DarkBlue);
+    } else {
+        print_color("\nThese console scripts are installed:", Color::DarkBlue);
+        for script in scripts {
+            print_color(&script, Color::DarkCyan);
+        }
     }
 }
 
@@ -461,7 +482,7 @@ pub fn find_venv_info(
     cfg_vers: &Version,
     pypackages_dir: &Path,
     pyflow_dir: &Path,
-    cache_dir: &Path,
+    dep_cache_path: &Path,
 ) -> (PathBuf, Version) {
     let venvs = find_venvs(pypackages_dir);
     // The version's explicitly specified; check if an environment for that version
@@ -474,7 +495,8 @@ pub fn find_venv_info(
     let py_vers;
     match compatible_venvs.len() {
         0 => {
-            let vers = py_versions::create_venv(cfg_vers, pypackages_dir, pyflow_dir, cache_dir);
+            let vers =
+                py_versions::create_venv(cfg_vers, pypackages_dir, pyflow_dir, dep_cache_path);
             vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
             py_vers = Version::new_short(vers.major, vers.minor); // Don't include patch.
         }
@@ -639,21 +661,21 @@ pub fn find_best_release(
                 // instead of `requires_python`.
                 // Note that the result of this parse is an any match.
                 if let Ok(constrs) = Constraint::from_wh_py_vers(&rel.python_version) {
-                        let mut compat_py_v = false;
-                        for constr in &constrs {
-                            if constr.is_compatible(python_vers) {
-                                compat_py_v = true;
-                            }
+                    let mut compat_py_v = false;
+                    for constr in &constrs {
+                        if constr.is_compatible(python_vers) {
+                            compat_py_v = true;
                         }
-                        if !compat_py_v {
-                            compatible = false;
-                        }
-                    } else {
-                        (println!(
-                            "Unable to match python version from python_version: {}",
-                            &rel.python_version
-                        ))
-                    };
+                    }
+                    if !compat_py_v {
+                        compatible = false;
+                    }
+                } else {
+                    (println!(
+                        "Unable to match python version from python_version: {}",
+                        &rel.python_version
+                    ))
+                };
 
                 if compatible {
                     compatible_releases.push(rel.clone());

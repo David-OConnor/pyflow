@@ -86,7 +86,7 @@ Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Exampl
     #[structopt(name = "package")]
     Package {
         #[structopt(name = "extras")]
-        extras: Vec<String>, // todo: rename features?
+        extras: Vec<String>,
     },
     /// Publish to `pypi`
     #[structopt(name = "publish")]
@@ -155,6 +155,42 @@ pub struct Config {
     python_requires: Option<String>,
 }
 
+/// Reduce repetition between reqs and dev reqs when populating reqs of path reqs.
+fn pop_reqs_helper(reqs: &[Req], dev: bool) -> Vec<Req> {
+    let mut result = vec![];
+    for req in reqs.iter().filter(|r| r.path.is_some()) {
+        let req_path = PathBuf::from(req.path.clone().unwrap());
+        let pyproj = req_path.join("pyproject.toml");
+        let req_txt = req_path.join("requirements.txt");
+        let pipfile = req_path.join("Pipfile");
+
+        let mut dummy_cfg = Config::default();
+
+        if req_txt.exists() {
+            files::parse_req_dot_text(&mut dummy_cfg, &req_txt);
+        }
+
+        if pipfile.exists() {
+            files::parse_pipfile(&mut dummy_cfg, &pipfile);
+        }
+
+        if dev {
+            result.append(&mut dummy_cfg.dev_reqs);
+        } else {
+            result.append(&mut dummy_cfg.reqs);
+        }
+
+        // We don't parse `setup.py`, since it involves running arbitrary Python code.
+
+        if pyproj.exists() {
+            let mut req_cfg = Config::from_file(&PathBuf::from(&pyproj))
+                .unwrap_or_else(|| panic!("Problem parsing`pyproject.toml`: {:?}", &pyproj));
+            result.append(&mut req_cfg.reqs)
+        }
+    }
+    result
+}
+
 impl Config {
     /// Helper fn to prevent repetition
     fn parse_deps(deps: HashMap<String, files::DepComponentWrapper>) -> Vec<Req> {
@@ -179,14 +215,17 @@ impl Config {
                 }
                 files::DepComponentWrapper::B(subdata) => {
                     constraints = match subdata.constrs {
-                        Some(constrs) => if let Ok(c) = Constraint::from_str_multiple(&constrs) {
-                            c } else {
+                        Some(constrs) => {
+                            if let Ok(c) = Constraint::from_str_multiple(&constrs) {
+                                c
+                            } else {
                                 abort(&format!(
                                     "Problem parsing constraints in `pyproject.toml`: {}",
                                     &constrs
                                 ));
                                 unreachable!()
                             }
+                        }
                         None => vec![],
                     };
 
@@ -224,10 +263,10 @@ impl Config {
 
     /// Pull config data from `pyproject.toml`. We use this to deserialize things like Versions
     /// and requirements.
-    fn from_file(filename: &str) -> Option<Self> {
+    fn from_file(path: &Path) -> Option<Self> {
         // todo: Lots of tweaks and QC could be done re what fields to parse, and how best to
         // todo parse and store them.
-        let toml_str = match fs::read_to_string(filename) {
+        let toml_str = match fs::read_to_string(path) {
             Ok(d) => d,
             Err(_) => return None,
         };
@@ -405,6 +444,13 @@ impl Config {
         Some(result)
     }
 
+    /// For reqs of `path` type, add their sub-reqs by parsing `setup.py` or `pyproject.toml`.
+    fn populate_path_subreqs(&mut self) {
+        self.reqs.append(&mut pop_reqs_helper(&self.reqs, false));
+        self.dev_reqs
+            .append(&mut pop_reqs_helper(&self.dev_reqs, true));
+    }
+
     /// Create a new `pyproject.toml` file.
     fn write_file(&self, filename: &str) {
         let file = PathBuf::from(filename);
@@ -551,10 +597,7 @@ fn parse_lockpack_rename(rename: &str) -> (u32, String) {
 
 /// Install/uninstall deps as required from the passed list, and re-write the lock file.
 fn sync_deps(
-    bin_path: &Path,
-    lib_path: &Path,
-    script_path: &Path,
-    cache_path: &Path,
+    paths: &util::Paths,
     lock_packs: &[LockPackage],
     dont_uninstall: &[String],
     installed: &[(String, Version, Vec<String>)],
@@ -631,7 +674,7 @@ fn sync_deps(
 
     for (name, version) in &to_uninstall {
         // todo: Deal with renamed. Currently won't work correctly with them.
-        install::uninstall(name, version, lib_path)
+        install::uninstall(name, version, &paths.lib)
     }
 
     for ((name, version), rename) in &to_install {
@@ -674,10 +717,7 @@ fn sync_deps(
             &best_release.url,
             &best_release.filename,
             &best_release.digests.sha256,
-            lib_path,
-            bin_path,
-            script_path,
-            cache_path,
+            paths,
             package_type,
             rename,
         )
@@ -692,7 +732,7 @@ fn sync_deps(
         if let Some((id, new)) = rename {
             // Rename in the renamed package
 
-            let renamed_path = &lib_path.join(util::standardize_name(new));
+            let renamed_path = &paths.lib.join(util::standardize_name(new));
 
             util::wait_for_dirs(&[renamed_path.clone()]).expect("Problem creating renamed path");
             install::rename_package_files(renamed_path, name, new);
@@ -703,14 +743,16 @@ fn sync_deps(
                 .find(|lp| lp.id == *id)
                 .expect("Can't find parent calling renamed package");
             install::rename_package_files(
-                &lib_path.join(util::standardize_name(&parent.name)),
+                &paths.lib.join(util::standardize_name(&parent.name)),
                 name,
                 new,
             );
 
             // todo: Handle this more generally, in case we don't have proper semvar dist-info paths.
             install::rename_metadata(
-                &lib_path.join(&format!("{}-{}.dist-info", name, version.to_string2())),
+                &paths
+                    .lib
+                    .join(&format!("{}-{}.dist-info", name, version.to_string2())),
                 name,
                 new,
             );
@@ -776,7 +818,7 @@ fn run_cli_tool(
             ];
 
             args_to_pass.append(&mut specified_args);
-            if commands::run_python(bin_path, lib_path, &args_to_pass).is_err() {
+            if commands::run_python(bin_path, &[lib_path.to_owned()], &args_to_pass).is_err() {
                 abort(&abort_msg);
             }
         } else {
@@ -802,7 +844,7 @@ fn run_cli_tool(
         .to_owned()];
 
     args_to_pass.append(&mut specified_args);
-    if commands::run_python(bin_path, lib_path, &args_to_pass).is_err() {
+    if commands::run_python(bin_path, &[lib_path.to_owned()], &args_to_pass).is_err() {
         abort(&abort_msg);
     }
 }
@@ -842,7 +884,7 @@ fn find_deps_from_script(file_path: &Path) -> Vec<String> {
 /// todo perhaps with an id in a comment at the top of a file
 fn run_script(
     script_env_path: &Path,
-    cache_path: &Path,
+    dep_cache_path: &Path,
     os: util::Os,
     args: &mut Vec<String>,
     pyflow_dir: &Path,
@@ -903,12 +945,19 @@ fn run_script(
     // todo DRY
     let pypackages_dir = env_path.join("__pypackages__");
     let (vers_path, py_vers) =
-        util::find_venv_info(&cfg_vers, &pypackages_dir, pyflow_dir, cache_path);
+        util::find_venv_info(&cfg_vers, &pypackages_dir, pyflow_dir, dep_cache_path);
 
     let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
     let script_path = vers_path.join("bin");
     let lock_path = env_path.join("pyproject.lock");
+
+    let paths = util::Paths {
+        bin: bin_path,
+        lib: lib_path,
+        entry_pt: script_path,
+        cache: dep_cache_path.to_owned(),
+    };
 
     let deps = find_deps_from_script(&PathBuf::from(&filename));
 
@@ -941,10 +990,7 @@ fn run_script(
         .collect();
 
     sync(
-        &bin_path,
-        &lib_path,
-        &script_path,
-        cache_path,
+        &paths,
         &lockpacks,
         &reqs,
         &[],
@@ -954,7 +1000,7 @@ fn run_script(
         &lock_path,
     );
 
-    if commands::run_python(&bin_path, &lib_path, args).is_err() {
+    if commands::run_python(&paths.bin, &[paths.lib], args).is_err() {
         abort("Problem running this script")
     };
 }
@@ -962,10 +1008,7 @@ fn run_script(
 /// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
 /// the config and lock files.
 fn sync(
-    bin_path: &Path,
-    lib_path: &Path,
-    script_path: &Path,
-    cache_path: &Path,
+    paths: &util::Paths,
     lockpacks: &[LockPackage],
     reqs: &[Req],
     dev_reqs: &[Req],
@@ -974,7 +1017,7 @@ fn sync(
     py_vers: &Version,
     lock_path: &Path,
 ) {
-    let installed = util::find_installed(lib_path);
+    let installed = util::find_installed(&paths.lib);
     // We control the lock format, so this regex will always match
     let dep_re = Regex::new(r"^(.*?)\s(.*)\s.*$").unwrap();
 
@@ -1087,10 +1130,7 @@ fn sync(
     // Now that we've confirmed or modified the lock file, we're ready to sync installed
     // depenencies with it.
     sync_deps(
-        bin_path,
-        lib_path,
-        script_path,
-        cache_path,
+        paths,
         &updated_lock_packs,
         dont_uninstall,
         &installed,
@@ -1174,7 +1214,7 @@ fn main() {
         .to_owned()
         .join("pyflow");
 
-    let cache_path = pyflow_path.join("dependency-cache");
+    let dep_cache_path = pyflow_path.join("dependency-cache");
     let script_env_path = pyflow_path.join("script-envs");
     // git_cache_path is where we clone git repos into, to build wheels from
     let git_path = pyflow_path.join("git");
@@ -1203,7 +1243,13 @@ fn main() {
 
     // Run this before parsing the config.
     if let SubCommand::Script { mut args } = subcmd {
-        run_script(&script_env_path, &cache_path, os, &mut args, &pyflow_path);
+        run_script(
+            &script_env_path,
+            &dep_cache_path,
+            os,
+            &mut args,
+            &pyflow_path,
+        );
         return;
     }
 
@@ -1220,13 +1266,14 @@ fn main() {
         return;
     }
 
-    let mut cfg = Config::from_file(cfg_filename).unwrap_or_default();
+    let mut cfg = Config::from_file(&PathBuf::from(cfg_filename)).unwrap_or_default();
+    cfg.populate_path_subreqs();
 
     // Run subcommands that don't require info about the environment.
     match subcmd {
         SubCommand::Init {} => {
-            files::parse_req_dot_text(&mut cfg);
-            files::parse_pipfile(&mut cfg);
+            files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
+            files::parse_pipfile(&mut cfg, &PathBuf::from("Pipfile"));
 
             if PathBuf::from(cfg_filename).exists() {
                 abort("pyproject.toml already exists - not overwriting.")
@@ -1262,7 +1309,7 @@ fn main() {
             return;
         }
         SubCommand::Clear {} => {
-            clear(&pyflow_path, &cache_path, &script_env_path);
+            clear(&pyflow_path, &dep_cache_path, &script_env_path);
             return;
         }
         SubCommand::List => {
@@ -1309,11 +1356,24 @@ fn main() {
     };
 
     let (vers_path, py_vers) =
-        util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_path, &cache_path);
+        util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_path, &dep_cache_path);
 
-    let lib_path = vers_path.join("lib");
-    let script_path = vers_path.join("bin");
-    let bin_path = util::find_bin_path(&vers_path);
+    let paths = util::Paths {
+        bin: util::find_bin_path(&vers_path),
+        lib: vers_path.join("lib"),
+        entry_pt: vers_path.join("bin"),
+        cache: dep_cache_path,
+    };
+
+    // Add all path reqs to the PYTHONPATH; this is the way we make these packages accessible when
+    // running `pyflow`.
+    let mut pythonpath = vec![paths.lib.clone()];
+    for r in cfg.reqs.iter().filter(|r| r.path.is_some()) {
+        pythonpath.push(PathBuf::from(r.path.clone().unwrap()));
+    }
+    for r in cfg.dev_reqs.iter().filter(|r| r.path.is_some()) {
+        pythonpath.push(PathBuf::from(r.path.clone().unwrap()));
+    }
 
     let mut found_lock = false;
     let lock = match read_lock(&PathBuf::from(lock_filename)) {
@@ -1350,8 +1410,13 @@ fn main() {
             let mut dont_uninstall: Vec<String> = updated_reqs
                 .clone()
                 .into_iter()
-                .filter(|r| r.git.is_some() || r.path.is_some())
-                .map(|r| r.name)
+                .filter_map(|r| {
+                    if r.git.is_some() || r.path.is_some() {
+                        Some(r.name)
+                    } else {
+                        None
+                    }
+                })
                 .collect();
 
             for r in &up_dev_reqs {
@@ -1367,55 +1432,53 @@ fn main() {
                 // todo: as_ref() would be better than clone, if we can get it working.
                 let mut metadata = install::download_and_install_git(
                     &req.name,
-                    util::GitPath::Git(req.git.clone().unwrap()),
+                    //                    util::GitPath::Git(req.git.clone().unwrap()),
+                    &req.git.clone().unwrap(),
                     &git_path,
-                    &lib_path,
-                    &script_path,
-                    &bin_path,
+                    &paths,
                 );
 
                 git_reqs.append(&mut metadata.requires_dist);
             }
 
-            // todo: lots of DRY between reqs and dev reqs, and git and path
+            // todo: lots of DRY between reqs and dev reqs
             for req in up_dev_reqs.iter().filter(|r| r.git.is_some()) {
                 let mut metadata = install::download_and_install_git(
                     &req.name,
-                    util::GitPath::Git(req.git.clone().unwrap()),
+                    //                    util::GitPath::Git(req.git.clone().unwrap()),
+                    &req.git.clone().unwrap(),
                     &git_path,
-                    &lib_path,
-                    &script_path,
-                    &bin_path,
+                    &paths,
                 );
 
                 git_reqs_dev.append(&mut metadata.requires_dist);
             }
 
-            for req in updated_reqs.iter().filter(|r| r.path.is_some()) {
-                let mut metadata = install::download_and_install_git(
-                    &req.name,
-                    util::GitPath::Path(req.path.clone().unwrap()),
-                    &git_path,
-                    &lib_path,
-                    &script_path,
-                    &bin_path,
-                );
-
-                git_reqs.append(&mut metadata.requires_dist);
-            }
-
-            for req in up_dev_reqs.iter().filter(|r| r.path.is_some()) {
-                let mut metadata = install::download_and_install_git(
-                    &req.name,
-                    util::GitPath::Path(req.path.clone().unwrap()),
-                    &git_path,
-                    &lib_path,
-                    &script_path,
-                    &bin_path,
-                );
-
-                git_reqs.append(&mut metadata.requires_dist);
-            }
+            //            for req in updated_reqs.iter().filter(|r| r.path.is_some()) {
+            //                let mut metadata = install::download_and_install_git(
+            //                    &req.name,
+            //                    util::GitPath::Path(req.path.clone().unwrap()),
+            //                    &git_path,
+            //                    &lib_path,
+            //                    &script_path,
+            //                    &bin_path,
+            //                );
+            //
+            //                git_reqs.append(&mut metadata.requires_dist);
+            //            }
+            //
+            //            for req in up_dev_reqs.iter().filter(|r| r.path.is_some()) {
+            //                let mut metadata = install::download_and_install_git(
+            //                    &req.name,
+            //                    util::GitPath::Path(req.path.clone().unwrap()),
+            //                    &git_path,
+            //                    &lib_path,
+            //                    &script_path,
+            //                    &bin_path,
+            //                );
+            //
+            //                git_reqs.append(&mut metadata.requires_dist);
+            //            }
 
             // We don't pass the git requirement itself, since we've directly installed it,
             // but we do pass its requirements.
@@ -1436,10 +1499,7 @@ fn main() {
             }
 
             sync(
-                &bin_path,
-                &lib_path,
-                &script_path,
-                &cache_path,
+                &paths,
                 &lockpacks,
                 &updated_reqs,
                 &up_dev_reqs,
@@ -1474,10 +1534,7 @@ fn main() {
                 .collect();
 
             sync(
-                &bin_path,
-                &lib_path,
-                &script_path,
-                &cache_path,
+                &paths,
                 &lockpacks,
                 &updated_reqs,
                 &cfg.dev_reqs.clone(),
@@ -1490,22 +1547,25 @@ fn main() {
         }
 
         SubCommand::Python { args } => {
-            if commands::run_python(&bin_path, &lib_path, &args).is_err() {
+            if commands::run_python(&paths.bin, &pythonpath, &args).is_err() {
                 abort("Problem running Python");
             }
         }
         SubCommand::Package { extras } => {
-            build::build(&lockpacks, &bin_path, &lib_path, &cfg, &extras)
+            build::build(&lockpacks, &paths.bin, &paths.lib, &cfg, &extras)
         }
-        SubCommand::Publish {} => build::publish(&bin_path, &cfg),
+        SubCommand::Publish {} => build::publish(&paths.bin, &cfg),
         SubCommand::Run { args } => {
-            run_cli_tool(&lib_path, &bin_path, &vers_path, &cfg, args);
+            run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, args);
         }
-        SubCommand::List {} => util::show_installed(&lib_path),
-        //        SubCommand::Script { mut args } => {
-        ////            let mut args = args2.clone();
-        //            run_script(&script_env_path, &cache_path, os, &mut args);
-        //        }
+        SubCommand::List {} => util::show_installed(
+            &paths.lib,
+            &[cfg.reqs.as_slice(), cfg.dev_reqs.as_slice()]
+                .concat()
+                .into_iter()
+                .filter(|r| r.path.is_some())
+                .collect::<Vec<Req>>(),
+        ),
         _ => (),
     }
 }

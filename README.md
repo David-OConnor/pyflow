@@ -6,7 +6,7 @@
 
 #### *Simple is better than complex* - The Zen of Python
 
-This tool manages Python installations and dependencies.
+Pyflow manages Python installations and dependencies.
 
 ![Demonstration](https://raw.githubusercontent.com/david-oconnor/pyflow/master/demo.gif)
 
@@ -70,7 +70,7 @@ Pyflow's *raison d'être*, but expose stumbling blocks that may frustrate new us
 both when installing and using. Some reasons why this is different:
   
 - It behaves consistently regardless of how your system and Python installations
-are configured.
+are configured, and requires no other installations or config to work properly.
   
 - It automatically manages Python installations and environments. You specify a Python version
  in `pyproject.toml` (if ommitted, it asks), and it ensures that version is used. 
@@ -410,7 +410,9 @@ cargo build --release
 ```
 
 ## Updating
-If installed via `Cargo`, run `cargo install pyflow --force`. If using an installer or 
+- If installed via `Scoop`, run `scoop update pyflow`.
+- If installed via `Cargo`, run `cargo install pyflow --force`. 
+- If using an installer or 
 deb, run the new version's installer or deb. If manually calling a binary, replace it.
 
 ## Contributing

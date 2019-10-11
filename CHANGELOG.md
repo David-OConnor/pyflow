@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.1.7
+- Fixed bugs in `path` dependencies
+
 ## v0.1.6
 - Added installation from local paths and Git repositories
 - Improved error messages and instructions

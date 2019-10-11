@@ -19,7 +19,7 @@ works on 19.04, but not vice-versa)
 1. Run `cargo build --release`, then `cargo rpm build` on Centos 7. (This allows easy installation for Red Hat, Fedora, and CentOs
 users, and binaries built on other OSes appear not to work on these due to OpenSSL issues.
 1. Run `cargo wix` on Windows
-1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`, in order to support `Scoop`.
-1. [How do we update scoop?]
+1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`. 
+1. Updated the version in `snapcraft.yml`. Run `snapcraft` on Ubuntu.
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
 1. Upload the following binaries to the release page: zipped Windows binary, Linux binary, Msi, Deb, Rpm.

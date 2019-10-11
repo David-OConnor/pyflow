@@ -1,6 +1,6 @@
 [package]
 name = "pyflow"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 description = "A modern Python installation and dependency manager"
 license = "MIT"
@@ -28,7 +28,7 @@ reqwest = "^0.9.21"
 ring = "^0.16.9"
 # We disable, by ommission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
 # of `pyflow python`.
-structopt = { version = "0.3.2", default_features = false, features = ["color", "wrap_help", "doc"] }
+structopt = { version = "^0.3.3", default_features = false, features = ["color", "wrap_help", "doc"] }
 serde = {version = "^1.0.101", features = ["derive"]}
 tar = "^0.4.26"
 toml = "^0.5.1"

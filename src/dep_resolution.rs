@@ -46,7 +46,7 @@ struct WarehouseData {
     urls: Vec<WarehouseRelease>,
 }
 
-/// Format a name based on how it's listed on PyPi. Ie capitalize or convert - to _'
+/// Format a name based on how it's listed on `PyPi`. Ie capitalize or convert - to _'
 /// a required.
 fn format_name(name: &str, cache: &HashMap<String, (String, Version, Vec<Version>)>) -> String {
     match cache.get(name) {
@@ -71,9 +71,17 @@ pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), D
     let all_versions = data
         .releases
         .keys()
-        .filter(|v| Version::from_str(v).is_ok())
+        .filter_map(|v| {
+            if Version::from_str(v).is_ok() {
+                Some(
+                    Version::from_str(v)
+                        .expect("Trouble parsing version while getting version info"),
+                )
+            } else {
+                None
+            }
+        })
         // todo: way to do this in one step, like filter_map?
-        .map(|v| Version::from_str(v).expect("Trouble parsing version while getting version info"))
         .collect();
 
     match Version::from_str(&data.info.version) {
@@ -127,8 +135,13 @@ impl ReqCache {
         self.requires_dist
             .iter()
             // todo: way to filter ok?
-            .filter(|vr| Req::from_str(vr, true).is_ok())
-            .map(|vr| Req::from_str(vr, true).unwrap())
+            .filter_map(|vr| {
+                if Req::from_str(vr, true).is_ok() {
+                    Some(Req::from_str(vr, true).unwrap())
+                } else {
+                    None
+                }
+            })
             //            .expect("Problem parsing req: ")  // todo how do I do this?
             .collect()
     }
@@ -167,7 +180,7 @@ fn get_req_cache_multiple(
 /// Helper fn for `guess_graph`.
 fn is_compat(constraints: &[Constraint], vers: &Version) -> bool {
     for constraint in constraints.iter() {
-        if !constraint.is_compatible(&vers) {
+        if !constraint.is_compatible(vers) {
             return false;
         }
     }
@@ -188,19 +201,16 @@ fn fetch_req_data(
         let (_, latest_version, all_versions) = match vers_cache.get(&req.name) {
             Some(c) => c.clone(),
             None => {
-                match get_version_info(&req.name) {
-                    Ok(data) => {
-                        vers_cache.insert(req.name.clone(), data.clone());
-                        data
-                    }
-                    Err(_) => {
-                        util::abort(&format!(
-                            "Can't get version info for the dependency `{}`. \
-                             Is it spelled correctly? Is the internet connection ok?",
-                            &req.name
-                        ));
-                        ("".to_string(), Version::new(0, 0, 0), vec![]) // match-compatibility placeholder
-                    }
+                if let Ok(data) = get_version_info(&req.name) {
+                    vers_cache.insert(req.name.clone(), data.clone());
+                    data
+                } else {
+                    util::abort(&format!(
+                        "Can't get version info for the dependency `{}`. \
+                         Is it spelled correctly? Is the internet connection ok?",
+                        &req.name
+                    ));
+                    ("".to_string(), Version::new(0, 0, 0), vec![]) // match-compatibility placeholder
                 }
             }
         };
@@ -308,15 +318,14 @@ fn guess_graph(
     }
 
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
-    let mut query_data = match fetch_req_data(&non_locked_reqs, vers_cache) {
-        Ok(d) => d,
-        Err(_) => {
-            util::abort(&format!(
-                "Problem getting dependency data - this is\
-                 likely a bug in the cacheing process. Please try again in a few minutes."
-            ));
-            unreachable!()
-        }
+    let mut query_data = if let Ok(d) = fetch_req_data(&non_locked_reqs, vers_cache) {
+        d
+    } else {
+        util::abort(
+            "Problem getting dependency data - this is\
+             likely a bug in the cacheing process. Please try again in a few minutes.",
+        );
+        unreachable!()
     };
 
     // Now add info from lock packs for data we didn't query. The purpose of passing locks
@@ -359,13 +368,18 @@ fn guess_graph(
         let deps: Vec<Dependency> = query_result
             .into_iter()
             // Our query data should already be compat, but QC here.
-            .filter(|r| is_compat(&req.constraints, &Version::from_str(&r.version).unwrap()))
-            .map(|r| Dependency {
-                id: result.iter().map(|d| d.id).max().unwrap_or(0) + 1,
-                name: req.name.to_owned(),
-                version: Version::from_str(&r.version).expect("Problem parsing vers"),
-                reqs: r.reqs(),
-                parent: parent_id,
+            .filter_map(|r| {
+                if is_compat(&req.constraints, &Version::from_str(&r.version).unwrap()) {
+                    Some(Dependency {
+                        id: result.iter().map(|d| d.id).max().unwrap_or(0) + 1,
+                        name: req.name.to_owned(),
+                        version: Version::from_str(&r.version).expect("Problem parsing vers"),
+                        reqs: r.reqs(),
+                        parent: parent_id,
+                    })
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -385,7 +399,7 @@ fn guess_graph(
             &newest_compat.reqs,
             locked,
             os,
-            &req.install_with_extras.as_ref().unwrap_or(&vec![]),
+            req.install_with_extras.as_ref().unwrap_or(&vec![]),
             py_vers,
             result,
             cache,
@@ -463,10 +477,10 @@ fn make_renamed_packs(
     // We were unable to resolve using the newest version; add and rename packages.
     for (i, dep) in deps.iter().enumerate() {
         // Don't rename the first one.
-        let rename = if i != 0 {
-            Rename::Yes(dep.parent, dep.id, format!("{}_renamed_{}", dep.name, i))
-        } else {
+        let rename = if i == 0 {
             Rename::No
+        } else {
+            Rename::Yes(dep.parent, dep.id, format!("{}_renamed_{}", dep.name, i))
         };
 
         result.push(Package {
@@ -490,15 +504,18 @@ fn assign_subdeps(packages: &mut Vec<Package>, updated_ids: &HashMap<u32, u32>) 
     for package in packages.iter_mut() {
         let mut children: Vec<(u32, String, Version)> = packs2
             .iter()
-            .filter(|p| {
-                // If there were multiple instances of this dep, the parent id may have been updated.
+            .filter_map(|p| {
+                // If there wee multiple instances of this dep, the parent id may have been updated.
                 let parent_id = match updated_ids.get(&p.parent) {
                     Some(updated_parent) => *updated_parent,
                     None => p.parent,
                 };
-                parent_id == package.id
+                if parent_id == package.id {
+                    Some((p.id, p.name.clone(), p.version))
+                } else {
+                    None
+                }
             })
-            .map(|child| (child.id, child.name.clone(), child.version))
             .collect();
         package.deps.append(&mut children);
     }
@@ -536,7 +553,7 @@ pub fn resolve(
     }
 
     let mut by_name: HashMap<String, Vec<Dependency>> = HashMap::new();
-    for mut dep in result.clone().into_iter() {
+    for mut dep in result.clone() {
         // The formatted name may be different from the pypi one. Eg `IPython` vice `ipython`.
         let fmtd_name = format_name(&dep.name, &version_cache);
         dep.name = fmtd_name.clone();
@@ -557,7 +574,7 @@ pub fn resolve(
     let mut updated_ids = HashMap::new();
     let mut result_cleaned = vec![];
     for (name, deps) in &by_name {
-        let fmtd_name = format_name(&name, &version_cache);
+        let fmtd_name = format_name(name, &version_cache);
 
         if deps.len() == 1 {
             // This dep is only specified once; no need to resolve conflicts.
@@ -573,13 +590,13 @@ pub fn resolve(
             });
         } else if deps.len() > 1 {
             // Find what constraints are driving each dep that shares a name.
-            let constraints = find_constraints(reqs, &result, &deps);
+            let constraints = find_constraints(reqs, &result, deps);
 
             let _names: Vec<String> = deps.iter().map(|d| d.version.to_string()).collect();
             let inter = dep_types::intersection_many(&constraints);
 
             if inter.is_empty() {
-                result_cleaned.append(&mut make_renamed_packs(&version_cache, &deps, &fmtd_name));
+                result_cleaned.append(&mut make_renamed_packs(&version_cache, deps, &fmtd_name));
                 continue;
             }
 
@@ -605,80 +622,83 @@ pub fn resolve(
                 .max_by(|a, b| a.version.cmp(&b.version));
 
             if let Some(best) = newest_compatible {
-                    result_cleaned.push(Package {
-                        id: best.id,
-                        parent: best.parent,
-                        name: fmtd_name,
-                        version: best.version,
-                        deps: vec![], // to be filled in after resolution
-                        rename: Rename::No,
-                    });
+                result_cleaned.push(Package {
+                    id: best.id,
+                    parent: best.parent,
+                    name: fmtd_name,
+                    version: best.version,
+                    deps: vec![], // to be filled in after resolution
+                    rename: Rename::No,
+                });
 
-                    // Indicate we need to update the parent. We can't do it here, since
-                    // we don't know if we're pr
-                    // ocessed the parent[s] yet. Not doing this will
-                    // result in incorrect dependencies listed in lock packs.
-                    for dep in deps {
-                        // note that we push the old ids, so we can update the subdeps with the new versions.
-                        //                        updated_ids.insert(dep.id, best.id).expect("Problem inserting updated id");
-                        updated_ids.insert(dep.id, best.id);
-                    }
+                // Indicate we need to update the parent. We can't do it here, since
+                // we don't know if we're pr
+                // ocessed the parent[s] yet. Not doing this will
+                // result in incorrect dependencies listed in lock packs.
+                for dep in deps {
+                    // note that we push the old ids, so we can update the subdeps with the new versions.
+                    //                        updated_ids.insert(dep.id, best.id).expect("Problem inserting updated id");
+                    updated_ids.insert(dep.id, best.id);
+                }
+            } else {
+                // We consider the possibility there's a compatible version
+                // that wasn't one of the best-per-req we queried.
+                println!("⛏️ Digging deeper to resolve dependencies for {}...", name);
+
+                // I think we should query with the raw name, not fmted?
+                let versions = &version_cache.get(name).unwrap().2;
+
+                if versions.is_empty() {
+                    result_cleaned.append(&mut make_renamed_packs(
+                        &version_cache,
+                        deps,
+                        //                            &result,
+                        &fmtd_name,
+                    ));
+                    continue;
                 }
 
-                else {
-                    // We consider the possibility there's a compatible version
-                    // that wasn't one of the best-per-req we queried.
-                    println!("⛏️ Digging deeper to resolve dependencies for {}...", name);
+                // Generate dependencies here for all avail versions.
+                let unresolved_deps: Vec<Dependency> = versions
+                    .iter()
+                    .filter_map(|vers| {
+                        if inter.iter().any(|i| i.0 <= *vers && *vers <= i.1) {
+                            Some(Dependency {
+                                id: 0, // placeholder; we'll assign an id to the one we pick.
+                                name: fmtd_name.clone(),
+                                version: *vers,
+                                reqs: vec![], // todo
+                                parent: 0,    // todo
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
 
-                    // I think we should query with the raw name, not fmted?
-                    let versions = &version_cache.get(name).unwrap().2;
+                let mut newest_unresolved = unresolved_deps
+                    .into_iter()
+                    .max_by(|a, b| a.version.cmp(&b.version))
+                    .unwrap();
 
-                    if versions.is_empty() {
-                        result_cleaned.append(&mut make_renamed_packs(
-                            &version_cache,
-                            deps,
-                            //                            &result,
-                            &fmtd_name,
-                        ));
-                        continue;
-                    }
+                newest_unresolved.id = result.iter().map(|d| d.id).max().unwrap_or(0) + 1;
 
-                    // Generate dependencies here for all avail versions.
-                    let unresolved_deps: Vec<Dependency> = versions
-                        .iter()
-                        .filter(|vers| inter.iter().any(|i| i.0 <= **vers && **vers <= i.1))
-                        .map(|vers| Dependency {
-                            id: 0, // placeholder; we'll assign an id to the one we pick.
-                            name: fmtd_name.clone(),
-                            version: *vers,
-                            reqs: vec![], // todo
-                            parent: 0,    // todo
-                        })
-                        .collect();
+                result_cleaned.push(Package {
+                    id: newest_unresolved.id,
+                    parent: newest_unresolved.parent,
+                    name: fmtd_name,
+                    version: newest_unresolved.version,
+                    deps: vec![], // to be filled in after resolution
+                    rename: Rename::No,
+                });
 
-                    let mut newest_unresolved = unresolved_deps
-                        .into_iter()
-                        .max_by(|a, b| a.version.cmp(&b.version))
-                        .unwrap();
+                // todo: Do a check on newest_unresolved! If fails, execute renamed plan
 
-                    newest_unresolved.id = result.iter().map(|d| d.id).max().unwrap_or(0) + 1;
-
-                    result_cleaned.push(Package {
-                        id: newest_unresolved.id,
-                        parent: newest_unresolved.parent,
-                        name: fmtd_name,
-                        version: newest_unresolved.version,
-                        deps: vec![], // to be filled in after resolution
-                        rename: Rename::No,
-                    });
-
-                    // todo: Do a check on newest_unresolved! If fails, execute renamed plan
-
-                    for dep in deps {
-                        // note that we push the old ids, so we can update the subdeps with the new versions.
-                        updated_ids.insert(dep.id, newest_unresolved.id);
-                    }
+                for dep in deps {
+                    // note that we push the old ids, so we can update the subdeps with the new versions.
+                    updated_ids.insert(dep.id, newest_unresolved.id);
                 }
+            }
         } else {
             panic!("We shouldn't be seeing this!")
         }

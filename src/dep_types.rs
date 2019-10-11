@@ -155,7 +155,7 @@ impl Version {
         }
     }
 
-    pub fn _max() -> Self {
+    pub const fn _max() -> Self {
         Self::new(MAX_VER, 0, 0)
     }
 
@@ -257,10 +257,10 @@ impl Ord for Version {
             self.extra_num
                 .unwrap_or(0)
                 .cmp(&other.extra_num.unwrap_or(0))
-        } else if self_mod.0 != other_mod.0 {
-            self_mod.0.cmp(&other_mod.0)
-        } else {
+        } else if self_mod.0 == other_mod.0 {
             self_mod.1.cmp(&other_mod.1)
+        } else {
+            self_mod.0.cmp(&other_mod.0)
         }
     }
 }
@@ -325,13 +325,13 @@ impl ToString for ReqType {
     fn to_string(&self) -> String {
         match self {
             Self::Exact => "==".into(),
-             Self::Gte => ">=".into(),
-             Self::Lte => "<=".into(),
-             Self::Gt => ">".into(),
-             Self::Lt => "<".into(),
+            Self::Gte => ">=".into(),
+            Self::Lte => "<=".into(),
+            Self::Gt => ">".into(),
+            Self::Lt => "<".into(),
             Self::Ne => "!=".into(),
-             Self::Caret => "^".into(),
-             Self::Tilde => "~".into(),
+            Self::Caret => "^".into(),
+            Self::Tilde => "~".into(),
         }
     }
 }
@@ -452,7 +452,8 @@ impl Constraint {
         Ok(result)
     }
 
-    pub fn to_string(&self, ommit_equals: bool, pip_style: bool) -> String {
+    /// Called `to_string2` to avoid shadowing `Display`
+    pub fn to_string2(&self, ommit_equals: bool, pip_style: bool) -> String {
         // ommit_equals indicates we dont' want to add any type if it's exact. Eg in config files.
         // pip_style means that ^ is transformed to ^=, and ~ to ~=
         let mut type_str = if ommit_equals && self.type_ == ReqType::Exact {
@@ -615,12 +616,12 @@ pub fn intersection_many(constrs: &[Constraint]) -> Vec<(Version, Version)> {
         let rng = &constr.compatible_range();
         let rng2;
         if let ReqType::Ne = constr.type_ {
-                rng2 = (Version::new(0, 0, 0), Version::_max());
-                // We'll remove nes at the end.
-                nes.push(constr.version);
-            } else {
-                rng2 = rng[0]; // If not Ne, there will be exactly 1.
-            }
+            rng2 = (Version::new(0, 0, 0), Version::_max());
+            // We'll remove nes at the end.
+            nes.push(constr.version);
+        } else {
+            rng2 = rng[0]; // If not Ne, there will be exactly 1.
+        }
         ranges.push(rng2);
     }
     // todo: We haven't included nes!
@@ -841,7 +842,7 @@ impl Req {
                 format!(
                     r#"{} = "{}""#,
                     name,
-                    Constraint::new(ReqType::Caret, latest_version).to_string(true, false)
+                    Constraint::new(ReqType::Caret, latest_version).to_string2(true, false)
                 )
             }
             _ => format!(
@@ -849,7 +850,7 @@ impl Req {
                 self.name,
                 self.constraints
                     .iter()
-                    .map(|r| r.to_string(true, false))
+                    .map(|r| r.to_string2(true, false))
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
@@ -863,7 +864,7 @@ impl Req {
             self.name,
             self.constraints
                 .iter()
-                .map(|c| c.to_string(false, true))
+                .map(|c| c.to_string2(false, true))
                 .collect::<Vec<String>>()
                 .join(",")
         )

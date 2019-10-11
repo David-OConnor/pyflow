@@ -1,8 +1,10 @@
 use crate::util;
 use regex::Regex;
-//use std::process::Stdio;
 use std::{error::Error, fmt};
-use std::{path::Path, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 #[derive(Debug)]
 struct _ExecutionError {
@@ -100,8 +102,12 @@ pub fn create_venv2(py_alias: &Path, lib_path: &Path, name: &str) -> Result<(), 
     Ok(())
 }
 
-pub fn run_python(bin_path: &Path, lib_path: &Path, args: &[String]) -> Result<(), Box<dyn Error>> {
-    util::set_pythonpath(lib_path);
+pub fn run_python(
+    bin_path: &Path,
+    lib_paths: &[PathBuf],
+    args: &[String],
+) -> Result<(), Box<dyn Error>> {
+    util::set_pythonpath(lib_paths);
     Command::new(bin_path.join("python")).args(args).status()?;
     Ok(())
 }

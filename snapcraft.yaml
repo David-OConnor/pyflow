@@ -1,0 +1,28 @@
+name: pyflow
+version: 0.1.6
+summary: A Python
+description: |
+  Pyflow manages Python installations and dependencies.
+
+  **Goals**: Make using and publishing Python projects as simple as possible. Actively
+  managing Python environments shouldn't be required to use dependencies safely. We're attempting
+  to fix each stumbling block in the Python workflow, so that it's as elegant
+  as the language itself.
+
+  You don't need Python or any other tools installed to use Pyflow.
+
+  It runs standalone scripts in their
+  own environments with no config, and project functions directly from the CLI.
+
+  It implements [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
+  and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and supports Python ≥ 3.4.
+confinement: devmode
+base: core18
+parts:
+  pyflow:
+    plugin: rust
+    source: .
+
+apps:
+  pyflow:
+    command: target/release/pyflow

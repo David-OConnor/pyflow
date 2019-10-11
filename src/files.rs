@@ -163,6 +163,7 @@ fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
 
     let mut insertion_pt = dep_start;
     if dep_start != 0 {
+        #[allow(clippy::needless_range_loop)]
         for i in dep_start..=dep_end {
             let line = lines_vec[i];
             if !line.is_empty() {
@@ -173,6 +174,7 @@ fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
 
     let mut dev_insertion_pt = dev_dep_start;
     if dev_dep_start != 0 {
+        #[allow(clippy::needless_range_loop)]
         for i in dev_dep_start..=dev_dep_end {
             let line = lines_vec[i];
             if !line.is_empty() {
@@ -307,8 +309,8 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
         .expect("Unable to write to pyproject.toml while attempting to add a dependency");
 }
 
-pub fn parse_req_dot_text(cfg: &mut Config) {
-    let file = match fs::File::open("requirements.txt") {
+pub fn parse_req_dot_text(cfg: &mut Config, path: &Path) {
+    let file = match fs::File::open(path) {
         Ok(f) => f,
         Err(_) => return,
     };
@@ -318,10 +320,10 @@ pub fn parse_req_dot_text(cfg: &mut Config) {
             match Req::from_pip_str(&l) {
                 Some(r) => {
                     cfg.reqs.push(r.clone());
-                    util::print_color(
-                        &format!("Added {} from requirements.txt", r.name),
-                        Color::Green,
-                    )
+                    //                    util::print_color(
+                    //                        &format!("Added {} from requirements.txt", r.name),
+                    //                        Color::Green,
+                    //                    )
                 }
                 None => util::print_color(
                     &format!("Problem parsing {} from requirements.txt", l),
@@ -338,8 +340,8 @@ fn key_re(key: &str) -> Regex {
 }
 
 // todo: Dry from config parsing!!
-pub fn parse_pipfile(cfg: &mut Config) {
-    let file = match fs::File::open("Pipfile") {
+pub fn parse_pipfile(cfg: &mut Config, path: &Path) {
+    let file = match fs::File::open(path) {
         Ok(f) => f,
         Err(_) => return,
     };

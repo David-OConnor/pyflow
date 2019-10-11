@@ -10,6 +10,7 @@ use std::{fmt, fs, io, path::Path, path::PathBuf};
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
 enum PyVers {
+    V3_8_0,  // either Os
     V3_7_4,  // Either Os
     V3_6_9,  // Linux
     V3_6_8,  // Win
@@ -70,6 +71,13 @@ impl From<(Version, Os)> for PyVers {
                     unreachable!()
                 }
             },
+            8 => match v_o.1 {
+                Os::Windows | Os::Ubuntu | Os::Centos => Self::V3_8_0,
+                _ => {
+                    abort_helper("3.8", "Mac");
+                    unreachable!()
+                }
+            },
             _ => {
                 util::abort(unsupported);
                 unreachable!()
@@ -81,6 +89,7 @@ impl From<(Version, Os)> for PyVers {
 impl ToString for PyVers {
     fn to_string(&self) -> String {
         match self {
+            Self::V3_8_0 => "3.8.0".into(),
             Self::V3_7_4 => "3.7.4".into(),
             Self::V3_6_9 => "3.6.9".into(),
             Self::V3_6_8 => "3.6.8".into(),
@@ -94,6 +103,7 @@ impl ToString for PyVers {
 impl PyVers {
     fn to_vers(self) -> Version {
         match self {
+            Self::V3_8_0 => Version::new(3, 8, 0),
             Self::V3_7_4 => Version::new(3, 7, 4),
             Self::V3_6_9 => Version::new(3, 6, 9),
             Self::V3_6_8 => Version::new(3, 6, 8),
@@ -131,21 +141,6 @@ impl fmt::Display for Os {
         )
     }
 }
-
-//impl FromStr for Os {
-//    type Err = crate::dep_types::DependencyError;
-//
-//    fn from_str(s: &str) -> Result<Self, Self::Err> {
-//        Ok(match s {
-//            "windows" => Os::Any,
-//            "linux" => Os::Any,
-//            "mac" => Os::Any,
-//            _ => {
-//                     return Err(crate::DependencyError::new(&format!("Problem parsing Os: {}", s)));
-//                }
-//        })
-//    }
-//}
 
 fn download(py_install_path: &Path, version: &Version) {
     // We use the `.xz` format due to its small size compared to `.zip`. On order half the size.
@@ -325,7 +320,7 @@ pub fn create_venv(
     cfg_v: &Version,
     pypackages_dir: &Path,
     pyflow_dir: &Path,
-    cache_path: &Path,
+    dep_cache_path: &Path,
 ) -> Version {
     let os;
     let python_name;
@@ -406,6 +401,7 @@ pub fn create_venv(
         #[cfg(target_os = "linux")]
         {
             match py_ver.unwrap().minor {
+                8 => py_name += ".8",
                 7 => py_name += ".7",
                 6 => py_name += ".6",
                 5 => py_name += ".5",
@@ -471,20 +467,23 @@ pub fn create_venv(
     let venv_lib_path =
         PathBuf::from(lib).join(&format!("python{}.{}", py_ver.major, py_ver.minor));
 
+    let paths = util::Paths {
+        bin: bin_path.clone(),
+        lib: vers_path
+            .join(".venv")
+            .join(venv_lib_path)
+            .join("site-packages"),
+        entry_pt: bin_path,
+        cache: dep_cache_path.to_owned(),
+    };
+
     install::download_and_install_package(
         "wheel",
         &Version::new(0, 33, 6),
         wheel_url,
         "wheel-0.33.6-py2.py3-none-any.whl",
         "f4da1763d3becf2e2cd92a14a7c920f0f00eca30fdde9ea992c836685b9faf28",
-        // todo lib too (not 64)?
-        &vers_path
-            .join(".venv")
-            .join(venv_lib_path)
-            .join("site-packages"),
-        &bin_path,
-        &bin_path,
-        cache_path,
+        &paths,
         install::PackageType::Wheel,
         &None,
     )
