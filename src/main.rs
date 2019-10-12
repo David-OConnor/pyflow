@@ -1384,6 +1384,8 @@ fn main() {
         Err(_) => Lock::default(),
     };
 
+
+
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
 
     // Now handle subcommands that require info about the environment

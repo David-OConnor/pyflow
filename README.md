@@ -26,17 +26,17 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 ## Installation
 - **Windows** - Download and run 
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.6/pyflow-0.1.6-x86_64.msi).
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.7/pyflow-0.1.7-x86_64.msi).
 Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 
 - **Ubuntu or Debian** - Download and run 
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.6/pyflow_0.1.6_amd64.deb).
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.7/pyflow_0.1.7_amd64.deb).
 
 - **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run 
-[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.1.6/pyflow-0.1.6.x86_64.rpm).
+[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.1.7/pyflow-0.1.7.x86_64.rpm).
 
 - **A different Linux distro** - Download this 
-[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.6/pyflow)
+[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.7/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
 - **Mac** - Build from source using the instructions near the bottom of this page,
@@ -70,7 +70,7 @@ Pyflow's *raison d'être*, but expose stumbling blocks that may frustrate new us
 both when installing and using. Some reasons why this is different:
   
 - It behaves consistently regardless of how your system and Python installations
-are configured, and requires no other installations or config to work properly.
+are configured.
   
 - It automatically manages Python installations and environments. You specify a Python version
  in `pyproject.toml` (if ommitted, it asks), and it ensures that version is used. 
@@ -218,7 +218,8 @@ ipython = { version = "^7.7.0", extras = ["qtconsole"] }
 To install from a local pathinstead of `pypi`, use syntax like this:
 ```toml
 [tool.pyflow.dependencies]
-numpy= { path = "../numpy" }
+# packagename = { path = "path-to-package"}
+numpy = { path = "../numpy" }
 ```
 
 To install from a `git` repo, use syntax like this:
@@ -227,7 +228,7 @@ To install from a `git` repo, use syntax like this:
 saturn = { git = "https://github.com/david-oconnor/saturn.git" }  # The trailing `.git` here is optional.
 ```
 
-`git` and `path` dependencies are currently experimental. If you run into problems with them,
+`git`dependencies are currently experimental. If you run into problems with them,
 please submit an issue.
 
 To install a package that includes a `.` in its name, enclose the name in quotes.
@@ -411,6 +412,7 @@ cargo build --release
 
 ## Updating
 - If installed via `Scoop`, run `scoop update pyflow`.
+- If installed via `Snap`, run `snap refresh pyflow`.
 - If installed via `Cargo`, run `cargo install pyflow --force`. 
 - If using an installer or 
 deb, run the new version's installer or deb. If manually calling a binary, replace it.
