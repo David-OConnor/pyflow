@@ -81,12 +81,9 @@ are configured.
 
 - By not using Python to install or run, it remains environment-agnostic. 
 This is important for making setup and use as simple and decison-free as
- possible. It's especially important on Linux, where there may be several versions
-of Python installed, with different versions and access levels. This avoids
-complications, especially for new users. It's common for Python-based CLI tools
+ possible. It's common for Python-based CLI tools
 to not run properly when installed from `pip` due to the `PATH` or user directories
-not being configured in the expected way. Pipenv’s installation 
-instructions are confusing, and may result in it not working correctly.
+not being configured in the expected way.
 
 - Its dependency resolution and locking is faster due to using a cached
 database of dependencies, vice downloading and checking each package, or relying
@@ -215,7 +212,7 @@ If you'd like to an install a dependency with extras, use syntax like this:
 ipython = { version = "^7.7.0", extras = ["qtconsole"] }
 ```
 
-To install from a local pathinstead of `pypi`, use syntax like this:
+To install from a local path instead of `pypi`, use syntax like this:
 ```toml
 [tool.pyflow.dependencies]
 # packagename = { path = "path-to-package"}
@@ -350,10 +347,8 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 
 ## Not-yet-implemented
 - Installing global CLI tools
-- Installing from sources other than `pypi` (eg repos, paths)
 - The lock file is missing some info like hashes
 - Adding a dependency via the CLI with a specific version constraint, or extras.
-- Packaging and publishing projects that use compiled extensions
 - Dealing with multiple-installed-versions of a dependency that uses importlib
 or dynamic imports
 - Install Python on Mac
@@ -402,7 +397,7 @@ black = "^18.0"
 If you’d like to build from source, [download and install Rust]( https://www.rust-lang.org/tools/install),
 clone the repo, and in the repo directory, run `cargo build --release`.
 
-Ie on Linux:
+Ie on linux or Mac:
 ```bash
 curl https://sh.rustup.rs -sSf | sh
 git clone https://github.com/david-oconnor/pyflow.git
@@ -458,9 +453,13 @@ by Steve Dower.
 
 ## Gotchas
 - Make sure `__pypackages__` is in your `.gitignore` file.
-- You may need to set up IDEs to find packages in `__pypackages__`. If using PyCharm, 
-using the tree on the left, right click `__pypackages__/3.x/lib`,
-select `Mark directory as`, `Sources Root`.
+- You may need to set up IDEs to find packages in `__pypackages__`. If using PyCharm:
+`Settings` → `Project` → `Project Interpreter` → `⚙` → `Show All...` → 
+(Select the interpreter, ie `(projname)/__pypackages__/3.x/.venv/bin/python`) → 
+Click the folder-tree icon at the bottom of the pop-out window →
+ Click the + icon at the bottom of the new pop-out window →
+ Navigate to and select `(projname)/__pypackages__/3.x/lib`
+
 - Make sure the `pyflow` binary is accessible in your path. If installing
 via a `deb`, `msi`, or `Cargo`, this should be set up automatically.
 
