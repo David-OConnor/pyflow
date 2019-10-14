@@ -52,3 +52,8 @@ buildflags = ["--release"]
 
 [package.metadata.rpm.targets]
 pyflow = { path = "/usr/bin/pyflow" }
+
+
+[package.metadata.maturin]
+# todo
+classifier = ["Programming Language :: Python"]

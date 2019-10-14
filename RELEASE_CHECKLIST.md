@@ -20,6 +20,7 @@ works on 19.04, but not vice-versa)
 users, and binaries built on other OSes appear not to work on these due to OpenSSL issues.
 1. Run `cargo wix` on Windows
 1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`. 
+1. Run `maturin publish --manylinux off` to publish a pip-installable wheel
 1. Updated the version in `snapcraft.yml`. Run `snapcraft`, `snapcraft login`, then 
 `snapcraft push --release=stable pyflow_x.x.x_amd64.snap` on Ubuntu.
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
