@@ -19,6 +19,7 @@ data-encoding = "^2.1.2"
 directories = "^2.0.2"
 flate2 = "1.0.12"
 fs_extra = "^1.1.0"
+rust-ini = "0.13"
 # Perhaps this will prevent problems between linux distros  // edit: Appears not to.
 #openssl = { version = "^0.10.25", features = ["vendored"] }
 xz2 = "^0.1.6"

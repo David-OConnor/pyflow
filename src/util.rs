@@ -6,6 +6,7 @@ use crate::{
     py_versions,
 };
 use crossterm::{Color, Colored};
+use ini::Ini;
 use regex::Regex;
 use serde::Deserialize;
 use std::io::{self, BufRead, BufReader, Read};
@@ -724,20 +725,16 @@ pub fn get_git_author() -> Vec<String> {
         return vec![];
     }
 
-    let re_name = Regex::new(r"^\s*name\s*=\s*(.*?)\s*$").unwrap();
-    let re_email = Regex::new(r"^\s*email\s*=\s*(.*?)\s*$").unwrap();
-
-    let mut name = "".to_string();
-    let mut email = "".to_string();
-    let data = fs::read_to_string(gitcfg).expect("Problem reading ~/.gitconfig");
-    for line in data.lines() {
-        if let Some(caps) = re_name.captures(line) {
-            name = caps.get(1).unwrap().as_str().into()
-        } else if let Some(caps) = re_email.captures(line) {
-            email = caps.get(1).unwrap().as_str().into()
-        }
+    // Load the gitconfig file and read the [user] values.
+    let conf = Ini::load_from_file(gitcfg).expect("Could not read ~/.gitconfig");
+    let user = conf.section(Some("user".to_owned()));
+    if let Some(user) = user {
+        let name: String = user.get("name").unwrap_or(&String::from("")).to_string();
+        let email: String = user.get("email").unwrap_or(&String::from("")).to_string();
+        vec![format!("{} <{}>", name, email)]
+    } else {
+        vec![]
     }
-    vec![format!("{} <{}>", name, email)]
 }
 
 pub fn find_first_file(path: &Path) -> PathBuf {
