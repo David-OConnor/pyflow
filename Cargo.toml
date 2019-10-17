@@ -22,10 +22,10 @@ fs_extra = "^1.1.0"
 rust-ini = "0.13"
 # Perhaps this will prevent problems between linux distros  // edit: Appears not to.
 #openssl = { version = "^0.10.25", features = ["vendored"] }
+#openssl-sys = "^0.9.27"
 xz2 = "^0.1.6"
 regex = "^1.1.9"
-reqwest = "^0.9.21"
-#reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
+
 ring = "^0.16.9"
 # We disable, by ommission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
 # of `pyflow python`.
@@ -34,7 +34,16 @@ serde = {version = "^1.0.101", features = ["derive"]}
 tar = "^0.4.26"
 toml = "^0.5.1"
 zip = "^0.5.2"
+#reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
+reqwest = "^0.9.21"
 
+# Vendorize OpenSSl on Linux, to avoid compatibility problems.
+# todo: target-specific features aren't currently supported.
+#[target.'cfg(target_os = "linux")'.dependencies]
+#reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
+#
+#[target.'cfg(not(target_os = "linux"))'.dependencies]
+#reqwest = "^0.9.21"
 
 [package.metadata.deb]
 section = "Python"

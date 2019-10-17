@@ -186,7 +186,12 @@ pub fn download_and_install_package(
         let mut resp = reqwest::get(url)?; // Download the file
         let mut out =
             fs::File::create(&archive_path).expect("Failed to save downloaded package file");
-        io::copy(&mut resp, &mut out).expect("failed to copy content");
+        // todo: DRY between here and py_versions.
+        if let Err(e) = io::copy(&mut resp, &mut out) {
+            // Clean up the downloaded file, or we'll get an error next time.
+            fs::remove_file(&archive_path).expect("Problem removing the broken file");
+            util::abort(&format!("Problem downloading the package archive: {:?}", e));
+        }
     }
 
     let file = util::open_archive(&archive_path);

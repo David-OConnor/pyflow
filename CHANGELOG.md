@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.8
+- Fixed a bug in auto-filling name and email in `pyflow init` and `pyflow new`
+- Running `pyflow` alone in a directory without a `pyproject.toml` will now no
+longer attempt to initialize a project.
+
 ## v0.1.7
 - Fixed bugs in `path` dependencies
 

@@ -409,6 +409,7 @@ cargo build --release
 - If installed via `Scoop`, run `scoop update pyflow`.
 - If installed via `Snap`, run `snap refresh pyflow`.
 - If installed via `Cargo`, run `cargo install pyflow --force`. 
+- If installed via `Pip`, run `pip install --upgrade pflow`.
 - If using an installer or 
 deb, run the new version's installer or deb. If manually calling a binary, replace it.
 
@@ -459,6 +460,10 @@ by Steve Dower.
 Click the folder-tree icon at the bottom of the pop-out window →
  Click the `+` icon at the bottom of the new pop-out window →
  Navigate to and select `(projname)/__pypackages__/3.x/lib`
+ sss
+ - If using VsCode: `Settings` → search `python extra paths` →
+ `Edit in settings.json` → Add or modify the line: 
+ `"python.autoComplete.extraPaths": ["(projname)/__pypackages__/3.7/lib"]`
 
 - Make sure the `pyflow` binary is accessible in your path. If installing
 via a `deb`, `msi`, `snap`, `rpm`, or `Cargo`, this should be set up automatically.

@@ -212,8 +212,12 @@ fn download(py_install_path: &Path, version: &Version) {
         );
         let mut resp = reqwest::get(&url).expect("Problem downloading Python"); // Download the file
         let mut out =
-            fs::File::create(&archive_path).expect("Failed to save downloaded package file");
-        io::copy(&mut resp, &mut out).expect("failed to copy content");
+            fs::File::create(&archive_path).expect("Failed to save downloaded Python archive");
+        if let Err(e) = io::copy(&mut resp, &mut out) {
+            // Clean up the downloaded file, or we'll get an error next time.
+            fs::remove_file(&archive_path).expect("Problem removing the broken file");
+            util::abort(&format!("Problem downloading the Python archive: {:?}", e));
+        }
     }
     util::print_color(&format!("Installing Python {}...", vers_to_dl), Color::Cyan);
 
@@ -447,10 +451,6 @@ pub fn create_venv(
     util::wait_for_dirs(&[bin_path.join(python_name)])
         .expect("Timed out waiting for venv to be created.");
 
-    //     We need `wheel` installed to build wheels from source.
-    //     Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
-    let wheel_url = "https://files.pythonhosted.org/packages/00/83/b4a77d044e78ad1a45610eb88f745be2fd2c6d658f9798a15e384b7d57c9/wheel-0.33.6-py2.py3-none-any.whl";
-
     // Try 64 first; if not, use 32.
     let lib = if vers_path.join(".venv").join("lib64").exists() {
         "lib64"
@@ -476,6 +476,11 @@ pub fn create_venv(
         entry_pt: bin_path,
         cache: dep_cache_path.to_owned(),
     };
+
+    // We need `wheel` installed to build wheels from source.
+    // We use `twine` to upload packages to pypi.
+    // Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
+    let wheel_url = "https://files.pythonhosted.org/packages/00/83/b4a77d044e78ad1a45610eb88f745be2fd2c6d658f9798a15e384b7d57c9/wheel-0.33.6-py2.py3-none-any.whl";
 
     install::download_and_install_package(
         "wheel",

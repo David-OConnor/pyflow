@@ -39,8 +39,8 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.7/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
-- **Mac** - Build from source using the instructions near the bottom of this page,
- or install via `cargo`. (If able, please PR the binary.)
+- **Mac** - Install via Cargo: `curl https://sh.rustup.rs -sSf | sh`,  `cargo install pyflow`
+(If able, please PR the binary.)
  
  - **If you have [Rust](https://www.rust-lang.org) installed** - Run `cargo install pyflow`.
 

@@ -150,10 +150,9 @@ fn create_dummy_setup(cfg: &crate::Config, filename: &str) {
     };
 }
 
-pub(crate) fn build(
+pub fn build(
     lockpacks: &[crate::dep_types::LockPackage],
-    bin_path: &PathBuf,
-    lib_path: &PathBuf,
+    paths: &util::Paths,
     cfg: &crate::Config,
     _extras: &[String],
 ) {
@@ -169,18 +168,34 @@ pub(crate) fn build(
         }
     }
 
-    // todo: Install twine and its dependencies directly. This is the only place we need pip currently.
     let dummy_setup_fname = "setup_temp_pyflow.py";
-    Command::new(bin_path.join("python"))
+
+    // Twine has too many dependencies to install when the environment, like we do with `wheel`, and
+    // for now, it's easier to install using pip
+    // todo: Install using own tools instead of pip; this is the last dependence on pip.
+    Command::new(paths.bin.join("python"))
         .args(&["-m", "pip", "install", "twine"])
         .status()
         .expect("Problem installing Twine");
 
+    //    let twine_url = "https://files.pythonhosted.org/packages/c4/43/b9c56d378f5d0b9bee7be564b5c5fb65c65e5da6e82a97b6f50c2769249a/twine-2.0.0-py3-none-any.whl";
+    //    install::download_and_install_package(
+    //        "twine",
+    //        &Version::new(2, 0, 0),
+    //        twine_url,
+    //        "twine-2.0.0-py3-none-any.whl",
+    //        "5319dd3e02ac73fcddcd94f0…1f4699d57365199d85261e1",
+    //        &paths,
+    //        install::PackageType::Wheel,
+    //        &None,
+    //    )
+    //    .expect("Problem installing `twine`");
+
     create_dummy_setup(cfg, dummy_setup_fname);
 
-    util::set_pythonpath(&[lib_path.to_owned()]);
+    util::set_pythonpath(&[paths.lib.to_owned()]);
     println!("🛠️️ Building the package...");
-    Command::new(bin_path.join("python"))
+    Command::new(paths.bin.join("python"))
         .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
         .status()
         .expect("Problem building");

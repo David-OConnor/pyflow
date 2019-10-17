@@ -1266,6 +1266,15 @@ fn main() {
         return;
     }
 
+    // created_cfg is used to help us prevent accidentally creating files when running `pyflow` alone.
+    if !&PathBuf::from(cfg_filename).exists() {
+        if let SubCommand::Python { args: _ } = subcmd {
+            println!("To get started, run `pyflow new projname` to create a project folder, or `pyflow init` to start\
+                a project in this folder. For a list of what you can do, run `pyflow help");
+            return;
+        }
+    }
+
     let mut cfg = Config::from_file(&PathBuf::from(cfg_filename)).unwrap_or_default();
     cfg.populate_path_subreqs();
 
@@ -1383,8 +1392,6 @@ fn main() {
         }
         Err(_) => Lock::default(),
     };
-
-
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
 
@@ -1549,13 +1556,18 @@ fn main() {
         }
 
         SubCommand::Python { args } => {
+            // Don't let running `pyflow` nakedly in a non-proj directory build a proj skeleton;
+            // this may result in dumping files in weird places like the home directory, Desktop etc.
+            //            if created_cfg {
+            //                println!("To get started, run `pyflow new` to create a project folder, or `pyflow init` to set\
+            //                up a project in this folder");
+            //                return
+            //            }
             if commands::run_python(&paths.bin, &pythonpath, &args).is_err() {
                 abort("Problem running Python");
             }
         }
-        SubCommand::Package { extras } => {
-            build::build(&lockpacks, &paths.bin, &paths.lib, &cfg, &extras)
-        }
+        SubCommand::Package { extras } => build::build(&lockpacks, &paths, &cfg, &extras),
         SubCommand::Publish {} => build::publish(&paths.bin, &cfg),
         SubCommand::Run { args } => {
             run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, args);
