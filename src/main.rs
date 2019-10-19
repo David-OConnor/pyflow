@@ -120,7 +120,7 @@ Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Exampl
     //        #[structopt(name = "name")]
     //        name: String,
     //    },
-    /// Change the Python version for this project. eg `pyflow switch 3.7`. Equivalent to setting
+    /// Change the Python version for this project. eg `pyflow switch 3.8`. Equivalent to setting
     /// `py_version` in `pyproject.toml`.
     #[structopt(name = "switch")]
     Switch {
@@ -148,7 +148,8 @@ pub struct Config {
     repository: Option<String>,
     repo_url: Option<String>,
     package_url: Option<String>,
-    readme_filename: Option<String>,
+    readme: Option<String>,
+    build: Option<String>, // A python file used to build non-python extensions
     //    entry_points: HashMap<String, Vec<String>>, // todo option?
     scripts: HashMap<String, String>, //todo: put under [tool.pyflow.scripts] ?
     //    console_scripts: Vec<String>, // We don't parse these; pass them to `setup.py` as-entered.
@@ -300,7 +301,12 @@ impl Config {
             if let Some(v) = po.repository {
                 result.repository = Some(v);
             }
-
+            if let Some(v) = po.readme {
+                result.readme = Some(v);
+            }
+            if let Some(v) = po.build {
+                result.build = Some(v);
+            }
             // todo: Process entry pts, classifiers etc?
             if let Some(v) = po.classifiers {
                 result.classifiers = v;
@@ -405,7 +411,13 @@ impl Config {
             if let Some(v) = pf.keywords {
                 result.keywords = v;
             }
-            //            if let Some(v) = pp.entry_points {
+            if let Some(v) = pf.readme {
+                result.readme = Some(v);
+            }
+            if let Some(v) = pf.build {
+                result.build = Some(v);
+            }
+            //            if let Some(v) = pf.entry_points {
             //                result.entry_points = v;
             //            } // todo
             if let Some(v) = pf.scripts {

@@ -6,7 +6,6 @@
 *.workspace.xml
 
 # Prevent generated and test files from being committed
-setup.py
 requirements.txt
 Pipfile
 pyflow.lock

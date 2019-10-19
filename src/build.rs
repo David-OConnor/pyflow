@@ -116,7 +116,7 @@ setuptools.setup(
         //            entry_points={{
         //        "console_scripts": ,
         //    }},
-        cfg.readme_filename.unwrap_or_else(|| "README.md".into()),
+        cfg.readme.unwrap_or_else(|| "README.md".into()),
         cfg.name.unwrap_or_else(|| "".into()),
         version,
         author,
@@ -195,10 +195,18 @@ pub fn build(
 
     util::set_pythonpath(&[paths.lib.to_owned()]);
     println!("🛠️️ Building the package...");
-    Command::new(paths.bin.join("python"))
-        .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
-        .status()
-        .expect("Problem building");
+    // todo: Run build script first, right?
+    if let Some(build_file) = &cfg.build {
+        Command::new(paths.bin.join("python"))
+            .arg(&build_file)
+            .status()
+            .expect(&format!("Problem building using {}", build_file));
+    }
+
+//    Command::new(paths.bin.join("python"))
+//        .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
+//        .status()
+//        .expect("Problem building");
 
     util::print_color("Build complete.", Color::Green);
 
@@ -257,7 +265,7 @@ pub mod test {
             python_requires: Some(">=3.6".into()),
             package_url: Some("https://upload.pypi.org/legacy/".into()),
             scripts,
-            readme_filename: Some("README.md".into()),
+            readme: Some("README.md".into()),
             reqs: vec![
                 Req::new(
                     "numpy".into(),

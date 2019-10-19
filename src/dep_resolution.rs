@@ -322,8 +322,9 @@ fn guess_graph(
         d
     } else {
         util::abort(
-            "Problem getting dependency data - this is\
-             likely a bug in the cacheing process. Please try again in a few minutes.",
+            "Problem getting dependency data - this is \
+             likely a bug in the cacheing process. Please try again in a few minutes. \
+             Reqs: {:#?}",
         );
         unreachable!()
     };

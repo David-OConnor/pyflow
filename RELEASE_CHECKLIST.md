@@ -13,7 +13,7 @@ links to reflect the latest version.
 1. Commit and push the repo
 1. Check that CI pipeline passed
 1. Run `cargo package` and `cargo publish` (Allows installation via cargo)
-1. Run `cargo build --release` on Windows and Linux (to build binaries)
+1. Run `cargo build --release` on Windows and Linux (to build standalone binaries)
 1. Run `cargo deb` on Ubuntu 16.04 (one built on 18.04
 works on 19.04, but not vice-versa)
 1. Run `cargo build --release`, then `cargo rpm build` on Centos 7. (This allows easy installation for Red Hat, Fedora, and CentOs

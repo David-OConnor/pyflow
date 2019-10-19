@@ -460,13 +460,10 @@ by Steve Dower.
 Click the folder-tree icon at the bottom of the pop-out window →
  Click the `+` icon at the bottom of the new pop-out window →
  Navigate to and select `(projname)/__pypackages__/3.x/lib`
- sss
- - If using VsCode: `Settings` → search `python extra paths` →
+- If using VsCode: `Settings` → search `python extra paths` →
  `Edit in settings.json` → Add or modify the line: 
  `"python.autoComplete.extraPaths": ["(projname)/__pypackages__/3.7/lib"]`
 
-- Make sure the `pyflow` binary is accessible in your path. If installing
-via a `deb`, `msi`, `snap`, `rpm`, or `Cargo`, this should be set up automatically.
 
 # References
 - [PEP 582 - Python local packages directory](https://www.python.org/dev/peps/pep-0582/)

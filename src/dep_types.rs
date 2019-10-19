@@ -422,7 +422,9 @@ impl Constraint {
         }
 
         if let Ok(parsed) = Version::from_str(s) {
-            return Ok(vec![Self::new(ReqType::Exact, parsed)]);
+            // Note the `Caret` req type; if passed in this format, assuming packages marked
+            // `3.6` are valid for `3.7+`.
+            return Ok(vec![Self::new(ReqType::Caret, parsed)]);
         }
 
         let s_split = s.split('.');

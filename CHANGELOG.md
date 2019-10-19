@@ -3,7 +3,10 @@
 ## v0.1.8
 - Fixed a bug in auto-filling name and email in `pyflow init` and `pyflow new`
 - Running `pyflow` alone in a directory without a `pyproject.toml` will now no
-longer attempt to initialize a project.
+longer attempt to initialize a project
+- Added support for specifying a build script
+- Treat `python_version` on `pypi` as a caret requirement, if specified like `3.6`.
+- Improved error messages
 
 ## v0.1.7
 - Fixed bugs in `path` dependencies

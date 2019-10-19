@@ -283,7 +283,9 @@ pub fn download_and_install_package(
             if !dist_path.exists() {
                 util::abort(&format!(
                     "Problem building {} from source. \
-                     This may occur on WSL if installing to a mounted directory.",
+                     This may occur if a package that requires compiling has no wheels available \
+                     for this OS and this system is missing dependencies required to compile it, \
+                     or if on WSL and installing to a mounted directory.",
                     name
                 ));
             }

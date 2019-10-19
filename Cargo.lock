@@ -920,7 +920,7 @@ dependencies = [
 
 [[package]]
 name = "pyflow"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "crossterm 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "data-encoding 2.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
