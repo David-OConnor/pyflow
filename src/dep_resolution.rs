@@ -268,7 +268,6 @@ fn guess_graph(
 ) -> Result<(), DependencyError> {
     // Sometimes requirements are specified on separate lines; combine them if so, or we'll
     // have problems resolving.
-    println!("r: {:#?}", &reqs);
 
     let mut cleaned_reqs: Vec<Req> = vec![];
     for req in reqs {
