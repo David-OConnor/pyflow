@@ -20,7 +20,11 @@ works on 19.04, but not vice-versa)
 users, and binaries built on other OSes appear not to work on these due to OpenSSL issues.
 1. Run `cargo wix` on Windows
 1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`. 
-1. Run `maturin publish --skip-auditwheel` to publish a pip-installable wheel
+1. Change the name in `Cargo.toml` on Windows to `pflow`. Run `maturin build` on Windows.
+Move the built wheel to `/pip/dist`.
+1. On Ubuntu 16.04, do the same, and also swap comments on the `reqwest` dependency. Put the wheel
+in the same dir as for Windows
+1. Run `twine upload dist/*` in `/pip`
 1. Updated the version in `snapcraft.yml`. Run `snapcraft`, `snapcraft login`, then 
 `snapcraft push --release=stable pyflow_x.x.x_amd64.snap` on Ubuntu.
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.

@@ -42,6 +42,10 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 - **Mac** - Build from source using the instructions near the bottom of this page,
  or install via `cargo`. (If able, please PR the binary.)
  
+- **With Pip** - `pip install pflow` (It doesn't matter which Python you use to install it) 
+Note that you still run with `pyflow`. The linux install using this method is much larger than 
+with the above ones, and it doesn't yet work with Mac.
+ 
  - **If you have [Rust](https://www.rust-lang.org) installed** - Run `cargo install pyflow`.
 
 
