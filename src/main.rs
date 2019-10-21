@@ -1270,7 +1270,10 @@ fn main() {
         .join("__pypackages__");
 
     if let SubCommand::New { name } = subcmd {
-        new(&name).expect("Problem creating project");
+        if new(&name).is_err() {
+            abort("Problem creating the project. This may be due to a permissions problem. \
+            If on linux, please try again with `sudo`.");
+        }
         util::print_color(
             &format!("Created a new Python project named {}", name),
             Color::Green,
@@ -1281,8 +1284,9 @@ fn main() {
     // created_cfg is used to help us prevent accidentally creating files when running `pyflow` alone.
     if !&PathBuf::from(cfg_filename).exists() {
         if let SubCommand::Python { args: _ } = subcmd {
-            println!("To get started, run `pyflow new projname` to create a project folder, or `pyflow init` to start\
-                a project in this folder. For a list of what you can do, run `pyflow help");
+            util::print_color("To get started, run `pyflow new projname` to create a project folder, or \
+            `pyflow init` to start a project in this folder. For a list of what you can do, run \
+            `pyflow help", Color::DarkCyan);
             return;
         }
     }

@@ -39,11 +39,13 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.8/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
-- **Mac** - Build from source using the instructions near the bottom of this page,
- or install via `cargo`. (If able, please PR the binary.)
+- **Mac** - Install Rust: `curl https://sh.rustup.rs -sSf | sh`, then run 
+`cargo install pyflow`. If able, please build from source using the instructions near the bottom of 
+this page and PR a binary, to make this easier in the future.
  
-- **With Pip** - `pip install pflow` (It doesn't matter which Python you use to install it) 
-Note that you still run with `pyflow`. The linux install using this method is much larger than 
+- **With Pip** - Run `pip install pflow` Note that you still run with `pyflow`, and 
+it doesn't matter which Python you use to install it.
+ The linux install using this method is much larger than 
 with the above ones, and it doesn't yet work with Mac.
  
  - **If you have [Rust](https://www.rust-lang.org) installed** - Run `cargo install pyflow`.
@@ -184,7 +186,7 @@ Example contents:
 [tool.pyflow]
 py_version = "3.7"
 name = "runcible"
-version = "0.1.0"
+version = "0.1.8"
 authors = ["John Hackworth <jhackworth@vic.org>"]
 
 
@@ -364,7 +366,7 @@ In order to build and publish your project, additional info is needed in
 [tool.pyflow]
 name = "everythingkiller"
 py_version = "3.6"
-version = "0.1.0"
+version = "0.1.8"
 authors = ["Fraa Erasmas <raz@edhar.math>"]
 description = "Small, but packs a punch!"
 homepage = "https://everything.math"

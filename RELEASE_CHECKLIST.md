@@ -6,7 +6,7 @@ This is a list of steps to complete when making a new release.
 changes are included in `CHANGELOG.md`
 1. Ensure  the readme and homepage website reflects API changes. This includes changing the download
 links to reflect the latest version.
-1. Ensure the version listed in `Cargo.toml` is updated
+1. Run `python update_version.py v.v.v`.
 1. Update Rust tools: `rustup update`
 1. Run `cargo test`, `cargo fmt`
 1. Run `cargo clippy -- -W clippy::pedantic -W clippy::nursery -W clippy::cargo`
@@ -21,11 +21,10 @@ users, and binaries built on other OSes appear not to work on these due to OpenS
 1. Run `cargo wix` on Windows
 1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`. 
 1. Change the name in `Cargo.toml` on Windows to `pflow`. Run `maturin build` on Windows.
-Move the built wheel to `/pip/dist`.
-1. On Ubuntu 16.04, do the same, and also swap comments on the `reqwest` dependency. Put the wheel
-in the same dir as for Windows
-1. Run `twine upload dist/*` in `/pip`
-1. Updated the version in `snapcraft.yml`. Run `snapcraft`, `snapcraft login`, then 
+rename the executable (`data subfolder`) to `pyflow[.exe]`
+1. On Ubuntu 16.04, do the same, and also swap comments on the `reqwest` dependency.
+1. For both wheels, Run `twine upload (wheelname)`.
+1. Run `snapcraft`, `snapcraft login`, then 
 `snapcraft push --release=stable pyflow_x.x.x_amd64.snap` on Ubuntu.
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
 1. Upload the following binaries to the release page: zipped Windows binary, Linux binary, Msi, Deb, Rpm.
