@@ -266,7 +266,29 @@ fn guess_graph(
     vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
     reqs_searched: &mut Vec<Req>,
 ) -> Result<(), DependencyError> {
-    let reqs: Vec<&Req> = reqs
+    // Sometimes requirements are specified on separate lines; combine them if so, or we'll
+    // have problems resolving.
+    println!("r: {:#?}", &reqs);
+
+    let mut cleaned_reqs: Vec<Req> = vec![];
+    for req in reqs {
+        let names: Vec<String> = cleaned_reqs.iter().map(|cr| cr.name.clone()).collect();
+        if names.contains(&req.name) {
+            for c in cleaned_reqs.iter_mut() {
+                if c.name == req.name {
+                    for constr in req.constraints.iter() {
+                        c.constraints.push(constr.clone());
+                    }
+                }
+            }
+
+            continue;
+        }
+        cleaned_reqs.push(req.clone());
+        // todo: Should merge extra, sys_platform, python_version, install_with_extras too.
+    }
+
+    let reqs: Vec<&Req> = cleaned_reqs
         .iter()
         // If we've already satisfied this req, don't query it again. Otherwise we'll make extra
         // http calls, and could end up in infinite loops.
@@ -361,6 +383,7 @@ fn guess_graph(
 
     for req in &reqs {
         // Find matching packages for this requirement.
+
         let query_result: Vec<&ReqCache> = query_data
             .iter()
             .filter(|d| util::compare_names(d.name.as_ref().unwrap(), &req.name))

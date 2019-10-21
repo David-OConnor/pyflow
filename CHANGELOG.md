@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.9
+- Fixed a bug where subdep contraints specified on multiple lines would
+cause resolution to fail
+
 ## v0.1.8
 - Fixed a bug in auto-filling name and email in `pyflow init` and `pyflow new`
 - Running `pyflow` alone in a directory without a `pyproject.toml` will now no

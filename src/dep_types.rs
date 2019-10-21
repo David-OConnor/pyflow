@@ -8,7 +8,7 @@ use std::{cmp, fmt, num, str::FromStr};
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Dependency {
     pub id: u32,
     pub name: String,

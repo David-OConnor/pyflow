@@ -43,7 +43,7 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 `cargo install pyflow`. If able, please build from source using the instructions near the bottom of 
 this page and PR a binary, to make this easier in the future.
  
-- **With Pip** - Run `pip install pflow` Note that you still run with `pyflow`, and 
+- **With Pip** - Run `pip install pflow`. Note that you still run with `pyflow`, and 
 it doesn't matter which Python you use to install it.
  The linux install using this method is much larger than 
 with the above ones, and it doesn't yet work with Mac.
@@ -142,7 +142,7 @@ who don't understand venvs, or are unaware of the hazards of working with a syst
 allowing reproducable dependency graphs. `Poetry` improves upon `Pipenv's` API,
 speed, and dependency resolution, as well as improving
 the packaging and distributing process by using a consolidating project config. Both
- are sensitive to the Python environment used to run them, and won't work
+ are sensitive to the environment they run in, and won't work
  correctly if it's not as expected. 
 
 `Conda` addresses these problems elegantly, but maintains a separate repository

@@ -1271,8 +1271,10 @@ fn main() {
 
     if let SubCommand::New { name } = subcmd {
         if new(&name).is_err() {
-            abort("Problem creating the project. This may be due to a permissions problem. \
-            If on linux, please try again with `sudo`.");
+            abort(
+                "Problem creating the project. This may be due to a permissions problem. \
+                 If on linux, please try again with `sudo`.",
+            );
         }
         util::print_color(
             &format!("Created a new Python project named {}", name),
