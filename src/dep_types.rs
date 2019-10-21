@@ -1520,18 +1520,6 @@ pub mod tests {
         );
     }
 
-    //    #[test]
-    //    fn intersection_contained_many_more() {
-    //        let reqs1 = vec![Constraint::new(Gte, 4, 9, 2)];
-    //        let reqs2 = vec![Constraint::new(Gte, 4, 9, 4), Constraint::new(Lt, 5, 5, 5)];
-    //        let reqs3 = vec![Constraint::new(Gte, 4, 9, 4), Constraint::new(Lt, 5, 5, 5)];
-    //
-    //        assert_eq!(
-    //            intersection_many(&[reqs1, reqs2, reqs3]),
-    //            vec![(Version::new(4, 9, 4), Version::new(5, 5, 4))]
-    //        );
-    //    }
-
     #[test]
     fn python_version_from_warehouse() {
         let a1 = Constraint::from_wh_py_vers("py3").unwrap();
@@ -1546,8 +1534,6 @@ pub mod tests {
         assert_eq!(
             a2,
             vec![
-                //                Constraint::new(Gte, Version::new(3, 5, 0)),
-                //                Constraint::new(Lte, Version::new(3, 8, 0)),
                 Constraint::new(Exact, Version::new(3, 5, 0)),
                 Constraint::new(Exact, Version::new(3, 6, 0)),
                 Constraint::new(Exact, Version::new(3, 7, 0)),
@@ -1566,6 +1552,6 @@ pub mod tests {
 
         assert_eq!(a5, vec![Constraint::new(Exact, Version::new(3, 6, 0))]);
         assert_eq!(a6, vec![Constraint::new(Gte, Version::new(2, 0, 0))]);
-        assert_eq!(a7, vec![Constraint::new(Exact, Version::new(2, 7, 0))]);
+        assert_eq!(a7, vec![Constraint::new(Caret, Version::new(2, 7, 0))]);
     }
 }

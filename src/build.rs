@@ -203,10 +203,10 @@ pub fn build(
             .expect(&format!("Problem building using {}", build_file));
     }
 
-//    Command::new(paths.bin.join("python"))
-//        .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
-//        .status()
-//        .expect("Problem building");
+    //    Command::new(paths.bin.join("python"))
+    //        .args(&[dummy_setup_fname, "sdist", "bdist_wheel"])
+    //        .status()
+    //        .expect("Problem building");
 
     util::print_color("Build complete.", Color::Green);
 
@@ -286,6 +286,7 @@ pub mod test {
             )],
             extras: HashMap::new(),
             repo_url: None,
+            build: None,
         };
 
         let expected = r#"import setuptools

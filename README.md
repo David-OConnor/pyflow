@@ -393,6 +393,10 @@ black = "^18.0"
 `package_url` is used to determine which package repository to upload to. If ommitted, 
 `Pypi test` is used (`https://test.pypi.org/legacy/`).
 
+Other items you can specify in `[tool.pyflow]`:
+- `readme`: The readme filename, use this if it's named something other than `README.md`.
+- `build`: A python script to execute building non-python extensions when running `pyflow package`.
+
 ## Building this from source                      
 If you’d like to build from source, [download and install Rust]( https://www.rust-lang.org/tools/install),
 clone the repo, and in the repo directory, run `cargo build --release`.
