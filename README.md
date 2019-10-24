@@ -477,7 +477,7 @@ Click the folder-tree icon at the bottom of the pop-out window →
 
 # References
 - [PEP 582 - Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
-- [PEP 518 - pyproject.toml](https://www.python.org/dev/peps/pep-518/)
+- [PEP 518 - pyproject.toml](https://www.python.org/dev/peps/pep-0518/)
 - [Semantic versioning](https://semver.org/)
 - [PEP 440 -- Version Identification and Dependency Specification](https://www.python.org/dev/peps/pep-0440/)
 - [Specifying dependencies in Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
