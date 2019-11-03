@@ -19,12 +19,12 @@ works on 19.04, but not vice-versa)
 1. Run `cargo build --release`, then `cargo rpm build` on Centos 7. (This allows easy installation for Red Hat, Fedora, and CentOs
 users, and binaries built on other OSes appear not to work on these due to OpenSSL issues.
 1. Run `cargo wix` on Windows
-1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`. 
+1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`.
 1. Change the name in `Cargo.toml` on Windows to `pflow`. Run `maturin build` on Windows.
 rename the executable (`data subfolder`) to `pyflow[.exe]`
 1. On Ubuntu 16.04, do the same, and also swap comments on the `reqwest` dependency.
 1. For both wheels, Run `twine upload (wheelname)`.
-1. Run `snapcraft`, `snapcraft login`, then 
+1. Run `snapcraft`, `snapcraft login`, then
 `snapcraft push --release=stable pyflow_x.x.x_amd64.snap` on Ubuntu.
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
 1. Upload the following binaries to the release page: zipped Windows binary, Linux binary, Msi, Deb, Rpm.
