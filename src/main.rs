@@ -51,18 +51,11 @@ enum SubCommand {
     },
 
     /// Install packages from `pyproject.toml`, or ones specified
-    #[structopt(
-        name = "install",
-        help = "
-Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Example:
-
-`pyflow install`: sync your installation with `pyproject.toml`, or `pyflow.lock` if it exists.
-`pyflow install numpy scipy`: install `numpy` and `scipy`.
-"
-    )]
+    #[structopt(name = "install")]
     Install {
         #[structopt(name = "packages")]
         packages: Vec<String>,
+        /// Save package to your dev-dependencies section
         #[structopt(short, long)]
         dev: bool,
     },
