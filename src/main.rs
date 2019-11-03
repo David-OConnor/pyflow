@@ -188,6 +188,18 @@ fn pop_reqs_helper(reqs: &[Req], dev: bool) -> Vec<Req> {
                 .unwrap_or_else(|| panic!("Problem parsing`pyproject.toml`: {:?}", &pyproj));
             result.append(&mut req_cfg.reqs)
         }
+
+        // Check for metadata of a built wheel
+        for folder_name in util::find_folders(&req_path) {
+            // todo: Dry from `util` and `install`.
+            let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
+            if let Some(_) = re_dist.captures(&folder_name) {
+                let metadata_path = req_path.join(folder_name).join("METADATA");
+                let mut metadata = util::parse_metadata(&metadata_path);
+
+                result.append(&mut metadata.requires_dist);
+            }
+        }
     }
     result
 }

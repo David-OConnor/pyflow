@@ -741,9 +741,9 @@ impl Req {
     }
 
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
+        // Todo: DRY between versioned and unversioned.
         let re = if pypi_fmt {
             // eg saturn (>=0.3.4) or argon2-cffi (>=16.1.0) ; extra == 'argon2'
-            // todo deal with extra etc
             // Note: We specify what chars are acceptable in a name instead of using
             // wildcard, so we don't accidentally match a semicolon here if a
             // set of parens appears later. The non-greedy ? in the version-matching
@@ -755,10 +755,22 @@ impl Req {
             Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
         };
 
+        // Check if no version is specified.
+        let novers_re = if pypi_fmt {
+            Regex::new(r"^([a-zA-Z\-0-9._]+)(?:(?:\s*;\s*)(.*))?$").unwrap()
+        } else {
+            // todo extras
+            Regex::new(r"^([a-zA-Z\-0-9._]+)$").unwrap()
+        };
+
         if let Some(caps) = re.captures(s) {
             let name = caps.get(1).unwrap().as_str().to_owned();
             let reqs_m = caps.get(2).unwrap();
-            let constraints = Constraint::from_str_multiple(reqs_m.as_str())?;
+            let constraints = if reqs_m.as_str().is_empty() {
+                vec![]
+            } else {
+                Constraint::from_str_multiple(reqs_m.as_str())?
+            };
 
             let (extra, sys_platform, python_version) = parse_extras(caps.get(3));
 
@@ -772,14 +784,6 @@ impl Req {
                 path: None,
                 git: None,
             });
-        };
-
-        // Check if no version is specified.
-        let novers_re = if pypi_fmt {
-            Regex::new(r"^([a-zA-Z\-0-9._]+)(?:(?:\s*;\s*)(.*))?$").unwrap()
-        } else {
-            // todo extras
-            Regex::new(r"^([a-zA-Z\-0-9._]+)$").unwrap()
         };
 
         if let Some(caps) = novers_re.captures(s) {
@@ -1185,9 +1189,24 @@ pub mod tests {
             git: None,
         };
 
+        let actual4 = Req::from_str("envisage ; extra == 'app'", true).unwrap();
+
+        // Test with extras, but no version
+        let expected4 = Req {
+            name: "envisage".into(),
+            constraints: vec![],
+            extra: Some("app".into()),
+            sys_platform: None,
+            python_version: None,
+            install_with_extras: None,
+            path: None,
+            git: None,
+        };
+
         assert_eq!(actual, expected);
         assert_eq!(actual2, expected2);
         assert_eq!(actual3, expected3);
+        assert_eq!(actual4, expected4);
     }
 
     // Non-standard format I've come across; more like the non-pypi fmt.

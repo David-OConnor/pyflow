@@ -233,29 +233,13 @@ pub fn show_installed(lib_path: &Path, path_reqs: &[Req]) {
 /// Find the packages installed, by browsing the lib folder for metadata.
 /// Returns package-name, version, folder names
 pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
-    let mut package_folders = vec![];
-
     if !lib_path.exists() {
         return vec![];
-    }
-    for entry in lib_path.read_dir().expect("Can't open lib path") {
-        if let Ok(entry) = entry {
-            if entry
-                .file_type()
-                .expect("Problem reading lib path file type")
-                .is_dir()
-            {
-                package_folders.push(entry.file_name())
-            }
-        }
     }
 
     let mut result = vec![];
 
-    for folder in &package_folders {
-        let folder_name = folder
-            .to_str()
-            .expect("Problem converting folder name to string");
+    for folder_name in &find_folders(&lib_path) {
         let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
 
         if let Some(caps) = re_dist.captures(folder_name) {
@@ -806,5 +790,27 @@ pub fn parse_metadata(path: &Path) -> Metadata {
         }
     }
     // todo: For now, just pull version and requires_dist. Add more as-required.
+    result
+}
+
+pub fn find_folders(path: &Path) -> Vec<String> {
+    let mut result = vec![];
+    for entry in path.read_dir().expect("Can't open lib path") {
+        if let Ok(entry) = entry {
+            if entry
+                .file_type()
+                .expect("Problem reading lib path file type")
+                .is_dir()
+            {
+                result.push(
+                    entry
+                        .file_name()
+                        .to_str()
+                        .expect("Problem converting folder name to string")
+                        .to_owned(),
+                );
+            }
+        }
+    }
     result
 }

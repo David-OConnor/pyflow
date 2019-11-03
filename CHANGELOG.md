@@ -1,6 +1,7 @@
 # Changelog
 
 ## v0.1.9
+- Can now parse subdependencies of `path` requirements from built-wheels
 - Fixed a bug where subdep contraints specified on multiple lines would
 cause resolution to fail
 

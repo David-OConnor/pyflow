@@ -237,10 +237,19 @@ pub fn download_and_install_package(
             util::extract_zip(&archive_file, &paths.lib, &rename);
         }
         PackageType::Source => {
+            // todo: Support .tar.bz2
+            if archive_path.extension().unwrap() == "bz2" {
+                util::abort(&format!(
+                    "Extracting source packages in the `.bz2` format isn't supported \
+                     at this time: {:?}",
+                    &archive_path
+                ));
+            }
             // Extract the tar.gz source code.
             let tar = GzDecoder::new(&archive_file);
             let mut archive = Archive::new(tar);
 
+            // Perhaps we're dealing with a zip.
             if archive.unpack(&paths.lib).is_err() {
                 // The extract_wheel function just extracts a zip file, so it's appropriate here.
                 // We'll then continue with this leg, and build/move/cleanup.
