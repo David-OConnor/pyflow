@@ -26,17 +26,17 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 ## Installation
 - **Windows** - Download and run 
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.8/pyflow-0.1.8-x86_64.msi).
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow-0.1.9-x86_64.msi).
 Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 
 - **Ubuntu or Debian** - Download and run 
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.8/pyflow_0.1.8_amd64.deb).
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow_0.1.9_amd64.deb).
 
 - **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run 
-[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.1.8/pyflow-0.1.8.x86_64.rpm).
+[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow-0.1.9.x86_64.rpm).
 
 - **A different Linux distro** - Download this 
-[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.8/pyflow)
+[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
 - **Mac** - Install Rust: `curl https://sh.rustup.rs -sSf | sh`, then run 
@@ -186,7 +186,7 @@ Example contents:
 [tool.pyflow]
 py_version = "3.7"
 name = "runcible"
-version = "0.1.8"
+version = "0.1.9"
 authors = ["John Hackworth <jhackworth@vic.org>"]
 
 
@@ -368,7 +368,7 @@ In order to build and publish your project, additional info is needed in
 [tool.pyflow]
 name = "everythingkiller"
 py_version = "3.6"
-version = "0.1.8"
+version = "0.1.9"
 authors = ["Fraa Erasmas <raz@edhar.math>"]
 description = "Small, but packs a punch!"
 homepage = "https://everything.math"
@@ -391,7 +391,7 @@ activate = "jeejah:activate"
 
 [tool.pyflow.dependencies]
 numpy = "^1.16.4"
-manimlib = "0.1.8"
+manimlib = "0.1.9"
 ipython = {version = "^7.7.0", extras=["qtconsole"]}
 
 

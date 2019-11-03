@@ -1,5 +1,5 @@
 name: pyflow
-version: 0.1.8
+version: 0.1.9
 license: MIT
 summary: A Python installation and dependency manager.
 description: |

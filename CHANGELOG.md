@@ -4,6 +4,7 @@
 - Can now parse subdependencies of `path` requirements from built-wheels
 - Fixed a bug where subdep contraints specified on multiple lines would
 cause resolution to fail
+- Fixed a bug parsing METADATA requirements that includes extras, but no version
 
 ## v0.1.8
 - Fixed a bug in auto-filling name and email in `pyflow init` and `pyflow new`
