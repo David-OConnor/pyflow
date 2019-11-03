@@ -171,7 +171,7 @@ These tools have different scopes and purposes:
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | **Isolated envs for scripts** | | | | | | | ✓ |
-| **Runs project fns from CLI** | | | | | | | ✓ |
+| **Runs project fns from CLI** | | | ✓ | | | | ✓ |
 
 
 ## Use
@@ -355,6 +355,8 @@ check for resolutions, then vary children as-required down the hierarchy. We don
 - Installing global CLI tools
 - The lock file is missing some info like hashes
 - Adding a dependency via the CLI with a specific version constraint, or extras.
+- Install packages from a local `wheel` directly. In the meanwhile, you can use a `path`
+dependency of the unpacked wheel.
 - Dealing with multiple-installed-versions of a dependency that uses importlib
 or dynamic imports
 - Install Python on Mac

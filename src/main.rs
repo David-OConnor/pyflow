@@ -543,7 +543,7 @@ impl Config {
 pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
     if !PathBuf::from(name).exists() {
         fs::create_dir_all(&format!("{}/{}", name, name))?;
-        fs::File::create(&format!("{}/{}/main.py", name, name))?;
+        fs::File::create(&format!("{}/{}/__init__.py", name, name))?;
         fs::File::create(&format!("{}/README.md", name))?;
         fs::File::create(&format!("{}/LICENSE", name))?;
         fs::File::create(&format!("{}/.gitignore", name))?;
@@ -1288,7 +1288,7 @@ fn main() {
         if let SubCommand::Python { args: _ } = subcmd {
             util::print_color("To get started, run `pyflow new projname` to create a project folder, or \
             `pyflow init` to start a project in this folder. For a list of what you can do, run \
-            `pyflow help", Color::DarkCyan);
+            `pyflow help`", Color::DarkCyan);
             return;
         }
     }

@@ -88,6 +88,16 @@ pub fn print_color(message: &str, color: Color) {
     );
 }
 
+///// Print in a color, then reset formatting.
+//pub fn print_color_bold(message: &str, color: Color) {
+//    println!(
+//        "{}{}{}",
+//        Colored::Fg(color),
+//        message,
+//        Colored::Fg(Color::Reset)
+//    );
+//}
+
 /// Used when the program should exit from a condition that may arise normally from program use,
 /// like incorrect info in config files, problems with dependencies, or internet connection problems.
 /// We use `expect`, `panic!` etc for problems that indicate a bug in this program.

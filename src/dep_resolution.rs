@@ -342,11 +342,11 @@ fn guess_graph(
     let mut query_data = if let Ok(d) = fetch_req_data(&non_locked_reqs, vers_cache) {
         d
     } else {
-        util::abort(
+        util::abort(&format!(
             "Problem getting dependency data - this is \
              likely a bug in the cacheing process. Please try again in a few minutes. \
-             Reqs: {:#?}",
-        );
+             Reqs: {:#?}", &reqs
+        ));
         unreachable!()
     };
 
