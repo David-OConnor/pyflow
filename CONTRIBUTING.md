@@ -1,4 +1,4 @@
-Thanks for your interest in contributing to Pyflow. Bug reports, API improvements, 
+Thanks for your interest in contributing to Pyflow. Bug reports, API improvements,
 performance improvements and new features are all welcome - as issues, or PRs.
 
 Required tools to build and test:
