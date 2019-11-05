@@ -814,3 +814,20 @@ pub fn find_folders(path: &Path) -> Vec<String> {
     }
     result
 }
+
+/// Ask the user what Python version to use.
+pub fn prompt_py_vers() -> Version {
+    print_color(
+        "Please enter the Python version for this project: (eg: 3.8)",
+        Color::Magenta,
+    );
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Unable to read user input for version");
+
+    input.pop(); // Remove trailing newline.
+    let input = input.replace("\n", "").replace("\r", "");
+
+    fallible_v_parse(&input)
+}

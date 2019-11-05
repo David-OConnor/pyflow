@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.0
+- `pyflow new` now asks for the Python version instead of using a default.
+
 ## v0.1.9
 - Can now parse subdependencies of `path` requirements from built-wheels
 - Fixed a bug where subdep contraints specified on multiple lines would

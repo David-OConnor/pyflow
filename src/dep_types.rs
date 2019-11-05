@@ -186,6 +186,13 @@ impl Version {
         self.add_str_mod(&mut result);
         result
     }
+
+    /// unlike Display, which overwrites to_string, don't add colors.
+    pub fn to_string_no_patch(&self) -> String {
+        let mut result = format!("{}.{}", self.major, self.minor);
+        self.add_str_mod(&mut result);
+        result
+    }
 }
 
 impl FromStr for Version {

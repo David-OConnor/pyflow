@@ -5,14 +5,13 @@ use crate::util::{abort, Os};
 use crossterm::{Color, Colored};
 use regex::Regex;
 use serde::Deserialize;
-use std::{collections::HashMap, env, error::Error, fs, io, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, str::FromStr};
 
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use structopt::StructOpt;
 
 mod build;
-//mod build_new;
 mod commands;
 mod dep_resolution;
 mod dep_types;
@@ -495,7 +494,7 @@ impl Config {
             result.push_str(&("name = \"\"".to_owned() + "\n"));
         }
         if let Some(py_v) = &self.py_version {
-            result.push_str(&("py_version = \"".to_owned() + &py_v.to_string2() + "\"\n"));
+            result.push_str(&("py_version = \"".to_owned() + &py_v.to_string_no_patch() + "\"\n"));
         } else {
             result.push_str(&("py_version = \"3.7\"".to_owned() + "\n"));
         }
@@ -582,6 +581,8 @@ __pypackages__/
 
     let mut cfg = Config::default();
     cfg.authors = util::get_git_author();
+    cfg.py_version = Some(util::prompt_py_vers());
+
     cfg.write_file(&format!("{}/pyproject.toml", name));
 
     if commands::git_init(Path::new(name)).is_err() {
@@ -943,22 +944,7 @@ fn run_script(
         )
         .expect("Problem parsing version from file");
     } else {
-        cfg_vers = {
-            // Ask the user, and write it to `pyproject.toml`.
-            util::print_color(
-                "Please enter the Python version for this project:",
-                Color::Magenta,
-            );
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .expect("Unable to read user input for version");
-
-            input.pop(); // Remove trailing newline.
-            let input = input.replace("\n", "").replace("\r", "");
-
-            util::fallible_v_parse(&input)
-        };
+        cfg_vers = util::prompt_py_vers();
 
         fs::File::create(&py_vers_path)
             .expect("Problem creating a file to store the Python version for this script");
@@ -1240,7 +1226,6 @@ fn main() {
 
     let dep_cache_path = pyflow_path.join("dependency-cache");
     let script_env_path = pyflow_path.join("script-envs");
-    // git_cache_path is where we clone git repos into, to build wheels from
     let git_path = pyflow_path.join("git");
 
     #[cfg(target_os = "windows")]
@@ -1366,25 +1351,10 @@ fn main() {
         _ => (),
     }
 
-    // Check for environments. Create one if none exist. Set `vers_path`.
-
     let cfg_vers = if let Some(v) = cfg.py_version {
         v
     } else {
-        // Ask the user, and write it to `pyproject.toml`.
-        util::print_color(
-            "Please enter the Python version for this project:",
-            Color::Magenta,
-        );
-        // todo: Utility fn for this type promp? Shared with prompt_alias.
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Unable to read user input for version");
-
-        input.pop(); // Remove trailing newline.
-
-        let specified = util::fallible_v_parse(&input);
+        let specified = util::prompt_py_vers();
 
         if !PathBuf::from(cfg_filename).exists() {
             cfg.write_file(cfg_filename);
@@ -1394,6 +1364,7 @@ fn main() {
         specified
     };
 
+    // Check for environments. Create one if none exist. Set `vers_path`.
     let (vers_path, py_vers) =
         util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_path, &dep_cache_path);
 
