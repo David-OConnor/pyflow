@@ -50,7 +50,10 @@ enum SubCommand {
         name: String, // holds the project name.
     },
 
-    /// Install packages from `pyproject.toml`, or ones specified
+    /** Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Example:
+
+    `pyflow install`: sync your installation with `pyproject.toml`, or `pyflow.lock` if it exists.
+    `pyflow install numpy scipy`: install `numpy` and `scipy`.*/
     #[structopt(name = "install")]
     Install {
         #[structopt(name = "packages")]
