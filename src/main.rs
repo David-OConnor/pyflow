@@ -1235,6 +1235,8 @@ fn main() {
     #[cfg(target_os = "macos")]
     let os = Os::Mac;
 
+    // Handle commands that don't involve operating out of a project before one that do, with setup
+    // code in-between.
     let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
@@ -1280,17 +1282,34 @@ fn main() {
         return;
     }
 
-    // created_cfg is used to help us prevent accidentally creating files when running `pyflow` alone.
-    if !&PathBuf::from(cfg_filename).exists() {
+    let mut cfg_path = PathBuf::from(cfg_filename);
+    if !&cfg_path.exists() {
         if let SubCommand::Python { args: _ } = subcmd {
-            util::print_color("To get started, run `pyflow new projname` to create a project folder, or \
+            // Try looking recursively in parent directories for a config file.
+            let recursion_limit = 8; // How my levels to look up
+            let mut current_level = env::current_dir().expect("Can't access current directory");
+            for _ in 0..recursion_limit {
+                if let Some(parent) = current_level.parent() {
+                    let parent_cfg_path = parent.join(cfg_filename);
+                    if parent_cfg_path.exists() {
+                        cfg_path = parent_cfg_path;
+                        break;
+                    }
+                    current_level = parent.to_owned();
+                }
+            }
+
+            if !&cfg_path.exists() {
+                // ie still can't find it after searching parents.
+                util::print_color("To get started, run `pyflow new projname` to create a project folder, or \
             `pyflow init` to start a project in this folder. For a list of what you can do, run \
-            `pyflow help`", Color::DarkCyan);
-            return;
+            `pyflow help`.", Color::DarkCyan);
+                return;
+            }
         }
     }
 
-    let mut cfg = Config::from_file(&PathBuf::from(cfg_filename)).unwrap_or_default();
+    let mut cfg = Config::from_file(&cfg_path).unwrap_or_default();
     cfg.populate_path_subreqs();
 
     // Run subcommands that don't require info about the environment.
@@ -1299,7 +1318,7 @@ fn main() {
             files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
             files::parse_pipfile(&mut cfg, &PathBuf::from("Pipfile"));
 
-            if PathBuf::from(cfg_filename).exists() {
+            if cfg_path.exists() {
                 abort("pyproject.toml already exists - not overwriting.")
             }
             cfg.write_file(cfg_filename);
@@ -1557,13 +1576,6 @@ fn main() {
         }
 
         SubCommand::Python { args } => {
-            // Don't let running `pyflow` nakedly in a non-proj directory build a proj skeleton;
-            // this may result in dumping files in weird places like the home directory, Desktop etc.
-            //            if created_cfg {
-            //                println!("To get started, run `pyflow new` to create a project folder, or `pyflow init` to set\
-            //                up a project in this folder");
-            //                return
-            //            }
             if commands::run_python(&paths.bin, &pythonpath, &args).is_err() {
                 abort("Problem running Python");
             }

@@ -2,6 +2,8 @@
 
 ## v0.2.0
 - `pyflow new` now asks for the Python version instead of using a default.
+- Now searches parent directories for `pyproject.toml`, if we can't find one
+in the current path.
 
 ## v0.1.9
 - Can now parse subdependencies of `path` requirements from built-wheels
