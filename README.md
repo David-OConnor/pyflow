@@ -29,7 +29,9 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 [this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow-0.1.9-x86_64.msi).
 Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 
-- **Ubuntu or Debian** - Download and run
+- **Ubuntu, or another Os that uses Snap** - Run `snap install pyflow --classic`.
+
+- **Ubuntu or Debian without Snap** - Download and run
 [this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow_0.1.9_amd64.deb).
 
 - **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run

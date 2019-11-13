@@ -16,8 +16,8 @@ description: |
   own environments with no config, and project functions directly from the CLI.
 
 grade: stable
-confinement: strict
-#confinement: classic  # Can't get strict to work.
+confinement: classic
+
 base: core18
 parts:
   pyflow:
@@ -30,4 +30,4 @@ apps:
   pyflow:
     command: pyflow
     # Plugs not required for classic mode.
-    plugs: ["home", "removable-media", "network", "system-files"]
+#    plugs: ["home", "removable-media", "network"]
