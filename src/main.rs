@@ -1260,10 +1260,6 @@ fn main() {
         return;
     }
 
-    let pypackages_dir = env::current_dir()
-        .expect("Can't find current path")
-        .join("__pypackages__");
-
     if let SubCommand::New { name } = subcmd {
         if new(&name).is_err() {
             abort(
@@ -1306,6 +1302,13 @@ fn main() {
         //        }
     }
 
+    // Base pypackages_path and lock_path on the `pyproject.toml` folder.
+    let proj_path = cfg_path.parent().expect("Can't find proj path via parent");
+    let pypackages_path = proj_path.join("__pypackages__");
+    let lock_path = &proj_path.join(lock_filename);
+
+    println!("PPP: {:?}", &pypackages_path);
+
     let mut cfg = Config::from_file(&cfg_path).unwrap_or_default();
     cfg.populate_path_subreqs();
 
@@ -1323,10 +1326,10 @@ fn main() {
             // Don't return here; let the normal logic create the venv now.
         }
         SubCommand::Reset {} => {
-            if pypackages_dir.exists() && fs::remove_dir_all(&pypackages_dir).is_err() {
+            if pypackages_path.exists() && fs::remove_dir_all(&pypackages_path).is_err() {
                 abort("Problem removing `__pypackages__` directory")
             }
-            if Path::new(lock_filename).exists() && fs::remove_file(lock_filename).is_err() {
+            if lock_path.exists() && fs::remove_file(&lock_path).is_err() {
                 abort("Problem removing `pyflow.lock`")
             }
             util::print_color(
@@ -1353,7 +1356,7 @@ fn main() {
             return;
         }
         SubCommand::List => {
-            let num_venvs = util::find_venvs(&pypackages_dir).len();
+            let num_venvs = util::find_venvs(&pypackages_path).len();
             if !cfg_path.exists() && num_venvs == 0 {
                 abort("Can't find a project in this directory")
             } else if num_venvs == 0 {
@@ -1382,7 +1385,7 @@ fn main() {
 
     // Check for environments. Create one if none exist. Set `vers_path`.
     let (vers_path, py_vers) =
-        util::find_venv_info(&cfg_vers, &pypackages_dir, &pyflow_path, &dep_cache_path);
+        util::find_venv_info(&cfg_vers, &pypackages_path, &pyflow_path, &dep_cache_path);
 
     let paths = util::Paths {
         bin: util::find_bin_path(&vers_path),
@@ -1402,7 +1405,7 @@ fn main() {
     }
 
     let mut found_lock = false;
-    let lock = match read_lock(&PathBuf::from(lock_filename)) {
+    let lock = match read_lock(&lock_path) {
         Ok(l) => {
             found_lock = true;
             l
@@ -1506,7 +1509,7 @@ fn main() {
                 &dont_uninstall,
                 os,
                 &py_vers,
-                &PathBuf::from(lock_filename),
+                &lock_path,
             );
             util::print_color("Installation complete", Color::Green);
         }
@@ -1541,7 +1544,7 @@ fn main() {
                 &[],
                 os,
                 &py_vers,
-                &PathBuf::from(lock_filename),
+                &lock_path,
             );
             util::print_color("Uninstall complete", Color::Green);
         }
