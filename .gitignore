@@ -15,6 +15,7 @@ script.py
 *.egg-info/
 *.wheel
 *.snap
+*.snap.*
 */snap.*
 build/
 dist/
