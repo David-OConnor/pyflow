@@ -471,8 +471,8 @@ impl Config {
     }
 
     /// Create a new `pyproject.toml` file.
-    fn write_file(&self, filename: &str) {
-        let file = PathBuf::from(filename);
+    fn write_file(&self, path: &Path) {
+        let file = path;
         if file.exists() {
             abort("`pyproject.toml` already exists")
         }
@@ -579,7 +579,7 @@ __pypackages__/
     cfg.authors = util::get_git_author();
     cfg.py_version = Some(util::prompt_py_vers());
 
-    cfg.write_file(&format!("{}/pyproject.toml", name));
+    cfg.write_file(&PathBuf::from(format!("{}/pyproject.toml", name)));
 
     if commands::git_init(Path::new(name)).is_err() {
         util::print_color(
@@ -1278,31 +1278,32 @@ fn main() {
         return;
     }
 
+    // We need access to the config from here on; throw an error if we can't find it.
     let mut cfg_path = PathBuf::from(cfg_filename);
     if !&cfg_path.exists() {
-        if let SubCommand::Python { args: _ } = subcmd {
-            // Try looking recursively in parent directories for a config file.
-            let recursion_limit = 8; // How my levels to look up
-            let mut current_level = env::current_dir().expect("Can't access current directory");
-            for _ in 0..recursion_limit {
-                if let Some(parent) = current_level.parent() {
-                    let parent_cfg_path = parent.join(cfg_filename);
-                    if parent_cfg_path.exists() {
-                        cfg_path = parent_cfg_path;
-                        break;
-                    }
-                    current_level = parent.to_owned();
+        //        if let SubCommand::Python { args: _ } = subcmd {
+        // Try looking recursively in parent directories for a config file.
+        let recursion_limit = 8; // How my levels to look up
+        let mut current_level = env::current_dir().expect("Can't access current directory");
+        for _ in 0..recursion_limit {
+            if let Some(parent) = current_level.parent() {
+                let parent_cfg_path = parent.join(cfg_filename);
+                if parent_cfg_path.exists() {
+                    cfg_path = parent_cfg_path;
+                    break;
                 }
-            }
-
-            if !&cfg_path.exists() {
-                // ie still can't find it after searching parents.
-                util::print_color("To get started, run `pyflow new projname` to create a project folder, or \
-            `pyflow init` to start a project in this folder. For a list of what you can do, run \
-            `pyflow help`.", Color::DarkCyan);
-                return;
+                current_level = parent.to_owned();
             }
         }
+
+        if !&cfg_path.exists() {
+            // ie still can't find it after searching parents.
+            util::print_color("To get started, run `pyflow new projname` to create a project folder, or \
+            `pyflow init` to start a project in this folder. For a list of what you can do, run \
+            `pyflow help`.", Color::DarkCyan);
+            return;
+        }
+        //        }
     }
 
     let mut cfg = Config::from_file(&cfg_path).unwrap_or_default();
@@ -1317,7 +1318,7 @@ fn main() {
             if cfg_path.exists() {
                 abort("pyproject.toml already exists - not overwriting.")
             }
-            cfg.write_file(cfg_filename);
+            cfg.write_file(&cfg_path);
             util::print_color("Created `pyproject.toml`", Color::Green);
             // Don't return here; let the normal logic create the venv now.
         }
@@ -1337,7 +1338,7 @@ fn main() {
         SubCommand::Switch { version } => {
             // Updates `pyproject.toml` with a new python version
             let specified = util::fallible_v_parse(&version);
-            files::change_py_vers(&PathBuf::from(&cfg_filename), &specified);
+            files::change_py_vers(&PathBuf::from(&cfg_path), &specified);
             util::print_color(
                 &format!(
                     "Switched to Python version {}.{}",
@@ -1353,7 +1354,7 @@ fn main() {
         }
         SubCommand::List => {
             let num_venvs = util::find_venvs(&pypackages_dir).len();
-            if !PathBuf::from(&cfg_filename).exists() && num_venvs == 0 {
+            if !cfg_path.exists() && num_venvs == 0 {
                 abort("Can't find a project in this directory")
             } else if num_venvs == 0 {
                 util::print_color(
@@ -1371,10 +1372,10 @@ fn main() {
     } else {
         let specified = util::prompt_py_vers();
 
-        if !PathBuf::from(cfg_filename).exists() {
-            cfg.write_file(cfg_filename);
+        if !cfg_path.exists() {
+            cfg.write_file(&cfg_path);
         }
-        files::change_py_vers(&PathBuf::from(&cfg_filename), &specified);
+        files::change_py_vers(&cfg_path, &specified);
 
         specified
     };
@@ -1419,8 +1420,8 @@ fn main() {
         // the currently-installed packages, found by crawling metadata in the `lib` path.
         // See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages, dev } => {
-            if !PathBuf::from(cfg_filename).exists() {
-                cfg.write_file(cfg_filename);
+            if !cfg_path.exists() {
+                cfg.write_file(&cfg_path);
             }
 
             if found_lock {
@@ -1428,7 +1429,7 @@ fn main() {
             }
 
             // Merge reqs added via cli with those in `pyproject.toml`.
-            let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, cfg_filename);
+            let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, &cfg_path);
 
             // We've removed the git repos from packages to install form pypi, but make
             // sure we flag them as not-to-uninstall.
@@ -1479,32 +1480,6 @@ fn main() {
                 git_reqs_dev.append(&mut metadata.requires_dist);
             }
 
-            //            for req in updated_reqs.iter().filter(|r| r.path.is_some()) {
-            //                let mut metadata = install::download_and_install_git(
-            //                    &req.name,
-            //                    util::GitPath::Path(req.path.clone().unwrap()),
-            //                    &git_path,
-            //                    &lib_path,
-            //                    &script_path,
-            //                    &bin_path,
-            //                );
-            //
-            //                git_reqs.append(&mut metadata.requires_dist);
-            //            }
-            //
-            //            for req in up_dev_reqs.iter().filter(|r| r.path.is_some()) {
-            //                let mut metadata = install::download_and_install_git(
-            //                    &req.name,
-            //                    util::GitPath::Path(req.path.clone().unwrap()),
-            //                    &git_path,
-            //                    &lib_path,
-            //                    &script_path,
-            //                    &bin_path,
-            //                );
-            //
-            //                git_reqs.append(&mut metadata.requires_dist);
-            //            }
-
             // We don't pass the git requirement itself, since we've directly installed it,
             // but we do pass its requirements.
             let mut updated_reqs: Vec<Req> = updated_reqs
@@ -1549,7 +1524,7 @@ fn main() {
                 })
                 .collect();
 
-            files::remove_reqs_from_cfg(cfg_filename, &removed_reqs);
+            files::remove_reqs_from_cfg(&cfg_path, &removed_reqs);
 
             // Filter reqs here instead of re-reading the config from file.
             let updated_reqs: Vec<Req> = cfg

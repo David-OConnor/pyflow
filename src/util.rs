@@ -293,7 +293,7 @@ pub fn merge_reqs(
     added: &[String],
     dev: bool,
     cfg: &crate::Config,
-    cfg_filename: &str,
+    cfg_path: &Path,
 ) -> (Vec<Req>, Vec<Req>) {
     let mut added_reqs = vec![];
     for p in added.iter() {
@@ -371,12 +371,12 @@ pub fn merge_reqs(
 
     if dev {
         if !added_reqs_unique.is_empty() {
-            files::add_reqs_to_cfg(cfg_filename, &[], &added_reqs_unique);
+            files::add_reqs_to_cfg(&cfg_path, &[], &added_reqs_unique);
         }
         (cfg.reqs.clone(), result)
     } else {
         if !added_reqs_unique.is_empty() {
-            files::add_reqs_to_cfg(cfg_filename, &added_reqs_unique, &[]);
+            files::add_reqs_to_cfg(&cfg_path, &added_reqs_unique, &[]);
         }
         (result, cfg.dev_reqs.clone())
     }
