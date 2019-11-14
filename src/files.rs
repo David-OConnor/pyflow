@@ -232,21 +232,21 @@ fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
 /// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
 /// we should update the version. Assume we've already parsed the config, and are only
 /// adding new reqs, or ones with a changed version.
-pub fn add_reqs_to_cfg(filename: &str, added: &[Req], added_dev: &[Req]) {
-    let data = fs::read_to_string(filename)
+pub fn add_reqs_to_cfg(cfg_path: &Path, added: &[Req], added_dev: &[Req]) {
+    let data = fs::read_to_string(cfg_path)
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 
     let updated = update_cfg(&data, added, added_dev);
-    fs::write(filename, updated)
+    fs::write(cfg_path, updated)
         .expect("Unable to write pyproject.toml while attempting to add a dependency");
 }
 
 /// Remove dependencies from pyproject.toml.
-pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
+pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
     // todo: Handle removing dev deps.
     // todo: DRY from parsing the config.
     let mut result = String::new();
-    let data = fs::read_to_string(filename)
+    let data = fs::read_to_string(cfg_path)
         .expect("Unable to read pyproject.toml while attempting to add a dependency");
 
     let mut in_dep = false;
@@ -307,7 +307,7 @@ pub fn remove_reqs_from_cfg(filename: &str, reqs: &[String]) {
         result.push_str("\n");
     }
 
-    fs::write(filename, result)
+    fs::write(cfg_path, result)
         .expect("Unable to write to pyproject.toml while attempting to add a dependency");
 }
 
