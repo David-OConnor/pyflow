@@ -55,7 +55,7 @@ with the above ones, and it doesn't yet work with Mac.
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname`
 to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
 creates a folder with the basics.
-- Run `pyflow install requests` etc, to install packages. Alternatively, edit `pyproject.toml` directly.
+- Run `pyflow install requests` etc to install packages. Alternatively, edit `pyproject.toml` directly.
 - Run `pyflow` or `pyflow myfile.py` to run Python.
 
 
@@ -263,8 +263,8 @@ entry points for somone using the package, regardless of if they're using this t
 
 ### Managing dependencies:
 - `pyflow install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified.
-If an environment isn't already set up for the version specified in `pyproject.toml`, sets one up. If
-no version is specified, it asks you. Note that this command isn't required to sync dependencies; any relevant `pyflow`
+If an environment isn't already set up for the version specified in `pyproject.toml`, sets one up.
+ Note that this command isn't required to sync dependencies; any relevant `pyflow`
 command will do so automatically.
 - `pyflow install requests` - If you specify one or more packages after `install`, those packages will
 be added to `pyproject.toml` and installed. You can use the `--dev` flag to install dev dependencies. eg:

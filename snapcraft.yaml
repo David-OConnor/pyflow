@@ -1,6 +1,6 @@
 name: pyflow
 version: 0.2.1
-#license: MIT
+license: MIT  # todo: This appears to cause the `snapcraft` command to fail.
 summary: A Python installation and dependency manager.
 description: |
   Pyflow manages Python installations and dependencies.
