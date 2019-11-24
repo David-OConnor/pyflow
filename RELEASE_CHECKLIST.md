@@ -2,6 +2,13 @@
 
 This is a list of steps to complete when making a new release.
 
+System prereqs:
+- Ubuntu 16.04: `sudo apt update`, `sudo apt install build-essential`, 
+`pip3 install maturin twine`, `cargo install cargo-deb`, `sudo apt install snapcraft`.
+- Centos 7: `yum update`, `yum install gcc gcc-c++ make`,
+ `cargo install cargo-rpm`, `yum install rpm-build`.
+- Windows: Install Visual Studio Community, and Wix. `cargo install cargo-wix`
+
 1. Review the commit and PR history since last release. Ensure that all relevant
 changes are included in `CHANGELOG.md`
 1. Ensure  the readme and homepage website reflects API changes. This includes changing the download

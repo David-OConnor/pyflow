@@ -55,6 +55,7 @@ with the above ones, and it doesn't yet work with Mac.
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname`
 to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
 creates a folder with the basics.
+- Run `pyflow install requests` etc, to install packages. Alternatively, edit `pyproject.toml` directly.
 - Run `pyflow` or `pyflow myfile.py` to run Python.
 
 
