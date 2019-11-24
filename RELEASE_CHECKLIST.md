@@ -12,7 +12,7 @@ links to reflect the latest version.
 1. Run `cargo clippy -- -W clippy::pedantic -W clippy::nursery -W clippy::cargo`
 1. Commit and push the repo
 1. Check that CI pipeline passed
-1. Run `cargo package` and `cargo publish` on Ubuntu 16.04 (Allows installation via cargo)
+1. Run `cargo package` and `cargo publish`
 1. Run `cargo build --release` on Windows and Ubuntu 16.04 (to build standalone binaries)
 1. Run `cargo deb` on Ubuntu 16.04 (one built on 18.04
 works on 19.04, but not vice-versa)
@@ -20,8 +20,7 @@ works on 19.04, but not vice-versa)
 users, and binaries built on other OSes appear not to work on these due to OpenSSL issues.
 1. Run `cargo wix` on Windows
 1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`.
-1. Change the name in `Cargo.toml` on Windows to `pflow`. Run `maturin build` on Windows.
-rename the executable (`data subfolder`) to `pyflow[.exe]`
+1. Run `maturin build` on Windows.
 1. On Ubuntu 16.04, do the same, and also swap comments on the `reqwest` dependency.
 1. For both wheels, Run `twine upload (wheelname)`.
 1. Run `snapcraft`, `snapcraft login`, then

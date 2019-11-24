@@ -45,9 +45,7 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 `cargo install pyflow`. If able, please build from source using the instructions near the bottom of
 this page and PR a binary, to make this easier in the future.
 
-- **With Pip** - Run `pip install pflow`. Note that you still run with `pyflow`, and
-it doesn't matter which Python you use to install it.
- The linux install using this method is much larger than
+- **With Pip** - Run `pip install pyflow`. The linux install using this method is much larger than
 with the above ones, and it doesn't yet work with Mac.
 
  - **If you have [Rust](https://www.rust-lang.org) installed** - Run `cargo install pyflow`.
@@ -421,7 +419,7 @@ cargo build --release
 - If installed via `Scoop`, run `scoop update pyflow`.
 - If installed via `Snap`, run `snap refresh pyflow`.
 - If installed via `Cargo`, run `cargo install pyflow --force`.
-- If installed via `Pip`, run `pip install --upgrade pflow`.
+- If installed via `Pip`, run `pip install --upgrade pyflow`.
 - If using an installer or
 deb, run the new version's installer or deb. If manually calling a binary, replace it.
 
