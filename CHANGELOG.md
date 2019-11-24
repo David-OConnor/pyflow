@@ -1,6 +1,8 @@
 # Changelog
 
-## v0.2.0
+## v0.2.1
+- Running `pyflow install` is now no longer required; Running `pyflow`, `pyflow list` etc
+will now install dependencies as required from `pyproject.toml`.
 - `pyflow new` now asks for the Python version instead of using a default.
 - Now searches parent directories for `pyproject.toml`, if we can't find one
 in the current path.

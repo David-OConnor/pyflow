@@ -1054,13 +1054,14 @@ fn sync(
         .collect();
 
     // todo: Only show this when needed.
+    // todo: Temporarily? Removed.
     // Powershell  doesn't like emojis
-    #[cfg(target_os = "windows")]
-    println!("Resolving dependencies...");
-    #[cfg(target_os = "linux")]
-    println!("🔍 Resolving dependencies...");
-    #[cfg(target_os = "macos")]
-    println!("🔍 Resolving dependencies...");
+    //    #[cfg(target_os = "windows")]
+    //    println!("Resolving dependencies...");
+    //    #[cfg(target_os = "linux")]
+    //    println!("🔍 Resolving dependencies...");
+    //    #[cfg(target_os = "macos")]
+    //    println!("🔍 Resolving dependencies...");
 
     // Dev reqs and normal reqs are both installed here; we only ommit dev reqs
     // when packaging.
@@ -1307,8 +1308,6 @@ fn main() {
     let pypackages_path = proj_path.join("__pypackages__");
     let lock_path = &proj_path.join(lock_filename);
 
-    println!("PPP: {:?}", &pypackages_path);
-
     let mut cfg = Config::from_file(&cfg_path).unwrap_or_default();
     cfg.populate_path_subreqs();
 
@@ -1415,6 +1414,17 @@ fn main() {
 
     let lockpacks = lock.package.unwrap_or_else(|| vec![]);
 
+    sync(
+        &paths,
+        &lockpacks,
+        &cfg.reqs,
+        &cfg.dev_reqs,
+        &util::find_dont_uninstall(&cfg.reqs, &cfg.dev_reqs),
+        os,
+        &py_vers,
+        &lock_path,
+    );
+
     // Now handle subcommands that require info about the environment
     match subcmd {
         // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
@@ -1434,25 +1444,7 @@ fn main() {
             // Merge reqs added via cli with those in `pyproject.toml`.
             let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, &cfg_path);
 
-            // We've removed the git repos from packages to install form pypi, but make
-            // sure we flag them as not-to-uninstall.
-            let mut dont_uninstall: Vec<String> = updated_reqs
-                .clone()
-                .into_iter()
-                .filter_map(|r| {
-                    if r.git.is_some() || r.path.is_some() {
-                        Some(r.name)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            for r in &up_dev_reqs {
-                if r.git.is_some() || r.path.is_some() {
-                    dont_uninstall.push(r.name.to_owned());
-                }
-            }
+            let dont_uninstall = util::find_dont_uninstall(&updated_reqs, &up_dev_reqs);
 
             // git_reqs is used to store requirements from packages installed via git.
             let mut git_reqs = vec![]; // For path reqs too.
@@ -1554,7 +1546,20 @@ fn main() {
                 abort("Problem running Python");
             }
         }
-        SubCommand::Package { extras } => build::build(&lockpacks, &paths, &cfg, &extras),
+        SubCommand::Package { extras } => {
+            sync(
+                &paths,
+                &lockpacks,
+                &cfg.reqs,
+                &cfg.dev_reqs,
+                &util::find_dont_uninstall(&cfg.reqs, &cfg.dev_reqs),
+                os,
+                &py_vers,
+                &lock_path,
+            );
+
+            build::build(&lockpacks, &paths, &cfg, &extras)
+        }
         SubCommand::Publish {} => build::publish(&paths.bin, &cfg),
         SubCommand::Run { args } => {
             run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, args);

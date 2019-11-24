@@ -831,3 +831,27 @@ pub fn prompt_py_vers() -> Version {
 
     fallible_v_parse(&input)
 }
+
+/// We've removed the git repos from packages to install form pypi, but make
+/// sure we flag them as not-to-uninstall.
+pub fn find_dont_uninstall(reqs: &[Req], dev_reqs: &[Req]) -> Vec<String> {
+    let mut result: Vec<String> = reqs
+        .clone()
+        .into_iter()
+        .filter_map(|r| {
+            if r.git.is_some() || r.path.is_some() {
+                Some(r.name.to_owned())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    for r in dev_reqs {
+        if r.git.is_some() || r.path.is_some() {
+            result.push(r.name.to_owned());
+        }
+    }
+
+    result
+}

@@ -5,7 +5,7 @@ use crate::dep_types::Version;
 use crate::{install, util};
 use crossterm::Color;
 use std::error::Error;
-use std::{fmt, fs, io, path::Path, path::PathBuf};
+use std::{fmt, fs, io, path::Path};
 
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
@@ -328,6 +328,7 @@ pub fn create_venv(
 ) -> Version {
     let os;
     let python_name;
+    #[allow(unused_mut)]
     let mut py_name;
     #[cfg(target_os = "windows")]
     {
@@ -452,6 +453,7 @@ pub fn create_venv(
         .expect("Timed out waiting for venv to be created.");
 
     // Try 64 first; if not, use 32.
+    #[allow(unused_variables)]
     let lib = if vers_path.join(".venv").join("lib64").exists() {
         "lib64"
     } else {

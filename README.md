@@ -26,19 +26,19 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 ## Installation
 - **Windows** - Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow-0.1.9-x86_64.msi).
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.2.1/pyflow-0.2.1-x86_64.msi).
 Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 
 - **Ubuntu, or another Os that uses Snap** - Run `snap install pyflow --classic`.
 
 - **Ubuntu or Debian without Snap** - Download and run
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow_0.1.9_amd64.deb).
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.2.1/pyflow_0.2.1_amd64.deb).
 
 - **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run
-[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow-0.1.9.x86_64.rpm).
+[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.2.1/pyflow-0.2.1.x86_64.rpm).
 
 - **A different Linux distro** - Download this
-[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.1.9/pyflow)
+[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.1/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
 - **Mac** - Install Rust: `curl https://sh.rustup.rs -sSf | sh`, then run
@@ -57,9 +57,6 @@ with the above ones, and it doesn't yet work with Mac.
 - *(Optional)* Run `pyflow init` in an existing project folder, or `pyflow new projname`
 to create a new project folder. `init` imports data from `requirements.txt` or `Pipfile`; `new`
 creates a folder with the basics.
-- Run `pyflow install` in a project folder to sync dependencies with `pyproject.toml`,
-or add dependencies to it.
-This file will be created if it doesn't exist.
 - Run `pyflow` or `pyflow myfile.py` to run Python.
 
 
@@ -188,7 +185,7 @@ Example contents:
 [tool.pyflow]
 py_version = "3.7"
 name = "runcible"
-version = "0.1.9"
+version = "0.2.1"
 authors = ["John Hackworth <jhackworth@vic.org>"]
 
 
@@ -268,7 +265,8 @@ entry points for somone using the package, regardless of if they're using this t
 ### Managing dependencies:
 - `pyflow install` - Install all packages in `pyproject.toml`, and remove ones not (recursively) specified.
 If an environment isn't already set up for the version specified in `pyproject.toml`, sets one up. If
-no version is specified, it asks you.
+no version is specified, it asks you. Note that this command isn't required to sync dependencies; any relevant `pyflow`
+command will do so automatically.
 - `pyflow install requests` - If you specify one or more packages after `install`, those packages will
 be added to `pyproject.toml` and installed. You can use the `--dev` flag to install dev dependencies. eg:
 `pyflow install black --dev`.
@@ -370,7 +368,7 @@ In order to build and publish your project, additional info is needed in
 [tool.pyflow]
 name = "everythingkiller"
 py_version = "3.6"
-version = "0.1.9"
+version = "0.2.1"
 authors = ["Fraa Erasmas <raz@edhar.math>"]
 description = "Small, but packs a punch!"
 homepage = "https://everything.math"
@@ -393,7 +391,7 @@ activate = "jeejah:activate"
 
 [tool.pyflow.dependencies]
 numpy = "^1.16.4"
-manimlib = "0.1.9"
+manimlib = "0.2.1"
 ipython = {version = "^7.7.0", extras=["qtconsole"]}
 
 
