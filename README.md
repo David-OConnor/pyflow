@@ -424,6 +424,16 @@ cargo build --release
 - If using an installer or
 deb, run the new version's installer or deb. If manually calling a binary, replace it.
 
+## Uninstalling
+- If installed via `Scoop`, run `scoop uninstall pyflow`.
+- If installed via `Snap`, run `snap remove pyflow`.
+- If installed via `Cargo`, run `cargo uninstall pyflow`.
+- If installed via `Pip`, run `pip uninstall pyflow`.
+- If installed via Windows installer, run the Installer again and select `Remove` when asked,
+or use `Apps & features`.
+- If installed via a `deb`, useg the `Software Center`.
+- If manually calling a binary, remove it.
+
 ## Contributing
 If you notice unexpected behavior or missing features, please post an issue,
 or submit a PR. If you see unexpected
