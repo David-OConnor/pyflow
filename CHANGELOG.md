@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.3
+- Now can parse deps with brackets listed in requirements.
+
 ## v0.2.1
 - Running `pyflow install` is now no longer required; Running `pyflow`, `pyflow list` etc
 will now install dependencies as required from `pyproject.toml`.

@@ -755,7 +755,7 @@ impl Req {
             // wildcard, so we don't accidentally match a semicolon here if a
             // set of parens appears later. The non-greedy ? in the version-matching
             // expression's important as well, in some cases of extras.
-            Regex::new(r#"^([a-zA-Z\-0-9._]+)\s+\(?(.*?)\)?(?:(?:\s*;\s*)(.*))?$"#).unwrap()
+            Regex::new(r#"^([a-zA-Z\-0-9._]+)(?:\[.*?\])?\s+\(?(.*?)\)?(?:(?:\s*;\s*)(.*))?$"#).unwrap()
         } else {
             // eg saturn = ">=0.3.4", as in pyproject.toml
             // todo extras in this format?
@@ -1328,6 +1328,19 @@ pub mod tests {
         );
         assert_eq!(b, Req::new("zc.lockfile".into(), vec![]));
     }
+
+    #[test]
+    fn parse_req_pypi_bracket() {
+        let p = Req::from_str("fonttools[ufo] (>=3.34.0)", true).unwrap();
+        assert_eq!(
+            p,
+            Req::new(
+                "fonttools".into(),
+                vec![Constraint::new(Gte, Version::new(3, 34, 0))]
+            )
+        );
+    }
+
 
     #[test]
     fn parse_req_pypi_cplx() {
