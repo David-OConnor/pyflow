@@ -836,8 +836,7 @@ pub fn prompt_py_vers() -> Version {
 /// sure we flag them as not-to-uninstall.
 pub fn find_dont_uninstall(reqs: &[Req], dev_reqs: &[Req]) -> Vec<String> {
     let mut result: Vec<String> = reqs
-        .clone()
-        .into_iter()
+        .iter()
         .filter_map(|r| {
             if r.git.is_some() || r.path.is_some() {
                 Some(r.name.to_owned())

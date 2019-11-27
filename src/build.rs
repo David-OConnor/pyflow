@@ -200,7 +200,7 @@ pub fn build(
         Command::new(paths.bin.join("python"))
             .arg(&build_file)
             .status()
-            .expect(&format!("Problem building using {}", build_file));
+            .unwrap_or_else(|_| panic!("Problem building using {}", build_file));
     }
 
     //    Command::new(paths.bin.join("python"))

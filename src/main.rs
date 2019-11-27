@@ -188,7 +188,7 @@ fn pop_reqs_helper(reqs: &[Req], dev: bool) -> Vec<Req> {
         for folder_name in util::find_folders(&req_path) {
             // todo: Dry from `util` and `install`.
             let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
-            if let Some(_) = re_dist.captures(&folder_name) {
+            if re_dist.captures(&folder_name).is_some() {
                 let metadata_path = req_path.join(folder_name).join("METADATA");
                 let mut metadata = util::parse_metadata(&metadata_path);
 
@@ -661,7 +661,9 @@ fn sync_deps(
                 }
             }
 
-            !contains
+            // The typing module is sometimes downloaded, causing a conflict/improper
+            // behavior compared to the built in module.
+            !contains && pack.0 != "typing"
         })
         .collect();
 

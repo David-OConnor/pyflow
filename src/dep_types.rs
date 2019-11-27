@@ -755,7 +755,8 @@ impl Req {
             // wildcard, so we don't accidentally match a semicolon here if a
             // set of parens appears later. The non-greedy ? in the version-matching
             // expression's important as well, in some cases of extras.
-            Regex::new(r#"^([a-zA-Z\-0-9._]+)(?:\[.*?\])?\s+\(?(.*?)\)?(?:(?:\s*;\s*)(.*))?$"#).unwrap()
+            Regex::new(r#"^([a-zA-Z\-0-9._]+)(?:\[(.*?)\])?\s+\(?(.*?)\)?(?:(?:\s*;\s*)(.*))?$"#)
+                .unwrap()
         } else {
             // eg saturn = ">=0.3.4", as in pyproject.toml
             // todo extras in this format?
@@ -772,14 +773,21 @@ impl Req {
 
         if let Some(caps) = re.captures(s) {
             let name = caps.get(1).unwrap().as_str().to_owned();
-            let reqs_m = caps.get(2).unwrap();
+            let reqs_m = caps.get(if pypi_fmt { 3 } else { 2 }).unwrap();
             let constraints = if reqs_m.as_str().is_empty() {
                 vec![]
             } else {
                 Constraint::from_str_multiple(reqs_m.as_str())?
             };
 
-            let (extra, sys_platform, python_version) = parse_extras(caps.get(3));
+            let (mut extra, sys_platform, python_version) =
+                parse_extras(caps.get(if pypi_fmt { 4 } else { 3 }));
+            // Now handle extras in brackets. Assume it's a simple string of the name.
+            if extra.is_none() && pypi_fmt {
+                if let Some(ex) = caps.get(2) {
+                    extra = Some(ex.as_str().to_owned())
+                }
+            }
 
             return Ok(Self {
                 name,
@@ -1331,16 +1339,15 @@ pub mod tests {
 
     #[test]
     fn parse_req_pypi_bracket() {
-        let p = Req::from_str("fonttools[ufo] (>=3.34.0)", true).unwrap();
-        assert_eq!(
-            p,
-            Req::new(
-                "fonttools".into(),
-                vec![Constraint::new(Gte, Version::new(3, 34, 0))]
-            )
+        let actual = Req::from_str("fonttools[ufo] (>=3.34.0)", true).unwrap();
+        let mut expected = Req::new(
+            "fonttools".into(),
+            vec![Constraint::new(Gte, Version::new(3, 34, 0))],
         );
-    }
+        expected.extra = Some("ufo".to_string());
 
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn parse_req_pypi_cplx() {
