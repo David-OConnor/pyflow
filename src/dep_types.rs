@@ -356,6 +356,7 @@ impl FromStr for ReqType {
             "!=" => Ok(Self::Ne),
             "^" => Ok(Self::Caret),
             "~" => Ok(Self::Tilde),
+            "~=" => Ok(Self::Tilde),
             _ => Err(DependencyError::new("Problem parsing ReqType")),
         }
     }
@@ -377,7 +378,9 @@ impl FromStr for Constraint {
             return Ok(Self::new(ReqType::Gte, Version::new(0, 0, 0)));
         }
 
-        let re = Regex::new(r"^(\^|~|==|<=|>=|<|>|!=)?(.*)$").unwrap();
+        // You must have the = versions listed before unequal, ie <= before <, or it'll
+        // conclude the match preemptively.
+        let re = Regex::new(r"^(\^|~=|~|==|<=|>=|<|>|!=)?(.*)$").unwrap();
 
         let caps = match re.captures(s) {
             Some(c) => c,
@@ -408,6 +411,7 @@ impl Constraint {
     pub fn from_str_multiple(vers: &str) -> Result<Vec<Self>, DependencyError> {
         let mut result = vec![];
         let vers = vers.replace(" ", "");
+
         for req in vers.split(',') {
             match Self::from_str(req) {
                 Ok(r) => result.push(r),
@@ -1335,6 +1339,20 @@ pub mod tests {
             )
         );
         assert_eq!(b, Req::new("zc.lockfile".into(), vec![]));
+    }
+
+    #[test]
+    fn parse_req_pypi_tilde() {
+        let a = Req::from_str("asgiref (~=3.2)", true).unwrap();
+        let b = Req::from_str("asgiref (~3.2)", true).unwrap();
+
+        let expected = Req::new(
+            "asgiref".into(),
+            vec![Constraint::new(Tilde, Version::new(3, 2, 0))],
+        );
+
+        assert_eq!(a, expected);
+        assert_eq!(b, expected);
     }
 
     #[test]

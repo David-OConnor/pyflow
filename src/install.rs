@@ -251,9 +251,15 @@ pub fn download_and_install_package(
 
             // Perhaps we're dealing with a zip.
             if archive.unpack(&paths.lib).is_err() {
+                println!(
+                    "Problem opening the tar.gz archive: {:?}, checking if it's a zip...",
+                    &archive_file
+                );
                 // The extract_wheel function just extracts a zip file, so it's appropriate here.
                 // We'll then continue with this leg, and build/move/cleanup.
+
                 util::extract_zip(&archive_file, &paths.lib, &None);
+
                 // Check if we have a zip file instead.
             }
 

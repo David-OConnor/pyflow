@@ -1,7 +1,9 @@
 # Changelog
 
 ## v0.2.3
-- Now can parse deps with brackets listed in requirements.
+- Fixed a potential conflict between the built-in `typing` module, and one on pypi
+- Now can parse deps with brackets listed in requirements
+- Now supports dependencies specified using `~=`. (Treat same as `~`)
 
 ## v0.2.1
 - Running `pyflow install` is now no longer required; Running `pyflow`, `pyflow list` etc
