@@ -603,7 +603,8 @@ impl Constraint {
                 } else {
                     max = Version::new(self.version.major + 1, 0, 0);
                 }
-                min < *version && *version < max
+
+                min <= *version && *version < max
             }
         }
     }
@@ -784,12 +785,15 @@ impl Req {
                 Constraint::from_str_multiple(reqs_m.as_str())?
             };
 
-            let (mut extra, sys_platform, python_version) =
+            let (extra, sys_platform, python_version) =
                 parse_extras(caps.get(if pypi_fmt { 4 } else { 3 }));
+
             // Now handle extras in brackets. Assume it's a simple string of the name.
+            let mut install_with_extras = None;
             if extra.is_none() && pypi_fmt {
                 if let Some(ex) = caps.get(2) {
-                    extra = Some(ex.as_str().to_owned())
+                    // todo: Handle multiple install_with_extras.
+                    install_with_extras = Some(vec![ex.as_str().to_owned()])
                 }
             }
 
@@ -799,7 +803,7 @@ impl Req {
                 extra,
                 sys_platform,
                 python_version,
-                install_with_extras: None,
+                install_with_extras,
                 path: None,
                 git: None,
             });
@@ -1357,12 +1361,14 @@ pub mod tests {
 
     #[test]
     fn parse_req_pypi_bracket() {
+        // Note that [ufo] doesn't refer to an extra required to install this input; it's
+        // an extra that may trigger additional installs from fonttools.
         let actual = Req::from_str("fonttools[ufo] (>=3.34.0)", true).unwrap();
         let mut expected = Req::new(
             "fonttools".into(),
             vec![Constraint::new(Gte, Version::new(3, 34, 0))],
         );
-        expected.extra = Some("ufo".to_string());
+        expected.install_with_extras = Some(vec!["ufo".to_string()]);
 
         assert_eq!(actual, expected);
     }

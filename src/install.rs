@@ -245,9 +245,14 @@ pub fn download_and_install_package(
                     &archive_path
                 ));
             }
+
             // Extract the tar.gz source code.
             let tar = GzDecoder::new(&archive_file);
+            //            println!("TAR: {:?}", &tar);
             let mut archive = Archive::new(tar);
+
+            //            println!("arc p: {:?}", &archive_path);
+            //            println!("arc f: {:?}", &archive_file);
 
             // Perhaps we're dealing with a zip.
             if archive.unpack(&paths.lib).is_err() {

@@ -1,6 +1,6 @@
 [package]
 name = "pyflow"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 description = "A modern Python installation and dependency manager"
 license = "MIT"
@@ -32,7 +32,6 @@ toml = "^0.5.1"
 zip = "^0.5.2"
 # We don't use native TLS, to avoid dependency issues on different linux distros.
 reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
-#reqwest = "^0.9.21"
 
 # Vendorize OpenSSl on Linux, to avoid compatibility problems.
 # todo: target-specific features aren't currently supported.
