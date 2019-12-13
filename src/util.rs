@@ -66,10 +66,14 @@ impl FromStr for Os {
             "win32" => Self::Windows32,
             "windows" | "win" | "win_amd64" => Self::Windows,
             "macosx_10_6_intel" | "darwin" => Self::Mac,
+            // We don't support BSD, but parsing it as Linux may be the best solution here.
+            "openbsd6" => Self::Linux,
             "any" => Self::Any,
             _ => {
                 if s.contains("mac") {
                     Self::Mac
+                } else if s.contains("bsd") {
+                    Self::Linux // see note above
                 } else {
                     return Err(DependencyError::new(&format!("Problem parsing Os: {}", s)));
                 }

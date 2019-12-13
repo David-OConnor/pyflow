@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.4
+- Fixed a bug where `bsd` specified as an OS on Pypi would cause a crash
+
 ## v0.2.3
 - Fixed a potential conflict between the built-in `typing` module, and one on pypi
 - Now can parse deps with brackets listed in requirements
