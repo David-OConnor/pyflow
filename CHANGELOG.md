@@ -1,6 +1,7 @@
 # Changelog
 
 ## v0.2.4
+- Fixed a bug where `pyflow script` was broken
 - `pyflow switch` now sets up the environment/dependencies with the new version
 - Fixed a bug where `bsd` specified as an OS on Pypi would cause a crash
 

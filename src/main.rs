@@ -920,8 +920,6 @@ fn run_script(
         unreachable!()
     };
 
-    let filename = util::standardize_name(&filename);
-
     // todo: Consider a metadata file, but for now, we'll use folders
     //    let scripts_data_path = script_env_path.join("scripts.toml");
 
