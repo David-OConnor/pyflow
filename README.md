@@ -467,7 +467,7 @@ on the server to properly determine dependencies, due to unreliable information
 
 ## Python binary sources:
 ### [Repo binaries are downloaded from](https://github.com/David-OConnor/pybin/releases)
-- Windows: [Python official Visual Studio package](https://www.nuget.org/packages/python/3.8.0-b4),
+- Windows: [Python official Visual Studio package](https://www.nuget.org/packages/python),
 by Steve Dower.
 - Newer linux distros: Built on Ubuntu 18.04, using standard procedures.
 - Older linux distros: Built on CentOS 7, using standard procedures.
