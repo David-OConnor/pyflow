@@ -1306,7 +1306,7 @@ fn main() {
     }
 
     // Base pypackages_path and lock_path on the `pyproject.toml` folder.
-    let proj_path = cfg_path.parent().expect("Can't find proj path via parent");
+    let proj_path = cfg_path.parent().expect("Can't find proj pathSw via parent");
     let pypackages_path = proj_path.join("__pypackages__");
     let lock_path = &proj_path.join(lock_filename);
 
@@ -1314,7 +1314,7 @@ fn main() {
     cfg.populate_path_subreqs();
 
     // Run subcommands that don't require info about the environment.
-    match subcmd {
+    match &subcmd {
         SubCommand::Init {} => {
             files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
             files::parse_pipfile(&mut cfg, &PathBuf::from("Pipfile"));
@@ -1342,6 +1342,7 @@ fn main() {
         SubCommand::Switch { version } => {
             // Updates `pyproject.toml` with a new python version
             let specified = util::fallible_v_parse(&version);
+            cfg.py_version = Some(specified);
             files::change_py_vers(&PathBuf::from(&cfg_path), &specified);
             util::print_color(
                 &format!(
@@ -1350,7 +1351,7 @@ fn main() {
                 ),
                 Color::Green,
             );
-            return;
+            // Don't return; now that we've changed the cfg version, let's run the normal flow.
         }
         SubCommand::Clear {} => {
             clear(&pyflow_path, &dep_cache_path, &script_env_path);
