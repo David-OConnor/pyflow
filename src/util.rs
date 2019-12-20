@@ -602,7 +602,7 @@ pub fn prompt_list<T: Clone + ToString>(
 
 /// Find the operating system from a wheel filename. This doesn't appear to be available
 /// anywhere else on the Pypi Warehouse.
-fn os_from_wheel_fname(filename: &str) -> Result<(Os), DependencyError> {
+fn os_from_wheel_fname(filename: &str) -> Result<Os, DependencyError> {
     // Format is "name-version-pythonversion-mobileversion?-os.whl"
     // Also works with formats like this:
     // `PyQt5-5.13.0-5.13.0-cp35.cp36.cp37.cp38-none-win32.whl` too.

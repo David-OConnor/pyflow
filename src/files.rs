@@ -10,6 +10,15 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+#[derive(Debug, Deserialize)]
+pub struct Pipfile {
+    // Pipfile doesn't use a prefix; assume `[packages]` and [`dev-packages`] sections
+    // are from it, and use the same format as this tool and `Poetry`.
+    pub packages: Option<HashMap<String, DepComponentWrapper>>,
+    #[serde(rename = "dev-packages")]
+    pub dev_packages: Option<HashMap<String, DepComponentWrapper>>,
+}
+
 /// This nested structure is required based on how the `toml` crate handles dots.
 #[derive(Debug, Deserialize)]
 pub struct Pyproject {
@@ -322,10 +331,6 @@ pub fn parse_req_dot_text(cfg: &mut Config, path: &Path) {
             match Req::from_pip_str(&l) {
                 Some(r) => {
                     cfg.reqs.push(r.clone());
-                    //                    util::print_color(
-                    //                        &format!("Added {} from requirements.txt", r.name),
-                    //                        Color::Green,
-                    //                    )
                 }
                 None => util::print_color(
                     &format!("Problem parsing {} from requirements.txt", l),
@@ -339,80 +344,6 @@ pub fn parse_req_dot_text(cfg: &mut Config, path: &Path) {
 fn key_re(key: &str) -> Regex {
     // todo DRY from main
     Regex::new(&format!(r#"^{}\s*=\s*"(.*)"$"#, key)).unwrap()
-}
-
-// todo: Dry from config parsing!!
-pub fn parse_pipfile(cfg: &mut Config, path: &Path) {
-    let file = match fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return,
-    };
-
-    let mut in_metadata = false;
-    let mut in_dep = false;
-    let mut _in_extras = false;
-
-    let sect_re = Regex::new(r"\[.*\]").unwrap();
-
-    for line in BufReader::new(file).lines() {
-        if let Ok(l) = line {
-            // todo replace this with something that clips off
-            // todo post-# part of strings; not just ignores ones starting with #
-            if l.starts_with('#') {
-                continue;
-            }
-
-            if &l == "[[source]]" {
-                in_metadata = true;
-                in_dep = false;
-                _in_extras = false;
-                continue;
-            } else if &l == "[packages]" {
-                in_metadata = false;
-                in_dep = true;
-                _in_extras = false;
-                continue;
-            } else if &l == "[dev-packages]" {
-                in_metadata = false;
-                in_dep = false;
-                // todo
-                continue;
-            } else if sect_re.is_match(&l) {
-                in_metadata = false;
-                in_dep = false;
-                _in_extras = false;
-                continue;
-            }
-
-            if in_metadata {
-                // todo DRY
-                // Pipfile deliberately only includes minimal metadata.
-                if let Some(n2) = key_re("name").captures(&l) {
-                    if let Some(n) = n2.get(1) {
-                        cfg.name = Some(n.as_str().to_string());
-                    }
-                }
-                if let Some(n2) = key_re("url").captures(&l) {
-                    if let Some(n) = n2.get(1) {
-                        cfg.homepage = Some(n.as_str().to_string());
-                    }
-                }
-            } else if in_dep && !l.is_empty() {
-                match Req::from_str(&l, false) {
-                    Ok(r) => {
-                        cfg.reqs.push(r.clone());
-                        util::print_color(&format!("Added {} from Pipfile", r.name), Color::Green)
-                    }
-                    Err(_) => util::print_color(
-                        &format!("Problem parsing {} from Pipfile", l),
-                        Color::Red,
-                    ),
-                }
-            }
-
-            // todo: [requires] section has python_version.
-        }
-    }
 }
 
 /// Update the config file with a new version.

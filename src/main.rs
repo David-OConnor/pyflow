@@ -158,7 +158,7 @@ fn pop_reqs_helper(reqs: &[Req], dev: bool) -> Vec<Req> {
         let req_path = PathBuf::from(req.path.clone().unwrap());
         let pyproj = req_path.join("pyproject.toml");
         let req_txt = req_path.join("requirements.txt");
-        let pipfile = req_path.join("Pipfile");
+        //        let pipfile = req_path.join("Pipfile");
 
         let mut dummy_cfg = Config::default();
 
@@ -166,9 +166,9 @@ fn pop_reqs_helper(reqs: &[Req], dev: bool) -> Vec<Req> {
             files::parse_req_dot_text(&mut dummy_cfg, &req_txt);
         }
 
-        if pipfile.exists() {
-            files::parse_pipfile(&mut dummy_cfg, &pipfile);
-        }
+        //        if pipfile.exists() {
+        //            files::parse_pipfile(&mut dummy_cfg, &pipfile);
+        //        }
 
         if dev {
             result.append(&mut dummy_cfg.dev_reqs);
@@ -267,6 +267,33 @@ impl Config {
             });
         }
         result
+    }
+
+    // todo: DRY at the top from `from_file`.
+    fn from_pipfile(path: &Path) -> Option<Self> {
+        // todo: Lots of tweaks and QC could be done re what fields to parse, and how best to
+        // todo parse and store them.
+        let toml_str = match fs::read_to_string(path) {
+            Ok(d) => d,
+            Err(_) => return None,
+        };
+
+        let decoded: files::Pipfile = if let Ok(d) = toml::from_str(&toml_str) {
+            d
+        } else {
+            abort("Problem parsing `Pipfile`");
+            unreachable!()
+        };
+        let mut result = Self::default();
+
+        if let Some(pipfile_deps) = decoded.packages {
+            result.reqs = Self::parse_deps(pipfile_deps);
+        }
+        if let Some(pipfile_dev_deps) = decoded.dev_packages {
+            result.dev_reqs = Self::parse_deps(pipfile_dev_deps);
+        }
+
+        Some(result)
     }
 
     /// Pull config data from `pyproject.toml`. We use this to deserialize things like Versions
@@ -592,7 +619,7 @@ __pypackages__/
 }
 
 /// Read dependency data from a lock file.
-fn read_lock(path: &Path) -> Result<(Lock), Box<dyn Error>> {
+fn read_lock(path: &Path) -> Result<Lock, Box<dyn Error>> {
     let data = fs::read_to_string(path)?;
     Ok(toml::from_str(&data)?)
 }
@@ -1275,6 +1302,24 @@ fn main() {
         return;
     }
 
+    if let SubCommand::Init {} = subcmd {
+        let cfg_path = PathBuf::from(cfg_filename);
+        if cfg_path.exists() {
+            abort("pyproject.toml already exists - not overwriting.")
+        }
+
+        let mut cfg = match fs::File::open(&PathBuf::from("Pipfile")) {
+            Ok(f) => Config::from_pipfile(&PathBuf::from("Pipfile")).unwrap_or_default(),
+            Err(_) => Config::default(),
+        };
+
+        files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
+
+        cfg.write_file(&cfg_path);
+        util::print_color("Created `pyproject.toml`", Color::Green);
+        // Don't return here; let the normal logic create the venv now.
+    }
+
     // We need access to the config from here on; throw an error if we can't find it.
     let mut cfg_path = PathBuf::from(cfg_filename);
     if !&cfg_path.exists() {
@@ -1304,7 +1349,7 @@ fn main() {
     }
 
     // Base pypackages_path and lock_path on the `pyproject.toml` folder.
-    let proj_path = cfg_path.parent().expect("Can't find proj pathSw via parent");
+    let proj_path = cfg_path.parent().expect("Can't find proj pathw via parent");
     let pypackages_path = proj_path.join("__pypackages__");
     let lock_path = &proj_path.join(lock_filename);
 
@@ -1313,17 +1358,6 @@ fn main() {
 
     // Run subcommands that don't require info about the environment.
     match &subcmd {
-        SubCommand::Init {} => {
-            files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
-            files::parse_pipfile(&mut cfg, &PathBuf::from("Pipfile"));
-
-            if cfg_path.exists() {
-                abort("pyproject.toml already exists - not overwriting.")
-            }
-            cfg.write_file(&cfg_path);
-            util::print_color("Created `pyproject.toml`", Color::Green);
-            // Don't return here; let the normal logic create the venv now.
-        }
         SubCommand::Reset {} => {
             if pypackages_path.exists() && fs::remove_dir_all(&pypackages_path).is_err() {
                 abort("Problem removing `__pypackages__` directory")
