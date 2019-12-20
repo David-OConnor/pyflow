@@ -576,8 +576,8 @@ impl Config {
 /// Create a template directory for a python project.
 pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
     if !PathBuf::from(name).exists() {
-        fs::create_dir_all(&format!("{}/{}", name, name))?;
-        fs::File::create(&format!("{}/{}/__init__.py", name, name))?;
+        fs::create_dir_all(&format!("{}/{}", name, name.replace("-", "_")))?;
+        fs::File::create(&format!("{}/{}/__init__.py", name, name.replace("-", "_")))?;
         fs::File::create(&format!("{}/README.md", name))?;
         fs::File::create(&format!("{}/LICENSE", name))?;
         fs::File::create(&format!("{}/.gitignore", name))?;
