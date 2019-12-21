@@ -26,19 +26,19 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and s
 
 ## Installation
 - **Windows** - Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.2.3/pyflow-0.2.3-x86_64.msi).
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.2.4/pyflow-0.2.4-x86_64.msi).
 Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 
 - **Ubuntu, or another Os that uses Snap** - Run `snap install pyflow --classic`.
 
 - **Ubuntu or Debian without Snap** - Download and run
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.2.3/pyflow_0.2.3_amd64.deb).
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.2.4/pyflow_0.2.4_amd64.deb).
 
 - **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run
-[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.2.3/pyflow-0.2.3.x86_64.rpm).
+[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.2.4/pyflow-0.2.4.x86_64.rpm).
 
 - **A different Linux distro** - Download this
-[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.3/pyflow)
+[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.4/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
 - **Mac** - Install Rust: `curl https://sh.rustup.rs -sSf | sh`, then run
@@ -184,7 +184,7 @@ Example contents:
 [tool.pyflow]
 py_version = "3.7"
 name = "runcible"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["John Hackworth <jhackworth@vic.org>"]
 
 
@@ -367,7 +367,7 @@ In order to build and publish your project, additional info is needed in
 [tool.pyflow]
 name = "everythingkiller"
 py_version = "3.6"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["Fraa Erasmas <raz@edhar.math>"]
 description = "Small, but packs a punch!"
 homepage = "https://everything.math"
@@ -390,7 +390,7 @@ activate = "jeejah:activate"
 
 [tool.pyflow.dependencies]
 numpy = "^1.16.4"
-manimlib = "0.2.3"
+manimlib = "0.2.4"
 ipython = {version = "^7.7.0", extras=["qtconsole"]}
 
 
