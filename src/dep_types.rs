@@ -48,7 +48,7 @@ impl fmt::Display for DependencyError {
 impl From<num::ParseIntError> for DependencyError {
     fn from(_: num::ParseIntError) -> Self {
         Self {
-            details: "Pare int error".into(),
+            details: "Parse int error".into(),
         }
     }
 }
