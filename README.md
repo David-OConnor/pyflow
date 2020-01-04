@@ -169,7 +169,7 @@ These tools have different scopes and purposes:
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | **Isolated envs for scripts** | | | | | | | ✓ |
-| **Runs project fns from CLI** | | | ✓ | | | | ✓ |
+| **Runs project fns from CLI** | | ✓ | ✓ | | | | ✓ |
 
 
 ## Use
