@@ -169,7 +169,7 @@ These tools have different scopes and purposes:
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | **Isolated envs for scripts** | | | | | | | ✓ |
-| **Runs project fns from CLI** | | | ✓ | | | | ✓ |
+| **Runs project fns from CLI** | | ✓ | ✓ | | | | ✓ |
 
 
 ## Use
@@ -236,7 +236,7 @@ To install a package that includes a `.` in its name, enclose the name in quotes
 
 For details on
 how to specify dependencies in this `Cargo.toml`-inspired
-[semvar](https://semver.org) format,
+[semver](https://semver.org) format,
  reference
 [this guide](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html).
 

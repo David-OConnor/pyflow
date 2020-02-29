@@ -798,7 +798,7 @@ fn sync_deps(
                 new,
             );
 
-            // todo: Handle this more generally, in case we don't have proper semvar dist-info paths.
+            // todo: Handle this more generally, in case we don't have proper semver dist-info paths.
             install::rename_metadata(
                 &paths
                     .lib

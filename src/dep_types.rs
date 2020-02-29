@@ -48,7 +48,7 @@ impl fmt::Display for DependencyError {
 impl From<num::ParseIntError> for DependencyError {
     fn from(_: num::ParseIntError) -> Self {
         Self {
-            details: "Pare int error".into(),
+            details: "Parse int error".into(),
         }
     }
 }
@@ -362,7 +362,7 @@ impl FromStr for ReqType {
     }
 }
 
-/// For holding semvar-style version requirements with Caret, tilde etc
+/// For holding semver-style version requirements with Caret, tilde etc
 /// [Ref](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Constraint {

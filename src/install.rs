@@ -96,7 +96,7 @@ pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_pa
     let mut scripts = vec![];
     // todo: Sep fn for dist_info path, to avoid repetition between here and uninstall?
     let mut dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
-    // If we can't find the dist_info path, it may be due to it not using a full 3-digit semvar format.
+    // If we can't find the dist_info path, it may be due to it not using a full 3-digit semver format.
     // todo: Dry from dep_resolution, release check.
     if !dist_info_path.exists() && version.patch == 0 {
         dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string_med()));
