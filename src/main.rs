@@ -273,9 +273,9 @@ impl Config {
     fn from_pipfile(path: &Path) -> Option<Self> {
         // todo: Lots of tweaks and QC could be done re what fields to parse, and how best to
         // todo parse and store them.
-        let toml_str = match fs::read_to_string(path) {
-            Ok(d) => d,
-            Err(_) => return None,
+        let toml_str = match fs::read_to_string(path).ok() {
+            Some(d) => d,
+            None => return None,
         };
 
         let decoded: files::Pipfile = if let Ok(d) = toml::from_str(&toml_str) {
@@ -1308,9 +1308,9 @@ fn main() {
             abort("pyproject.toml already exists - not overwriting.")
         }
 
-        let mut cfg = match fs::File::open(&PathBuf::from("Pipfile")) {
-            Ok(f) => Config::from_pipfile(&PathBuf::from("Pipfile")).unwrap_or_default(),
-            Err(_) => Config::default(),
+        let mut cfg = match PathBuf::from("Pipfile").exists() {
+            true => Config::from_pipfile(&PathBuf::from("Pipfile")).unwrap_or_default(),
+            false => Config::default(),
         };
 
         files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
@@ -1340,9 +1340,12 @@ fn main() {
 
         if !&cfg_path.exists() {
             // ie still can't find it after searching parents.
-            util::print_color("To get started, run `pyflow new projname` to create a project folder, or \
+            util::print_color(
+                "To get started, run `pyflow new projname` to create a project folder, or \
             `pyflow init` to start a project in this folder. For a list of what you can do, run \
-            `pyflow help`.", Color::DarkCyan);
+            `pyflow help`.",
+                Color::DarkCyan,
+            );
             return;
         }
         //        }

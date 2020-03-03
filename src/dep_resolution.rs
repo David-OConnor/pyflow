@@ -599,132 +599,137 @@ pub fn resolve(
     let mut result_cleaned = vec![];
     for (name, deps) in &by_name {
         let fmtd_name = format_name(name, &version_cache);
+        match deps.len() {
+            1 => {
+                // This dep is only specified once; no need to resolve conflicts.
+                let dep = &deps[0];
 
-        if deps.len() == 1 {
-            // This dep is only specified once; no need to resolve conflicts.
-            let dep = &deps[0];
-
-            result_cleaned.push(Package {
-                id: dep.id,
-                parent: dep.parent,
-                name: fmtd_name,
-                version: dep.version,
-                deps: vec![], // to be filled in after resolution
-                rename: Rename::No,
-            });
-        } else if deps.len() > 1 {
-            // Find what constraints are driving each dep that shares a name.
-            let constraints = find_constraints(reqs, &result, deps);
-
-            let _names: Vec<String> = deps.iter().map(|d| d.version.to_string()).collect();
-            let inter = dep_types::intersection_many(&constraints);
-
-            if inter.is_empty() {
-                result_cleaned.append(&mut make_renamed_packs(&version_cache, deps, &fmtd_name));
-                continue;
-            }
-
-            // If a version we've examined meets all constraints for packages that use it, use it -
-            // we've already built the graph to accomodate its sub-deps.
-
-            // If unable, find the highest version that meets the constraints, and determine
-            // what its dependencies are.
-
-            // Otherwise install all,
-            // and rename as-required(By which criteria? the older one?). This ensures our
-            // graph is always resolveable, and avoids diving through the graph recursively,
-            // dealing with cycles etc. There may be ways around this in some cases.
-            // todo: Renaming may not work if the renamed dep uses compiled code.
-
-            let newest_compatible = deps
-                .iter()
-                .filter(|dep| {
-                    inter
-                        .iter()
-                        .any(|i| i.0 <= dep.version && dep.version <= i.1)
-                })
-                .max_by(|a, b| a.version.cmp(&b.version));
-
-            if let Some(best) = newest_compatible {
                 result_cleaned.push(Package {
-                    id: best.id,
-                    parent: best.parent,
+                    id: dep.id,
+                    parent: dep.parent,
                     name: fmtd_name,
-                    version: best.version,
+                    version: dep.version,
                     deps: vec![], // to be filled in after resolution
                     rename: Rename::No,
                 });
+            }
+            x if x > 1 => {
+                // Find what constraints are driving each dep that shares a name.
+                let constraints = find_constraints(reqs, &result, deps);
 
-                // Indicate we need to update the parent. We can't do it here, since
-                // we don't know if we're pr
-                // ocessed the parent[s] yet. Not doing this will
-                // result in incorrect dependencies listed in lock packs.
-                for dep in deps {
-                    // note that we push the old ids, so we can update the subdeps with the new versions.
-                    //                        updated_ids.insert(dep.id, best.id).expect("Problem inserting updated id");
-                    updated_ids.insert(dep.id, best.id);
-                }
-            } else {
-                // We consider the possibility there's a compatible version
-                // that wasn't one of the best-per-req we queried.
-                println!("⛏️ Digging deeper to resolve dependencies for {}...", name);
+                let _names: Vec<String> = deps.iter().map(|d| d.version.to_string()).collect();
+                let inter = dep_types::intersection_many(&constraints);
 
-                // I think we should query with the raw name, not fmted?
-                let versions = &version_cache.get(name).unwrap().2;
-
-                if versions.is_empty() {
+                if inter.is_empty() {
                     result_cleaned.append(&mut make_renamed_packs(
                         &version_cache,
                         deps,
-                        //                            &result,
                         &fmtd_name,
                     ));
                     continue;
                 }
 
-                // Generate dependencies here for all avail versions.
-                let unresolved_deps: Vec<Dependency> = versions
+                // If a version we've examined meets all constraints for packages that use it, use it -
+                // we've already built the graph to accomodate its sub-deps.
+
+                // If unable, find the highest version that meets the constraints, and determine
+                // what its dependencies are.
+
+                // Otherwise install all,
+                // and rename as-required(By which criteria? the older one?). This ensures our
+                // graph is always resolveable, and avoids diving through the graph recursively,
+                // dealing with cycles etc. There may be ways around this in some cases.
+                // todo: Renaming may not work if the renamed dep uses compiled code.
+
+                let newest_compatible = deps
                     .iter()
-                    .filter_map(|vers| {
-                        if inter.iter().any(|i| i.0 <= *vers && *vers <= i.1) {
-                            Some(Dependency {
-                                id: 0, // placeholder; we'll assign an id to the one we pick.
-                                name: fmtd_name.clone(),
-                                version: *vers,
-                                reqs: vec![], // todo
-                                parent: 0,    // todo
-                            })
-                        } else {
-                            None
-                        }
+                    .filter(|dep| {
+                        inter
+                            .iter()
+                            .any(|i| i.0 <= dep.version && dep.version <= i.1)
                     })
-                    .collect();
+                    .max_by(|a, b| a.version.cmp(&b.version));
 
-                let mut newest_unresolved = unresolved_deps
-                    .into_iter()
-                    .max_by(|a, b| a.version.cmp(&b.version))
-                    .unwrap();
+                if let Some(best) = newest_compatible {
+                    result_cleaned.push(Package {
+                        id: best.id,
+                        parent: best.parent,
+                        name: fmtd_name,
+                        version: best.version,
+                        deps: vec![], // to be filled in after resolution
+                        rename: Rename::No,
+                    });
 
-                newest_unresolved.id = result.iter().map(|d| d.id).max().unwrap_or(0) + 1;
+                    // Indicate we need to update the parent. We can't do it here, since
+                    // we don't know if we're pr
+                    // ocessed the parent[s] yet. Not doing this will
+                    // result in incorrect dependencies listed in lock packs.
+                    for dep in deps {
+                        // note that we push the old ids, so we can update the subdeps with the new versions.
+                        //                        updated_ids.insert(dep.id, best.id).expect("Problem inserting updated id");
+                        updated_ids.insert(dep.id, best.id);
+                    }
+                } else {
+                    // We consider the possibility there's a compatible version
+                    // that wasn't one of the best-per-req we queried.
+                    println!("⛏️ Digging deeper to resolve dependencies for {}...", name);
 
-                result_cleaned.push(Package {
-                    id: newest_unresolved.id,
-                    parent: newest_unresolved.parent,
-                    name: fmtd_name,
-                    version: newest_unresolved.version,
-                    deps: vec![], // to be filled in after resolution
-                    rename: Rename::No,
-                });
+                    // I think we should query with the raw name, not fmted?
+                    let versions = &version_cache.get(name).unwrap().2;
 
-                // todo: Do a check on newest_unresolved! If fails, execute renamed plan
+                    if versions.is_empty() {
+                        result_cleaned.append(&mut make_renamed_packs(
+                            &version_cache,
+                            deps,
+                            //                            &result,
+                            &fmtd_name,
+                        ));
+                        continue;
+                    }
 
-                for dep in deps {
-                    // note that we push the old ids, so we can update the subdeps with the new versions.
-                    updated_ids.insert(dep.id, newest_unresolved.id);
+                    // Generate dependencies here for all avail versions.
+                    let unresolved_deps: Vec<Dependency> = versions
+                        .iter()
+                        .filter_map(|vers| {
+                            if inter.iter().any(|i| i.0 <= *vers && *vers <= i.1) {
+                                Some(Dependency {
+                                    id: 0, // placeholder; we'll assign an id to the one we pick.
+                                    name: fmtd_name.clone(),
+                                    version: *vers,
+                                    reqs: vec![], // todo
+                                    parent: 0,    // todo
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+
+                    let mut newest_unresolved = unresolved_deps
+                        .into_iter()
+                        .max_by(|a, b| a.version.cmp(&b.version))
+                        .unwrap();
+
+                    newest_unresolved.id = result.iter().map(|d| d.id).max().unwrap_or(0) + 1;
+
+                    result_cleaned.push(Package {
+                        id: newest_unresolved.id,
+                        parent: newest_unresolved.parent,
+                        name: fmtd_name,
+                        version: newest_unresolved.version,
+                        deps: vec![], // to be filled in after resolution
+                        rename: Rename::No,
+                    });
+
+                    // todo: Do a check on newest_unresolved! If fails, execute renamed plan
+
+                    for dep in deps {
+                        // note that we push the old ids, so we can update the subdeps with the new versions.
+                        updated_ids.insert(dep.id, newest_unresolved.id);
+                    }
                 }
             }
-        } else {
-            panic!("We shouldn't be seeing this!")
+            _ => panic!("We shouldn't be seeing this!"),
         }
     }
 
