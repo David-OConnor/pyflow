@@ -6,7 +6,9 @@
 
 #### *Simple is better than complex* - The Zen of Python
 
-Pyflow manages Python installations and dependencies.
+Pyflow streamlines working with Python projects and files. It's an 
+easy-to-use CLI app with a minimalist API. Never worry about having the right
+version of Python or dependencies.
 
 ![Demonstration](https://raw.githubusercontent.com/david-oconnor/pyflow/master/demo.gif)
 
@@ -21,7 +23,7 @@ It runs standalone scripts in their
 own environments with no config, and project functions directly from the CLI.
 
 It implements [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
-and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/), and supports Python ≥ 3.4.
+and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/).
 
 
 ## Installation

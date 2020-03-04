@@ -1,3 +1,4 @@
+use crate::util::print_color;
 use crate::{commands, dep_types::Version, util};
 use crossterm::{Color, Colored};
 use flate2::read::GzDecoder;
@@ -248,28 +249,74 @@ pub fn download_and_install_package(
 
             // Extract the tar.gz source code.
             let tar = GzDecoder::new(&archive_file);
-            //            println!("TAR: {:?}", &tar);
             let mut archive = Archive::new(tar);
 
-            //            println!("arc p: {:?}", &archive_path);
-            //            println!("arc f: {:?}", &archive_file);
+            // We iterate over and copy entries instead of running `Archive.unpack`, since
+            // symlinks in the archive may cause the unpack to break. If this happens, we want
+            // to continue unpacking the other files.
+            // Overall, this is a pretty verbose workaround!
+            match archive.entries() {
+                Ok(entries) => {
+                    for file in entries {
+                        match file {
+                            Ok(mut f) => {
+                                match f.unpack_in(&paths.lib) {
+                                    Ok(_) => (),
+                                    Err(e) => {
+                                        print_color(
+                                            &format!(
+                                                "Problem unpacking file {:?}: {:?}",
+                                                f.path(),
+                                                e
+                                            ),
+                                            Color::DarkYellow,
+                                        );
+                                        let f_path =
+                                            f.path().expect("Problem getting path from archive");
 
-            // Perhaps we're dealing with a zip.
-            if archive.unpack(&paths.lib).is_err() {
-                println!(
-                    "Problem opening the tar.gz archive: {:?}, checking if it's a zip...",
-                    &archive_file
-                );
-                // The extract_wheel function just extracts a zip file, so it's appropriate here.
-                // We'll then continue with this leg, and build/move/cleanup.
+                                        let filename =
+                                            f_path.file_name().expect("Problem getting file name");
 
-                util::extract_zip(&archive_file, &paths.lib, &None);
+                                        // In the `pandocfilters` Python package, the readme file specified in
+                                        // `setup.py` is a symlink, which we can't unwrap, and is requried to exist,
+                                        // or the wheel build fails. Workaround here; may apply to other packages as well.
+                                        if filename
+                                            .to_str()
+                                            .unwrap()
+                                            .to_lowercase()
+                                            .contains("readme")
+                                        {
+                                            if let Err(_) =
+                                                fs::File::create(&paths.lib.join(f.path().unwrap()))
+                                            {
+                                                print_color(
+                                                    "Problem creating dummy readme",
+                                                    Color::DarkYellow,
+                                                );
+                                            }
+                                        }
+                                    }
+                                };
+                            }
+                            Err(e) => util::abort(&format!("Problem upacking: {:?}", e)),
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!(
+                        "Problem opening the tar.gz archive: {:?}: {:?},  checking if it's a zip...",
+                        &archive_file, e
+                    );
+                    // The extract_wheel function just extracts a zip file, so it's appropriate here.
+                    // We'll then continue with this leg, and build/move/cleanup.
 
-                // Check if we have a zip file instead.
+                    // Check if we have a zip file instead.
+                    util::extract_zip(&archive_file, &paths.lib, &None);
+                }
             }
 
             // The archive is now unpacked into a parent folder from the `tar.gz`. Place
-            // its sub-folders directly in the lib folder, and delete the parent.
+            // its sub-folders directly in the lib folder, and deleten the parent.
             let re = Regex::new(r"^(.*?)(?:\.tar\.gz|\.zip)$").unwrap();
             let folder_name = re
                 .captures(filename)
@@ -293,7 +340,7 @@ pub fn download_and_install_package(
             replace_distutils(&extracted_parent.join("setup.py"));
 
             // Build a wheel from source.
-            println!("EX PAR: {:#?} bin: {:#?}", &extracted_parent, &paths.bin);
+            //            println!("EX PAR: {:#?} bin: {:#?}", &extracted_parent, &paths.bin);
             Command::new(paths.bin.join("python"))
                 .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])

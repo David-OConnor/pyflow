@@ -60,9 +60,12 @@ impl FromStr for Os {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "manylinux1_i686" | "manylinux2010_i686" => Self::Linux32,
-            "cygwin" | "linux" | "linux2" | "manylinux1_x86_64" | "manylinux2010_x86_64" | "manylinux2014_x86_64" => {
-                Self::Linux
-            }
+            "cygwin"
+            | "linux"
+            | "linux2"
+            | "manylinux1_x86_64"
+            | "manylinux2010_x86_64"
+            | "manylinux2014_x86_64" => Self::Linux,
             "win32" => Self::Windows32,
             "windows" | "win" | "win_amd64" => Self::Windows,
             "macosx_10_6_intel" | "darwin" => Self::Mac,

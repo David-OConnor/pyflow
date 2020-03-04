@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.5
+- Added support for `manylinux2014` spec
+- Fixed a dependency-installation bug triggered by symlinks inside Pypi source archives
+
 ## v0.2.4
 - Fixed a bug where `pyflow script` was broken
 - Fixed a bug where `pyflow init` was broken
