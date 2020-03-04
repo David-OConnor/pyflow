@@ -46,7 +46,8 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 this page and PR a binary, to make this easier in the future.
 
 - **With Pip** - Run `pip install pyflow`. The linux install using this method is much larger than
-with the above ones, and it doesn't yet work with Mac.
+with the above ones, and it doesn't yet work with Mac. This method will likely not work
+with Red Hat, CentOs, or Fedora.
 
  - **If you have [Rust](https://www.rust-lang.org) installed** - Run `cargo install pyflow`.
 
