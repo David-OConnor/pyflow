@@ -10,7 +10,11 @@ Pyflow streamlines working with Python projects and files. It's an
 easy-to-use CLI app with a minimalist API. Never worry about having the right
 version of Python or dependencies.
 
+Example use, including setting up a project and switching Py versions:
 ![Demonstration](https://raw.githubusercontent.com/david-oconnor/pyflow/master/demo.gif)
+
+If your project's already configured, the only command you need is `pyflow`,
+or `pyflow myscript.py`; setting up Python and its dependencies are automatic.
 
 **Goals**: Make using and publishing Python projects as simple as possible. Actively
 managing Python environments shouldn't be required to use dependencies safely. We're attempting
@@ -43,9 +47,8 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.4/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
-- **Mac** - Install Rust: `curl https://sh.rustup.rs -sSf | sh`, then run
-`cargo install pyflow`. If able, please build from source using the instructions near the bottom of
-this page and PR a binary, to make this easier in the future.
+- **Mac** - Download this [zipped Mac binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.4/pyflow_mac_0.2.4.zip)
+ , ance place the file in it somewhere accessible by the PATH. (Props to @russeldavis for building this)
 
 - **With Pip** - Run `pip install pyflow`. The linux install using this method is much larger than
 with the above ones, and it doesn't yet work with Mac. This method will likely not work
