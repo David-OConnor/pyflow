@@ -3,6 +3,7 @@
 ## v0.2.5
 - Added support for `manylinux2014` spec
 - Fixed a dependency-installation bug triggered by symlinks inside Pypi source archives
+- `pyflow new` no longer creates a `LICENSE` file
 
 ## v0.2.4
 - Fixed a bug where `pyflow script` was broken

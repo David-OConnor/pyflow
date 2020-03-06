@@ -579,7 +579,6 @@ pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
         fs::create_dir_all(&format!("{}/{}", name, name.replace("-", "_")))?;
         fs::File::create(&format!("{}/{}/__init__.py", name, name.replace("-", "_")))?;
         fs::File::create(&format!("{}/README.md", name))?;
-        fs::File::create(&format!("{}/LICENSE", name))?;
         fs::File::create(&format!("{}/.gitignore", name))?;
     }
 
