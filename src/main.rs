@@ -977,7 +977,7 @@ fn run_script(
     // todo DRY
     let pypackages_dir = env_path.join("__pypackages__");
     let (vers_path, py_vers) =
-        util::find_venv_info(&cfg_vers, &pypackages_dir, pyflow_dir, dep_cache_path);
+        util::find_or_create_venv(&cfg_vers, &pypackages_dir, pyflow_dir, dep_cache_path);
 
     let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
@@ -1421,7 +1421,7 @@ fn main() {
 
     // Check for environments. Create one if none exist. Set `vers_path`.
     let (vers_path, py_vers) =
-        util::find_venv_info(&cfg_vers, &pypackages_path, &pyflow_path, &dep_cache_path);
+        util::find_or_create_venv(&cfg_vers, &pypackages_path, &pyflow_path, &dep_cache_path);
 
     let paths = util::Paths {
         bin: util::find_bin_path(&vers_path),

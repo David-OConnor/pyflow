@@ -369,6 +369,8 @@ pub fn create_venv(
     // todo perhaps move alias finding back into create_venv, or make a
     // todo create_venv_if_doesnt_exist fn.
     // Only search for a system Python if we don't have an internal one.
+    // todo: Why did we choose to prioritize portable over system? Perhaps do the
+    // todo other way around.
     if py_ver.is_none() {
         let aliases = find_py_aliases(cfg_v);
         match aliases.len() {

@@ -341,11 +341,6 @@ pub fn parse_req_dot_text(cfg: &mut Config, path: &Path) {
     }
 }
 
-fn key_re(key: &str) -> Regex {
-    // todo DRY from main
-    Regex::new(&format!(r#"^{}\s*=\s*"(.*)"$"#, key)).unwrap()
-}
-
 /// Update the config file with a new version.
 pub fn change_py_vers(cfg_path: &Path, specified: &Version) {
     let f = fs::File::open(&cfg_path)

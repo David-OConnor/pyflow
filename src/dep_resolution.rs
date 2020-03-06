@@ -278,13 +278,19 @@ fn guess_graph(
                     for constr in req.constraints.iter() {
                         c.constraints.push(constr.clone());
                     }
+                    // If one is specified with an extra and the other without, keep
+                    // the version without the extra. This is probably bad specification, but
+                    // we have to work around it.
+                    if req.extra.is_none() && c.extra.is_some() {
+                        c.extra = None
+                    }
+                    // todo: Should merge sys_platform, python_version, install_with_extras too.
                 }
             }
 
             continue;
         }
         cleaned_reqs.push(req.clone());
-        // todo: Should merge extra, sys_platform, python_version, install_with_extras too.
     }
 
     let reqs: Vec<&Req> = cleaned_reqs
@@ -298,7 +304,10 @@ fn guess_graph(
         })
         .filter(|r| match r.sys_platform {
             Some((rt, os_)) => match rt {
-                ReqType::Exact => os_ == os,
+                // A specified win32 req could apply to 64-bit windows too.
+                ReqType::Exact => {
+                    os_ == os || (os_ == util::Os::Windows32 && os == util::Os::Windows)
+                }
                 ReqType::Ne => os_ != os,
                 _ => {
                     util::abort("Reqtypes for Os must be == or !=");
