@@ -66,7 +66,7 @@ creates a folder with the basics.
 
 
 ## Quick-and-dirty start for quick-and-dirty scripts
-- Add the line `__requires__ = [numpy, requests]` somewhere in your script, where `numpy` and
+- Add the line `__requires__ = ['numpy', 'requests']` somewhere in your script, where `numpy` and
 `requests` are dependencies.
 Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
 This will set up an isolated environment for this script, and install
