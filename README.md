@@ -170,7 +170,7 @@ These tools have different scopes and purposes:
 | **Manages Python installations** | | | | ✓ | | ✓ | ✓ |
 | **Py-environment-agnostic** | | | | ✓ | | ✓ | ✓ |
 | **Included with Python** | ✓ | | | | | | |
-| **Stores deps with project** | | | | | ✓ | | ✓|
+| **Stores deps with project** | | |✓| | ✓ | | ✓|
 | **Requires changing session state** | ✓ | | | ✓ | | | |
 | **Clean build/publish flow** | | | ✓ | | | | ✓ |
 | **Supports old Python versions** | with `virtualenv` | ✓ | ✓ | ✓ | ✓ | ✓ | |
