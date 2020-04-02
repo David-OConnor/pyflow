@@ -345,7 +345,7 @@ pub fn download_and_install_package(
                 .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])
                 .output()
-                .expect("Problem running setup.py bdist_wheel");
+                .expect(&format!("Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}", &extracted_parent, paths.bin.join("python")));
 
             let dist_path = &extracted_parent.join("dist");
             if !dist_path.exists() {
