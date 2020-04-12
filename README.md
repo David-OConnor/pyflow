@@ -83,14 +83,14 @@ both when installing and using. Some reasons why this is different:
 are configured.
 
 - It automatically manages Python installations and environments. You specify a Python version
- in `pyproject.toml` (if ommitted, it asks), and it ensures that version is used.
+ in `pyproject.toml` (if omitted, it asks), and it ensures that version is used.
  If the version's not installed, Pyflow downloads a binary, and uses that.
  If multiple installations are found for that version, it asks which to use.
  `Pyenv` can be used to install Python, but only if your system is configured in a certain way:
  I don’t think expecting a user’s computer to compile Python is reasonable.
 
 - By not using Python to install or run, it remains environment-agnostic.
-This is important for making setup and use as simple and decison-free as
+This is important for making setup and use as simple and decision-free as
  possible. It's common for Python-based CLI tools
 to not run properly when installed from `pip` due to the `PATH` or user directories
 not being configured in the expected way.
@@ -143,7 +143,7 @@ I think we can do better. This is especially relevant for new Python users
 who don't understand venvs, or are unaware of the hazards of working with a system Python.
 
 `Pipenv` improves the workflow by automating environment use, and
-allowing reproducable dependency graphs. `Poetry` improves upon `Pipenv's` API,
+allowing reproducible dependency graphs. `Poetry` improves upon `Pipenv's` API,
 speed, and dependency resolution, as well as improving
 the packaging and distributing process by using a consolidating project config. Both
  are sensitive to the environment they run in, and won't work
@@ -262,7 +262,7 @@ can be run at any time,
 without having to build the package. Run with `pyflow name` to do this.
 
 If you run `pyflow package` on on a package using this, the result will work like normal script
-entry points for somone using the package, regardless of if they're using this tool.
+entry points for someone using the package, regardless of if they're using this tool.
 
 
 ## What you can do
@@ -323,7 +323,7 @@ Once complete, packages are installed and removed in order to exactly meet those
 in the updated lock file.
 
 This tool downloads and unpacks wheels from `pypi`, or builds
-wheels from source if none are availabile. It verifies the integrity of the downloaded file
+wheels from source if none are available. It verifies the integrity of the downloaded file
  against that listed on `pypi` using `SHA256`, and the exact
 versions used are stored in a lock file.
 
@@ -403,7 +403,7 @@ ipython = {version = "^7.7.0", extras=["qtconsole"]}
 [tool.pyflow.dev-dependencies]
 black = "^18.0"
 ```
-`package_url` is used to determine which package repository to upload to. If ommitted,
+`package_url` is used to determine which package repository to upload to. If omitted,
 `Pypi test` is used (`https://test.pypi.org/legacy/`).
 
 Other items you can specify in `[tool.pyflow]`:
@@ -451,7 +451,7 @@ not install correctly.
 - It's adding another tool to an already complex field.
 - Most of the features here are already provided by a range of existing packages,
 like the ones in the table above.
-- The field of contributers is expected to be small, since it's written in a different language.
+- The field of contributors is expected to be small, since it's written in a different language.
 - Dependency managers like Pipenv and Poetry work well enough for many cases,
 have dedicated dev teams, and large userbases.
 - `Conda` in particular handles many things this does quite well.
@@ -499,4 +499,4 @@ Click the folder-tree icon at the bottom of the pop-out window →
 - [PEP 440 -- Version Identification and Dependency Specification](https://www.python.org/dev/peps/pep-0440/)
 - [Specifying dependencies in Cargo](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
 - [Predictable dependency management blog entry](https://blog.rust-lang.org/2016/05/05/cargo-pillars.html)
-- [Blog on why Pyhon dependencies are hard to determine](https://dustingram.com/articles/2018/03/05/why-pypi-doesnt-know-dependencies/)
+- [Blog on why Python dependencies are hard to determine](https://dustingram.com/articles/2018/03/05/why-pypi-doesnt-know-dependencies/)
