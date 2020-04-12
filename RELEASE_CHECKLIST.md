@@ -9,7 +9,7 @@ System prereqs:
  `cargo install cargo-rpm`, `yum install rpm-build`.
 - Windows: Install Visual Studio Community, and Wix. `cargo install cargo-wix`
 
-`Ubuntu` below shall refer to Ubuntu 16.04. Builds tend to be more foward-compatible
+`Ubuntu` below shall refer to Ubuntu 16.04. Builds tend to be more forward-compatible
 than backwards.
 
 ## Preliminary
@@ -27,7 +27,7 @@ links to reflect the latest version.
 ## Build binaries
 1. Run `cargo build --release` on Windows and Ubuntu.
 1. Run `cargo deb` on Ubuntu.
-1. Run `cargo rpm build` on Centos 7. Remove the unecessary `-1` in the filename.
+1. Run `cargo rpm build` on Centos 7. Remove the unnecessary `-1` in the filename.
  (This allows easy installation for Red Hat, Fedora, and CentOs.
 Also note that the standalone Linux binary may not work on these distros.)
 users, and binaries built on other OSes appear not to work on these due to OpenSSL issues.
