@@ -12,7 +12,7 @@ Recommended starting points:
 - Open issues
 - Dependency graphs that don't resolve correctly
 - Adding and improving tests
-- Bugs or nvonvenient behavior you've encountered
+- Bugs or inconvenient behavior you've encountered
 - Friction points in your workflow not already addressed
 - `//todo` comments in code
 

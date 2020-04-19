@@ -3,7 +3,7 @@
 ## v0.2.5
 - Added support for `manylinux2014` spec
 - If a dependencies dependencies are specified multiple times, merge `extras`
-by ommission. This led to bugs where dependencies didn't get installed when
+by omission. This led to bugs where dependencies didn't get installed when
 specified both as an extras and as not
 - Dependencies specifying `sys_platform == "win32"` now applies to 64-bit
 Windows installations as well. This should fix cases where Windows dependencies
@@ -32,7 +32,7 @@ in the current path.
 
 ## v0.1.9
 - Can now parse subdependencies of `path` requirements from built-wheels
-- Fixed a bug where subdep contraints specified on multiple lines would
+- Fixed a bug where subdep constraints specified on multiple lines would
 cause resolution to fail
 - Fixed a bug parsing METADATA requirements that includes extras, but no version
 
@@ -80,7 +80,7 @@ pip now to install `twine`.
 
 ## v0.1.1
 - Fixed a bug, where spaces could prevent console scripts from being installed
-- Fixed parsing pypi requirements that ommit parenthesis
+- Fixed parsing pypi requirements that omit parentheses
 - Now uses `~/.local/share/pyflow` on Linux, `~\AppData\Roaming\pyflow` on Windows, and
 `~/Library/Application Support/pyflow` on Mac, instead of `~/.python-installs`
 
