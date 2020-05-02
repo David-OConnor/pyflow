@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.6
+- Fixed a bug causing source only packages to fail to install
+- Added a bug relating to `manylinux2014_i686` wheels
+
 ## v0.2.5
 - Added support for `manylinux2014` spec
 - If a dependencies dependencies are specified multiple times, merge `extras`

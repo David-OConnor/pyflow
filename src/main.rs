@@ -37,8 +37,10 @@ struct Opt {
     #[structopt(subcommand)]
     subcmds: Option<SubCommand>,
     #[structopt(name = "script")]
-    //    #[structopt(raw(setting = "structopt::clap::AppSettings::TrailingVarArg"))]
     script: Vec<String>,
+
+    #[structopt(short = "ms", long)]
+    ms: Vec<String>,
 }
 
 #[derive(StructOpt, Debug)]
@@ -102,6 +104,13 @@ enum SubCommand {
         #[structopt(name = "args")]
         args: Vec<String>,
     },
+
+    ////    // todo: Trying to get `python -m myproject` syntax working, ie https://docs.python.org/3/library/__main__.html
+    //    #[structopt(short = "m", long = "dashm")]
+    //    DashM {
+    //        #[structopt(name = "args")]
+    //        args: Vec<String>,
+    //    },
     /// Run a standalone script not associated with a project
     #[structopt(name = "script")]
     Script {
@@ -1269,6 +1278,10 @@ fn main() {
                 // Nothing's specified, eg `pyflow`, or a script is specified; run `python`.
                 SubCommand::Python { args: opt.script }
             } else {
+                println!("ARGS: {:?}", &opt.script);
+                if opt.script[0] == "m" {
+                    println!("HMM");
+                }
                 // A command is specified, eg `pyflow black`
                 SubCommand::Run { args: opt.script }
             }
@@ -1601,6 +1614,9 @@ fn main() {
         SubCommand::Run { args } => {
             run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, args);
         }
+        //        SubCommand::M { args } => {
+        //            run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, args);
+        //        }
         SubCommand::List {} => util::show_installed(
             &paths.lib,
             &[cfg.reqs.as_slice(), cfg.dev_reqs.as_slice()]

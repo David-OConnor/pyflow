@@ -511,7 +511,42 @@ pub fn find_or_create_venv(
         }
     }
 
-    (vers_path, py_vers)
+    #[cfg(target_os = "windows")]
+    {
+        (vers_path, py_vers)
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let vers_path = fs::canonicalize(vers_path);
+        let vers_path = match vers_path {
+            Ok(path) => path,
+            Err(error) => {
+                abort(&format!(
+                    "Problem converting path to absolute path: {:?}",
+                    error
+                ));
+                unreachable!()
+            }
+        };
+        (vers_path, py_vers)
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let vers_path = fs::canonicalize(vers_path);
+        let vers_path = match vers_path {
+            Ok(path) => path,
+            Err(error) => {
+                abort(&format!(
+                    "Problem converting path to absolute path: {:?}",
+                    error
+                ));
+                unreachable!()
+            }
+        };
+        (vers_path, py_vers)
+    }
 }
 
 ///// Remove all files (but not folders) in a path.
@@ -665,10 +700,10 @@ pub fn find_best_release(
                         compatible = false;
                     }
                 } else {
-                    (println!(
+                    println!(
                         "Unable to match python version from python_version: {}",
                         &rel.python_version
-                    ))
+                    )
                 };
 
                 if compatible {

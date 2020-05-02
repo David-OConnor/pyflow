@@ -335,17 +335,55 @@ pub fn download_and_install_package(
             // todo moves, only copies. Figure out how to do a normal move,
             // todo, to speed this up.
 
-            let extracted_parent = paths.lib.join(folder_name);
+            let extracted_parent;
+            let bin_path;
+            let python;
+
+            #[cfg(target_os = "windows")]
+            {
+                let py_name = "python";
+                extracted_parent = paths.lib.join(folder_name);
+                bin_path = &paths.bin;
+                python = bin_path.join(py_name);
+            }
+            #[cfg(target_os = "linux")]
+            {
+                let py_name = "python3";
+                extracted_parent = match fs::canonicalize(paths.lib.join(folder_name)) {
+                    Ok(path) => path,
+                    Err(error) => panic!("Problem converting path to absolute path: {:?}", error),
+                };
+                bin_path = fs::canonicalize(&paths.bin);
+                python = match bin_path {
+                    Ok(path) => path.join(py_name),
+                    Err(error) => panic!("Problem converting path to absolute path: {:?}", error),
+                };
+            }
+            #[cfg(target_os = "macos")]
+            {
+                let py_name = "python3";
+                extracted_parent = match fs::canonicalize(paths.lib.join(folder_name)) {
+                    Ok(path) => path,
+                    Err(error) => panic!("Problem converting path to absolute path: {:?}", error),
+                };
+                bin_path = fs::canonicalize(&paths.bin);
+                python = match bin_path {
+                    Ok(path) => path.join(py_name),
+                    Err(error) => panic!("Problem converting path to absolute path: {:?}", error),
+                };
+            }
 
             replace_distutils(&extracted_parent.join("setup.py"));
 
-            // Build a wheel from source.
-            //            println!("EX PAR: {:#?} bin: {:#?}", &extracted_parent, &paths.bin);
-            Command::new(paths.bin.join("python"))
+            Command::new(&python)
                 .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])
                 .output()
-                .expect(&format!("Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}", &extracted_parent, paths.bin.join("python")));
+                //                .expect(&format!("Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}", &extracted_parent, paths.bin.join("python")));
+                .expect(&format!(
+                    "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+                    &extracted_parent, &python
+                ));
 
             let dist_path = &extracted_parent.join("dist");
             if !dist_path.exists() {
