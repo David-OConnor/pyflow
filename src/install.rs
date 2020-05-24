@@ -375,13 +375,24 @@ pub fn download_and_install_package(
 
             let dist_path = &extracted_parent.join("dist");
             if !dist_path.exists() {
-                util::abort(&format!(
-                    "Problem building {} from source. \
-                     This may occur if a package that requires compiling has no wheels available \
-                     for this OS and this system is missing dependencies required to compile it, \
-                     or if on WSL and installing to a mounted directory.",
-                    name
-                ));
+                #[cfg(target_os = "windows")]
+                let error = "Problem building {} from source. \
+                 This may occur if a package that requires compiling has no wheels available \
+                 for Windows, and the system is missing dependencies required to compile it, \
+                 or if on WSL and installing to a mounted directory.";
+
+                #[cfg(target_os = "linux")]
+                let error = "Problem building {} from source. \
+                 This may occur if a package that requires compiling has no wheels available \
+                 for this OS and this system is missing dependencies required to compile it.\
+                 Try running `pip install --upgrade wheel`, then try again";
+                #[cfg(target_os = "macos")]
+                let error = "Problem building {} from source. \
+                 This may occur if a package that requires compiling has no wheels available \
+                 for this OS and this system is missing dependencies required to compile it.
+                 Try running `pip install --upgrade wheel`, then try again";
+
+                util::abort(&format!(error, name));
             }
 
             let built_wheel_filename = util::find_first_file(dist_path)
