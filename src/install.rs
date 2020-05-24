@@ -57,7 +57,7 @@ fn replace_distutils(setup_path: &Path) {
 fn remove_scripts(scripts: &[String], scripts_path: &Path) {
     // todo: Likely not a great approach. QC.
     for entry in
-        fs::read_dir(scripts_path).expect("Problem reading dist directory when removing scripts")
+    fs::read_dir(scripts_path).expect("Problem reading dist directory when removing scripts")
     {
         let entry = entry.unwrap();
         if !entry.file_type().unwrap().is_file() {
@@ -287,7 +287,7 @@ pub fn download_and_install_package(
                                             .contains("readme")
                                         {
                                             if let Err(_) =
-                                                fs::File::create(&paths.lib.join(f.path().unwrap()))
+                                            fs::File::create(&paths.lib.join(f.path().unwrap()))
                                             {
                                                 print_color(
                                                     "Problem creating dummy readme",
@@ -298,7 +298,17 @@ pub fn download_and_install_package(
                                     }
                                 };
                             }
-                            Err(e) => util::abort(&format!("Problem upacking: {:?}", e)),
+                            Err(e) => {  // todo: dRY while troubleshooting
+                                println!(
+                                    "Problem opening the tar.gz archive: {:?}: {:?},  checking if it's a zip...",
+                                    &archive_file, e
+                                );
+                                // The extract_wheel function just extracts a zip file, so it's appropriate here.
+                                // We'll then continue with this leg, and build/move/cleanup.
+
+                                // Check if we have a zip file instead.
+                                util::extract_zip(&archive_file, &paths.lib, &None);
+                            },
                         }
                     }
                 }
@@ -340,7 +350,7 @@ pub fn download_and_install_package(
             replace_distutils(&extracted_parent.join("setup.py"));
 
             #[cfg(target_os = "windows")]
-            Command::new(paths.bin.join("python"))
+                Command::new(paths.bin.join("python"))
                 .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])
                 .output()
@@ -353,7 +363,7 @@ pub fn download_and_install_package(
             // The Linux and Mac builds appear to be unable to build wheels due to
             // missing the ctypes library; revert to system python.
             #[cfg(target_os = "linux")]
-            Command::new("python3")
+                Command::new("python3")
                 .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])
                 .output()
@@ -363,7 +373,7 @@ pub fn download_and_install_package(
                     paths.bin.join("python")
                 ));
             #[cfg(target_os = "macos")]
-            Command::new("python3")
+                Command::new("python3")
                 .current_dir(&extracted_parent)
                 .args(&["setup.py", "bdist_wheel"])
                 .output()
@@ -376,23 +386,23 @@ pub fn download_and_install_package(
             let dist_path = &extracted_parent.join("dist");
             if !dist_path.exists() {
                 #[cfg(target_os = "windows")]
-                let error = "Problem building {} from source. \
+                    let error = &format!("Problem building {} from source. \
                  This may occur if a package that requires compiling has no wheels available \
                  for Windows, and the system is missing dependencies required to compile it, \
-                 or if on WSL and installing to a mounted directory.";
+                 or if on WSL and installing to a mounted directory.", name);
 
                 #[cfg(target_os = "linux")]
-                let error = "Problem building {} from source. \
+                    let error = format!("Problem building {} from source. \
                  This may occur if a package that requires compiling has no wheels available \
                  for this OS and this system is missing dependencies required to compile it.\
-                 Try running `pip install --upgrade wheel`, then try again";
+                 Try running `pip install --upgrade wheel`, then try again", name);
                 #[cfg(target_os = "macos")]
-                let error = "Problem building {} from source. \
+                    let error = format!("Problem building {} from source. \
                  This may occur if a package that requires compiling has no wheels available \
                  for this OS and this system is missing dependencies required to compile it.
-                 Try running `pip install --upgrade wheel`, then try again";
+                 Try running `pip install --upgrade wheel`, then try again", name);
 
-                util::abort(&format!(error, name));
+                util::abort(error);
             }
 
             let built_wheel_filename = util::find_first_file(dist_path)
@@ -579,26 +589,26 @@ pub fn download_and_install_git(
     }
 
     let folder_name = util::standardize_name(name); // todo: Will this always work?
-                                                    //    match url {
-                                                    //        GitPath::Git(url) => {
-                                                    // Download the repo into the pyflow folder.
-                                                    // todo: Handle checking if it's current and correct; not just a matching folder
-                                                    // todo name.
+    //    match url {
+    //        GitPath::Git(url) => {
+    // Download the repo into the pyflow folder.
+    // todo: Handle checking if it's current and correct; not just a matching folder
+    // todo name.
     if !&git_path.join(&folder_name).exists() && commands::download_git_repo(url, git_path).is_err()
     {
         util::abort(&format!("Problem cloning this repo: {}", url));
     } // todo to keep dl small while troubleshooting.
-      //        }
-      //        GitPath::Path(path) => {
-      //            let f = &git_path.join(&folder_name);
-      //            if !&f.exists() {
-      //                fs::create_dir(f).expect("Problem creating dir for a path dependency");
-      //                let options = fs_extra::dir::CopyOptions::new();
-      //                fs_extra::dir::copy(PathBuf::from(path), &git_path, &options)
-      //                    .expect("Problem copying path requirement to lib folder");
-      //            }
-      //        }
-      //}
+    //        }
+    //        GitPath::Path(path) => {
+    //            let f = &git_path.join(&folder_name);
+    //            if !&f.exists() {
+    //                fs::create_dir(f).expect("Problem creating dir for a path dependency");
+    //                let options = fs_extra::dir::CopyOptions::new();
+    //                fs_extra::dir::copy(PathBuf::from(path), &git_path, &options)
+    //                    .expect("Problem copying path requirement to lib folder");
+    //            }
+    //        }
+    //}
 
     // Build a wheel from the repo
     Command::new(paths.bin.join("python"))

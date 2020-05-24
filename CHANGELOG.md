@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.7
+- Fixed a recently-introduced bug with installing zip files from source.
+
 ## v0.2.6
 - Fixed a bug causing source only packages to fail to install
 - Fixed a bug relating to `manylinux2014_i686` wheels

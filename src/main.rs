@@ -1278,9 +1278,9 @@ fn main() {
                 // Nothing's specified, eg `pyflow`, or a script is specified; run `python`.
                 SubCommand::Python { args: opt.script }
             } else {
-                println!("ARGS: {:?}", &opt.script);
+//                println!("ARGS: {:?}", &opt.script);
                 if opt.script[0] == "m" {
-                    println!("HMM");
+//                    println!("HMM");
                 }
                 // A command is specified, eg `pyflow black`
                 SubCommand::Run { args: opt.script }
