@@ -484,7 +484,7 @@ by Steve Dower.
 - You may need to set up IDEs to find packages in `__pypackages__`. If using PyCharm:
 `Settings` → `Project` → `Project Interpreter` → `⚙` → `Show All...` →
 (Select the interpreter, ie `(projname)/__pypackages__/3.x/.venv/bin/python` on 
-Linux/Mac, or `(projname)/__pypackages__/3.x/Scripts/python`) →
+Linux/Mac, or `(projname)/__pypackages__/3.x/Scripts/python` on Windows) →
 Click the folder-tree icon at the bottom of the pop-out window →
  Click the `+` icon at the bottom of the new pop-out window →
  Navigate to and select `(projname)/__pypackages__/3.x/lib`
