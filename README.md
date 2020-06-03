@@ -32,22 +32,22 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/).
 
 ## Installation
 - **Windows** - Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.2.6/pyflow-0.2.6-x86_64.msi).
+[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.2.7/pyflow-0.2.7-x86_64.msi).
 Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 
 - **Ubuntu, or another Os that uses Snap** - Run `snap install pyflow --classic`.
 
 - **Ubuntu or Debian without Snap** - Download and run
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.2.6/pyflow_0.2.6_amd64.deb).
+[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.2.7/pyflow_0.2.7_amd64.deb).
 
 - **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run
-[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.2.6/pyflow-0.2.6.x86_64.rpm).
+[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.2.7/pyflow-0.2.7.x86_64.rpm).
 
 - **A different Linux distro** - Download this
-[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.6/pyflow)
+[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.7/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
-- **Mac** - Download this [zipped Mac binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.6/pyflow_mac_0.2.6.zip)
+- **Mac** - Download this [zipped Mac binary](https://github.com/David-OConnor/pyflow/releases/download/0.2.7/pyflow_mac_0.2.7.zip)
  , ance place the file in it somewhere accessible by the PATH. (Props to @russeldavis for building this)
 
 - **With Pip** - Run `pip install pyflow`. The linux install using this method is much larger than
@@ -190,7 +190,7 @@ Example contents:
 [tool.pyflow]
 py_version = "3.7"
 name = "runcible"
-version = "0.2.6"
+version = "0.2.7"
 authors = ["John Hackworth <jhackworth@vic.org>"]
 
 
@@ -373,7 +373,7 @@ In order to build and publish your project, additional info is needed in
 [tool.pyflow]
 name = "everythingkiller"
 py_version = "3.6"
-version = "0.2.6"
+version = "0.2.7"
 authors = ["Fraa Erasmas <raz@edhar.math>"]
 description = "Small, but packs a punch!"
 homepage = "https://everything.math"
@@ -396,7 +396,7 @@ activate = "jeejah:activate"
 
 [tool.pyflow.dependencies]
 numpy = "^1.16.4"
-manimlib = "0.2.6"
+manimlib = "0.2.7"
 ipython = {version = "^7.7.0", extras=["qtconsole"]}
 
 
