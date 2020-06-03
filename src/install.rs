@@ -402,7 +402,7 @@ pub fn download_and_install_package(
                  for this OS and this system is missing dependencies required to compile it.
                  Try running `pip install --upgrade wheel`, then try again", name);
 
-                util::abort(error);
+                util::abort(&error);
             }
 
             let built_wheel_filename = util::find_first_file(dist_path)
