@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.8
+- `pyflow init` now prompts for the Python version to use.
+
 ## v0.2.7
 - Fixed a recently-introduced bug with installing zip files from source.
 

@@ -528,7 +528,7 @@ impl Config {
         if let Some(py_v) = &self.py_version {
             result.push_str(&("py_version = \"".to_owned() + &py_v.to_string_no_patch() + "\"\n"));
         } else {
-            result.push_str(&("py_version = \"3.7\"".to_owned() + "\n"));
+            result.push_str(&("py_version = \"3.8\"".to_owned() + "\n"));
         }
         if let Some(vers) = self.version {
             result.push_str(&(format!("version = \"{}\"", vers.to_string2()) + "\n"));
@@ -1324,6 +1324,8 @@ fn main() {
             true => Config::from_pipfile(&PathBuf::from("Pipfile")).unwrap_or_default(),
             false => Config::default(),
         };
+
+        cfg.py_version = Some(util::prompt_py_vers());
 
         files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
 
