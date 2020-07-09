@@ -378,10 +378,8 @@ pub mod tests {
 [tool.pyflow]
 name = ""
 
-
 [tool.pyflow.dependencies]
 a = "^0.3.5"
-
 
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
@@ -392,7 +390,6 @@ dev_a = "^1.17.2"
 [tool.pyflow]
 name = ""
 
-
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
 
@@ -401,7 +398,6 @@ dev_a = "^1.17.2"
     const BASELINE_NO_DEV_DEPS: &str = r#"
 [tool.pyflow]
 name = ""
-
 
 [tool.pyflow.dependencies]
 a = "^0.3.5"
@@ -412,9 +408,7 @@ a = "^0.3.5"
 [tool.pyflow]
 name = ""
 
-
 [tool.pyflow.dependencies]
-
 
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
@@ -436,12 +430,10 @@ dev_a = "^1.17.2"
 [tool.pyflow]
 name = ""
 
-
 [tool.pyflow.dependencies]
 a = "^0.3.5"
 b = "^0.0.1"
 c = "^0.0.1"
-
 
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
@@ -467,12 +459,10 @@ dev_b = "^0.0.1"
 [tool.pyflow]
 name = ""
 
-
 [tool.pyflow.dependencies]
 a = "^0.3.5"
 b = "^0.0.1"
 c = "^0.0.1"
-
 
 [tool.pyflow.dev-dependencies]
 dev_b = "^0.0.1"
@@ -497,11 +487,9 @@ dev_b = "^0.0.1"
 [tool.pyflow]
 name = ""
 
-
 [tool.pyflow.dependencies]
 b = "^0.0.1"
 c = "^0.0.1"
-
 
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"

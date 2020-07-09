@@ -608,6 +608,7 @@ __pypackages__/
     fs::write(&format!("{}/README.md", name), readme_init)?;
 
     let mut cfg = Config::default();
+    cfg.name = Some(name.to_string());
     cfg.authors = util::get_git_author();
     cfg.py_version = Some(util::prompt_py_vers());
 
