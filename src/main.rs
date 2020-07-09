@@ -513,10 +513,7 @@ impl Config {
             abort("`pyproject.toml` already exists")
         }
 
-        let mut result =
-            "# See PEP 518: https://www.python.org/dev/peps/pep-0518/ for info on this \
-             file's structure.\n"
-                .to_string();
+        let mut result = String::new();
 
         result.push_str("\n[tool.pyflow]\n");
         if let Some(name) = &self.name {
@@ -556,19 +553,19 @@ impl Config {
 
         // todo: More fields
 
-        result.push_str("\n\n");
+        result.push_str("\n");
         result.push_str("[tool.pyflow.scripts]\n");
         for (name, mod_fn) in &self.scripts {
             result.push_str(&(format!("{} = \"{}\"", name, mod_fn) + "\n"));
         }
 
-        result.push_str("\n\n");
+        result.push_str("\n");
         result.push_str("[tool.pyflow.dependencies]\n");
         for dep in &self.reqs {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
 
-        result.push_str("\n\n");
+        result.push_str("\n");
         result.push_str("[tool.pyflow.dev-dependencies]\n");
         for dep in &self.dev_reqs {
             result.push_str(&(dep.to_cfg_string() + "\n"));
