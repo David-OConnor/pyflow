@@ -401,6 +401,12 @@ a = "^0.3.5"
 
 "#;
 
+    const BASELINE_NO_DEPS_NO_DEV_DEPS: &str = r#"
+[tool.pyflow]
+name = ""
+
+"#;
+
     const BASELINE_EMPTY_DEPS: &str = r#"
 [tool.pyflow]
 name = ""
@@ -494,6 +500,32 @@ dev_b = "^0.0.1"
 
 "#;
 
+        assert_eq!(expected, &actual);
+    }
+
+    #[test]
+    fn add_deps_dev_deps_baseline_no_deps_dev_deps() {
+        let actual = update_cfg(
+            BASELINE_NO_DEPS_NO_DEV_DEPS.into(),
+            &[
+                Req::new("b".into(), base_constrs()),
+                Req::new("c".into(), base_constrs()),
+            ],
+            &[Req::new("dev_b".into(), base_constrs())],
+        );
+
+        let expected = r#"
+[tool.pyflow]
+name = ""
+
+[tool.pyflow.dependencies]
+b = "^0.0.1"
+c = "^0.0.1"
+
+[tool.pyflow.dev-dependencies]
+dev_b = "^0.0.1"
+
+"#;
         assert_eq!(expected, &actual);
     }
 }
