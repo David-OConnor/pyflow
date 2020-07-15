@@ -215,19 +215,16 @@ fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
     // todo: Adjust start pad as needed so there's exactly two blank lines before adding the section.
     if dep_start == 0 {
         // todo: Should add dependencies section before dev deps section.
-        result.push_str("\n[tool.pyflow.dependencies]\n");
+        result.push_str("[tool.pyflow.dependencies]\n");
         for req in added {
             result.push_str(&req.to_cfg_string());
             result.push_str("\n");
         }
-        if dev_dep_start != 0 {
-            // We only need to add one end-of-file pad.
-            result.push_str("\n");
-        }
+        result.push_str("\n");
     }
 
     if dev_dep_start == 0 {
-        result.push_str("\n[tool.pyflow.dev-dependencies]\n");
+        result.push_str("[tool.pyflow.dev-dependencies]\n");
         for req in added_dev {
             result.push_str(&req.to_cfg_string());
             result.push_str("\n");
