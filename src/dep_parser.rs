@@ -3,15 +3,15 @@ use nom::IResult;
 use nom::sequence::{tuple, preceded};
 use nom::character::complete::digit1;
 use nom::bytes::complete::tag;
-use nom::combinator::{opt, map};
+use nom::combinator::{opt, map, value};
 use nom::branch::alt;
 
 pub fn parse_version(input: &str) -> IResult<&str, Version> {
     let (remain, (major, minor, patch, extra_num)) = tuple((
-        parse_digit,
-        opt(preceded(tag("."), parse_digit)),
-        opt(preceded(tag("."), parse_digit)),
-        opt(preceded(tag("."), parse_digit)),
+        parse_digit_or_wildcard,
+        opt(preceded(tag("."), parse_digit_or_wildcard)),
+        opt(preceded(tag("."), parse_digit_or_wildcard)),
+        opt(preceded(tag("."), parse_digit_or_wildcard)),
     ))(input)?;
     let (remain, modifire) = parse_modifier(remain)?;
 
@@ -22,9 +22,9 @@ pub fn parse_version(input: &str) -> IResult<&str, Version> {
     Ok((remain, version))
 }
 
-fn parse_digit(input: &str)  -> IResult<&str, u32> {
+fn parse_digit_or_wildcard(input: &str) -> IResult<&str, u32> {
     map(
-        digit1,
+        alt((digit1, value("0", tag("*")))),
         |digit: &str| digit.parse().unwrap(),
     )(input)
 }
@@ -89,6 +89,27 @@ mod tests {
             modifier: None,
         }))),
         case("1", Ok(("", Version {
+            major: 1,
+            minor: 0,
+            patch: 0,
+            extra_num: None,
+            modifier: None,
+        }))),
+        case("3.2.*", Ok(("", Version {
+            major: 3,
+            minor: 2,
+            patch: 0,
+            extra_num: None,
+            modifier: None,
+        }))),
+        case("1.*", Ok(("", Version {
+            major: 1,
+            minor: 0,
+            patch: 0,
+            extra_num: None,
+            modifier: None,
+        }))),
+        case("1.*.*", Ok(("", Version {
             major: 1,
             minor: 0,
             patch: 0,
