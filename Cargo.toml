@@ -30,6 +30,7 @@ serde = {version = "^1.0.101", features = ["derive"]}
 tar = "^0.4.26"
 toml = "^0.5.1"
 zip = "^0.5.2"
+nom = "^5.1.2"
 # We don't use native TLS, to avoid dependency issues on different linux distros.
 reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
 
