@@ -67,6 +67,34 @@ mod tests {
     }
 
     #[rstest(input, expected,
+        case("3.12.5", Ok(("", Version {
+            major: 3,
+            minor: 12,
+            patch: 5,
+            extra_num: None,
+            modifier: None,
+        }))),
+        case("0.1.0", Ok(("", Version {
+            major: 0,
+            minor: 1,
+            patch: 0,
+            extra_num: None,
+            modifier: None,
+        }))),
+        case("3.7", Ok(("", Version {
+            major: 3,
+            minor: 7,
+            patch: 0,
+            extra_num: None,
+            modifier: None,
+        }))),
+        case("1", Ok(("", Version {
+            major: 1,
+            minor: 0,
+            patch: 0,
+            extra_num: None,
+            modifier: None,
+        }))),
         case("19.3", Ok(("", Version {
             major: 19,
             minor: 3,
