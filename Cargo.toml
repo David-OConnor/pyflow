@@ -42,6 +42,9 @@ reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-t
 #[target.'cfg(not(target_os = "linux"))'.dependencies]
 #reqwest = "^0.9.21"
 
+[dev-dependencies]
+rstest = "0.6.4"
+
 [package.metadata.deb]
 section = "Python"
 # Non-MD subsection of readme.

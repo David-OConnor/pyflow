@@ -1,4 +1,4 @@
-use crate::dep_types::{Version, DependencyError, VersionModifier};
+use crate::dep_types::{Version, VersionModifier};
 use nom::IResult;
 use nom::sequence::{tuple, preceded};
 use nom::character::complete::digit1;
@@ -57,24 +57,32 @@ fn parse_modifier_version(input: &str) -> IResult<&str, VersionModifier> {
 
 #[cfg(test)]
 mod tests {
-    use crate::dep_types::{Version, DependencyError, VersionModifier};
+    use rstest::rstest;
+    use crate::dep_types::{Version, VersionModifier};
     use super::*;
 
     #[test]
-    fn parse_versions() {
-        assert_eq!(parse_version("19.3"), Ok(("", Version {
+    fn dummy_test() {
+
+    }
+
+    #[rstest(input, expected,
+        case("19.3", Ok(("", Version {
             major: 19,
             minor: 3,
             patch: 0,
             extra_num: None,
             modifier: None,
-        })));
-        assert_eq!(parse_version("19.3b0"), Ok(("", Version {
+        }))),
+        case("19.3b0", Ok(("", Version {
             major: 19,
             minor: 3,
             patch: 0,
             extra_num: None,
-            modifier: Some((VersionModifier::Beta, 0))
-        })));
+            modifier: Some((VersionModifier::Beta, 0)),
+        }))),
+    )]
+    fn parse_versions(input: &str, expected: IResult<&str, Version>) {
+        assert_eq!(parse_version(input), expected);
     }
 }
