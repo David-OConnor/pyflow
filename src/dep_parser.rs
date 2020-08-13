@@ -27,6 +27,11 @@ pub fn parse_req(input: &str) -> IResult<&str, Req> {
 }
 
 pub fn parse_req_pypi_fmt(input: &str) -> IResult<&str, Req> {
+    // eg saturn (>=0.3.4) or argon2-cffi (>=16.1.0) ; extra == 'argon2'
+    // Note: We specify what chars are acceptable in a name instead of using
+    // wildcard, so we don't accidentally match a semicolon here if a
+    // set of parens appears later. The non-greedy ? in the version-matching
+    // expression's important as well, in some cases of extras.
     map(tuple((
         parse_package_name,
         space0,
