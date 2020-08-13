@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
+use crate::dep_parser::parse_version;
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 
@@ -199,52 +200,9 @@ impl FromStr for Version {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Treat wildcards as 0.
-        let s = &s.replace("*", "0");
-
-        let re = Regex::new(r"^(\d+)\.?(\d+)?\.?(\d+)?\.?(\d+)?(?:(a|b|rc|dep)(\d+))?$").unwrap();
-        if let Some(caps) = re.captures(s) {
-            return Ok(Self {
-                major: caps.get(1).unwrap().as_str().parse::<u32>()?,
-                minor: match caps.get(2) {
-                    Some(mi) => mi.as_str().parse::<u32>()?,
-                    None => 0,
-                },
-                patch: match caps.get(3) {
-                    Some(p) => p.as_str().parse::<u32>()?,
-                    None => 0,
-                },
-                extra_num: match caps.get(4) {
-                    Some(ex_num) => Some(ex_num.as_str().parse::<u32>()?),
-                    None => None,
-                },
-                modifier: {
-                    match caps.get(5) {
-                        Some(modifier) => {
-                            let m = VersionModifier::from_str(modifier.as_str())?;
-                            let num = match caps.get(6) {
-                                Some(n) => n.as_str().parse::<u32>()?,
-                                // We separate the modifier into two parts for easiser parsing,
-                                // but we shouldn't have one without the other.
-                                None => {
-                                    return Err(DependencyError::new(&format!(
-                                        "Problem parsing version modifier: {}",
-                                        s
-                                    )))
-                                }
-                            };
-                            Some((m, num))
-                        }
-                        None => None,
-                    }
-                },
-            });
-        }
-
-        Err(DependencyError::new(&format!(
-            "Problem parsing version: {}",
-            s
-        )))
+        parse_version(s)
+            .map_err(|_| DependencyError::new(&format!("Problem parsing version: {}", s)))
+            .map(|(_, v)| v)
     }
 }
 

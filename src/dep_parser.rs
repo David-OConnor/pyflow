@@ -1,10 +1,20 @@
-use crate::dep_types::{Version, VersionModifier};
+use crate::dep_types::{Version, VersionModifier, ReqType, Constraint};
 use nom::IResult;
 use nom::sequence::{tuple, preceded};
 use nom::character::complete::digit1;
 use nom::bytes::complete::tag;
-use nom::combinator::{opt, map, value};
+use nom::combinator::{opt, map, value, map_res};
 use nom::branch::alt;
+use std::str::FromStr;
+
+pub fn parse_constraint(input: &str) -> IResult<&str, Constraint> {
+    map(alt((
+        value((Some(ReqType::Gte), Version::new(0, 0, 0)), tag("*")),
+        tuple((opt(parse_req_type), parse_version)),
+    )),
+    |(r, v)| Constraint::new(r.unwrap_or(ReqType::Exact), v)
+    )(input)
+}
 
 pub fn parse_version(input: &str) -> IResult<&str, Version> {
     let (remain, (major, minor, patch, extra_num)) = tuple((
@@ -20,6 +30,20 @@ pub fn parse_version(input: &str) -> IResult<&str, Version> {
     version.modifier = modifire;
 
     Ok((remain, version))
+}
+
+pub fn parse_req_type(input: &str) -> IResult<&str, ReqType> {
+    map_res(alt((
+        tag("=="),
+        tag(">="),
+        tag("<="),
+        tag(">"),
+        tag("<"),
+        tag("!="),
+        tag("^"),
+        tag("~"),
+        tag("~="),
+    )), |x| ReqType::from_str(x))(input)
 }
 
 fn parse_digit_or_wildcard(input: &str) -> IResult<&str, u32> {
@@ -64,6 +88,15 @@ mod tests {
     #[test]
     fn dummy_test() {
 
+    }
+
+    #[rstest(input, expected,
+        case("*", Ok(("", Constraint::new(ReqType::Gte, Version::new(0, 0, 0))))),
+        case("==1.9.2", Ok(("", Constraint::new(ReqType::Exact, Version::new(1, 9, 2))))),
+        case("1.9.2", Ok(("", Constraint::new(ReqType::Exact, Version::new(1, 9, 2))))),
+    )]
+    fn parse_constraints(input: &str, expected: IResult<&str, Constraint>) {
+        assert_eq!(parse_constraint(input), expected);
     }
 
     #[rstest(input, expected,
