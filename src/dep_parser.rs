@@ -1,11 +1,98 @@
-use crate::dep_types::{Version, VersionModifier, ReqType, Constraint};
-use nom::IResult;
-use nom::sequence::{tuple, preceded};
-use nom::character::complete::digit1;
+use crate::dep_types::{Version, VersionModifier, ReqType, Constraint, Req, Extras, DependencyError};
+use nom::{IResult, InputTakeAtPosition, AsChar};
+use nom::sequence::{tuple, preceded, separated_pair, delimited};
+use nom::character::complete::{digit1, space0};
 use nom::bytes::complete::tag;
-use nom::combinator::{opt, map, value, map_res};
+use nom::combinator::{opt, map, value, map_res, flat_map};
 use nom::branch::alt;
 use std::str::FromStr;
+use std::io::ErrorKind;
+use nom::multi::{many0, many_m_n, separated_list};
+use crate::util::Os;
+
+enum ExtrasPart {
+    Extra(String),
+    SysPlatform(ReqType, Os),
+    PythonVersion(Constraint),
+}
+
+
+pub fn parse_req(input: &str) -> IResult<&str, Req> {
+    // eg saturn = ">=0.3.4", as in pyproject.toml
+    map(separated_pair(
+        parse_package_name,
+        tuple((space0, tag("="), space0)),
+        delimited(quote, parse_constraints, quote),
+    ), |(name, constraints)| Req::new(name.to_string(), constraints))(input)
+}
+
+pub fn parse_req_pypi_fmt(input: &str) -> IResult<&str, Req> {
+    map(tuple((
+        parse_package_name,
+        space0,
+        delimited(tag("("), parse_constraints, tag(")")),
+        tuple((space0, tag(";"), space0)),
+        parse_extras,
+    )),
+        |(name, _, constraints, _, extras)| {
+            Req::new_with_extras(name.to_string(), constraints, extras)
+        })(input)
+}
+
+fn quote(input: &str) -> IResult<&str, &str> {
+    alt((
+        tag("\""),
+        tag("'"),
+    ))(input)
+}
+
+pub fn parse_extras(input: &str) -> IResult<&str, Extras> {
+    map(separated_list(tag(","), parse_extra_part), |ps| {
+        let mut extra = None;
+        let mut sys_platform = None;
+        let mut python_version = None;
+
+        for p in ps {
+            match p {
+                ExtrasPart::Extra(s) => extra = Some(s),
+                ExtrasPart::SysPlatform(r, o) => sys_platform = Some((r, o)),
+                ExtrasPart::PythonVersion(c) => python_version = Some(c),
+            }
+        }
+
+        Extras {
+            extra,
+            sys_platform,
+            python_version,
+        }
+    })(input)
+}
+
+fn parse_extra_part(input: &str) -> IResult<&str, ExtrasPart> {
+    flat_map(alt((
+        tag("extra"),
+        tag("sys_platform"),
+        tag("python_version"),
+    )), |type_| {
+        move |input: &str| {
+            match type_ {
+                "extra" => { map(
+                    preceded(tag("=="), parse_package_name),
+                    |x| ExtrasPart::Extra(x.to_string()))(input) },
+                "sys_platform" => { map(tuple((parse_req_type, parse_package_name)), |(r, o)| {
+                    ExtrasPart::SysPlatform(r, Os::from_str(o).unwrap())
+                })(input) },
+                "python_version" => { map(parse_constraint, |x| ExtrasPart::PythonVersion(x))(input) },
+                _ => panic!("Found unexpected")
+            }
+        }
+
+    })(input)
+}
+
+pub fn parse_constraints(input: &str) -> IResult<&str, Vec<Constraint>> {
+    separated_list(tag(","), parse_constraint)(input)
+}
 
 pub fn parse_constraint(input: &str) -> IResult<&str, Constraint> {
     map(alt((
@@ -41,9 +128,22 @@ pub fn parse_req_type(input: &str) -> IResult<&str, ReqType> {
         tag("<"),
         tag("!="),
         tag("^"),
-        tag("~"),
         tag("~="),
+        tag("~"),
     )), |x| ReqType::from_str(x))(input)
+}
+
+fn parse_package_name(input: &str) -> IResult<&str, &str> {
+    input.split_at_position1_complete(|x| !is_package_char(x), nom::error::ErrorKind::Tag)
+}
+
+fn is_package_char(c: char) -> bool {
+    match c {
+        '-' => true,
+        '.' => true,
+        '_' => true,
+        _ => c.is_alpha() || c.is_dec_digit(),
+    }
 }
 
 fn parse_digit_or_wildcard(input: &str) -> IResult<&str, u32> {
@@ -94,8 +194,9 @@ mod tests {
         case("*", Ok(("", Constraint::new(ReqType::Gte, Version::new(0, 0, 0))))),
         case("==1.9.2", Ok(("", Constraint::new(ReqType::Exact, Version::new(1, 9, 2))))),
         case("1.9.2", Ok(("", Constraint::new(ReqType::Exact, Version::new(1, 9, 2))))),
+        case("~=1.9.2", Ok(("", Constraint::new(ReqType::Tilde, Version::new(1, 9, 2))))),
     )]
-    fn parse_constraints(input: &str, expected: IResult<&str, Constraint>) {
+    fn test_parse_constraint(input: &str, expected: IResult<&str, Constraint>) {
         assert_eq!(parse_constraint(input), expected);
     }
 
@@ -164,7 +265,18 @@ mod tests {
             modifier: Some((VersionModifier::Beta, 0)),
         }))),
     )]
-    fn parse_versions(input: &str, expected: IResult<&str, Version>) {
+    fn test_parse_version(input: &str, expected: IResult<&str, Version>) {
         assert_eq!(parse_version(input), expected);
+    }
+
+    #[rstest(input, expected,
+        case("pyflow", Ok(("", "pyflow"))),
+        case("py-flow", Ok(("", "py-flow"))),
+        case("py_flow", Ok(("", "py_flow"))),
+        case("py.flow", Ok(("", "py.flow"))),
+        case("py.flow2", Ok(("", "py.flow2"))),
+    )]
+    fn test_parse_package_name(input: &str, expected: IResult<&str, &str>) {
+        assert_eq!(parse_package_name(input), expected);
     }
 }
