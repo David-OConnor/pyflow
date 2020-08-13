@@ -1,6 +1,6 @@
 use crate::dep_types::{Version, VersionModifier, ReqType, Constraint, Req, Extras, DependencyError};
 use nom::{IResult, InputTakeAtPosition, AsChar};
-use nom::sequence::{tuple, preceded, separated_pair, delimited};
+use nom::sequence::{tuple, preceded, separated_pair, delimited, terminated};
 use nom::character::complete::{digit1, space0};
 use nom::bytes::complete::tag;
 use nom::combinator::{opt, map, value, map_res, flat_map};
@@ -36,11 +36,14 @@ pub fn parse_req_pypi_fmt(input: &str) -> IResult<&str, Req> {
         parse_package_name,
         space0,
         delimited(tag("("), parse_constraints, tag(")")),
-        tuple((space0, tag(";"), space0)),
-        parse_extras,
+        opt(preceded(tuple((space0, tag(";"), space0)), parse_extras)),
     )),
-        |(name, _, constraints, _, extras)| {
-            Req::new_with_extras(name.to_string(), constraints, extras)
+        |(name, _, constraints, extras_opt)| {
+            if let Some(extras)  = extras_opt {
+                Req::new_with_extras(name.to_string(), constraints, extras)
+            } else {
+                Req::new(name.to_string(), constraints)
+            }
         })(input)
 }
 
@@ -283,5 +286,19 @@ mod tests {
     )]
     fn test_parse_package_name(input: &str, expected: IResult<&str, &str>) {
         assert_eq!(parse_package_name(input), expected);
+    }
+
+    #[rstest(input, expected,
+        case("saturn = \">=0.3.4\"", Ok(("", Req::new("saturn".to_string(), vec![Constraint::new(ReqType::Gte, Version::new(0, 3, 4))])))),
+    )]
+    fn test_parse_req(input: &str, expected: IResult<&str, Req>) {
+        assert_eq!(parse_req(input), expected);
+    }
+
+    #[rstest(input, expected,
+    case("saturn (>=0.3.4)", Ok(("", Req::new("saturn".to_string(), vec![Constraint::new(ReqType::Gte, Version::new(0, 3, 4))])))),
+    )]
+    fn test_parse_req_pypi(input: &str, expected: IResult<&str, Req>) {
+        assert_eq!(parse_req_pypi_fmt(input), expected);
     }
 }
