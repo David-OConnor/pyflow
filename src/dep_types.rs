@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
-use crate::dep_parser::parse_version;
+use crate::dep_parser::{parse_version, parse_constraint};
+use nom::combinator::all_consuming;
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 
@@ -200,7 +201,7 @@ impl FromStr for Version {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_version(s)
+        all_consuming(parse_version)(s)
             .map_err(|_| DependencyError::new(&format!("Problem parsing version: {}", s)))
             .map(|(_, v)| v)
     }
@@ -332,30 +333,9 @@ impl FromStr for Constraint {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "*" {
-            return Ok(Self::new(ReqType::Gte, Version::new(0, 0, 0)));
-        }
-
-        // You must have the = versions listed before unequal, ie <= before <, or it'll
-        // conclude the match preemptively.
-        let re = Regex::new(r"^(\^|~=|~|==|<=|>=|<|>|!=)?(.*)$").unwrap();
-
-        let caps = match re.captures(s) {
-            Some(c) => c,
-            None => return Err(DependencyError::new("Problem parsing constraint")),
-        };
-
-        // Only major is required.
-        let type_ = match caps.get(1) {
-            Some(t) => ReqType::from_str(t.as_str())?,
-            None => ReqType::Exact,
-        };
-
-        let version = match caps.get(2) {
-            Some(c) => Version::from_str(c.as_str())?,
-            None => return Err(DependencyError::new("Problem parsing constraint")),
-        };
-        Ok(Self::new(type_, version))
+        parse_constraint(s)
+            .map_err(|_| DependencyError::new(&format!("Problem parsing constraint: {}", s)))
+            .map(|(_, c)| c)
     }
 }
 
@@ -629,6 +609,12 @@ pub fn intersection(
     result
 }
 
+pub struct Extras {
+    pub extra: Option<String>,
+    pub sys_platform: Option<(ReqType, util::Os)>,
+    pub python_version: Option<Constraint>,
+}
+
 /// For parsing Req from string.
 fn parse_extras(
     m: Option<Match>,
@@ -704,6 +690,19 @@ impl Req {
             extra: None,
             sys_platform: None,
             python_version: None,
+            install_with_extras: None,
+            path: None,
+            git: None,
+        }
+    }
+
+    pub fn new_with_extras(name: String, constraints: Vec<Constraint>, extras: Extras) -> Self {
+        Self {
+            name,
+            constraints,
+            extra: extras.extra,
+            sys_platform: extras.sys_platform,
+            python_version: extras.python_version,
             install_with_extras: None,
             path: None,
             git: None,
