@@ -19,11 +19,15 @@ enum ExtrasPart {
 
 pub fn parse_req(input: &str) -> IResult<&str, Req> {
     // eg saturn = ">=0.3.4", as in pyproject.toml
-    map(separated_pair(
-        parse_package_name,
-        tuple((space0, tag("="), space0)),
-        delimited(quote, parse_constraints, quote),
-    ), |(name, constraints)| Req::new(name.to_string(), constraints))(input)
+    map(alt((
+        separated_pair(
+            parse_package_name,
+            tuple((space0, tag("="), space0)),
+            delimited(quote, parse_constraints, quote),
+        ),
+        map(parse_package_name, |x| (x, vec![]))
+    )),
+        |(name, constraints)| Req::new(name.to_string(), constraints))(input)
 }
 
 pub fn parse_req_pypi_fmt(input: &str) -> IResult<&str, Req> {
@@ -99,7 +103,7 @@ fn parse_extra_part(input: &str) -> IResult<&str, ExtrasPart> {
 }
 
 pub fn parse_constraints(input: &str) -> IResult<&str, Vec<Constraint>> {
-    separated_list(tag(","), parse_constraint)(input)
+    separated_list(tuple((space0, tag(","), space0)), parse_constraint)(input)
 }
 
 pub fn parse_constraint(input: &str) -> IResult<&str, Constraint> {
@@ -290,6 +294,7 @@ mod tests {
 
     #[rstest(input, expected,
         case("saturn = \">=0.3.4\"", Ok(("", Req::new("saturn".to_string(), vec![Constraint::new(ReqType::Gte, Version::new(0, 3, 4))])))),
+        case("saturn", Ok(("", Req::new("saturn".to_string(), vec![])))),
     )]
     fn test_parse_req(input: &str, expected: IResult<&str, Req>) {
         assert_eq!(parse_req(input), expected);
