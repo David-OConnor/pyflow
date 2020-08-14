@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
-use crate::dep_parser::{parse_version, parse_constraint};
+use crate::dep_parser::{parse_version, parse_constraint, parse_req_pypi_fmt, parse_req};
 use nom::combinator::all_consuming;
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
@@ -333,7 +333,7 @@ impl FromStr for Constraint {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_constraint(s)
+        all_consuming(parse_constraint)(s)
             .map_err(|_| DependencyError::new(&format!("Problem parsing constraint: {}", s)))
             .map(|(_, c)| c)
     }
@@ -615,61 +615,6 @@ pub struct Extras {
     pub python_version: Option<Constraint>,
 }
 
-/// For parsing Req from string.
-fn parse_extras(
-    m: Option<Match>,
-) -> (
-    Option<String>,
-    Option<(ReqType, util::Os)>,
-    Option<Constraint>,
-) {
-    let mut extra = None;
-    let mut sys_platform = None;
-    let mut python_version = None;
-
-    if let Some(s) = m {
-        let extras = s.as_str();
-        // Now that we've extracted extras etc, parse them with a new re.
-        let ex_re = Regex::new(
-            r#"(extra|sys_platform|python_version)\s*(\^|~|==|<=|>=|<|>|!=)\s*['"](.*?)['"]"#,
-        )
-        .unwrap();
-
-        for caps in ex_re.captures_iter(extras) {
-            let type_ = caps.get(1).unwrap().as_str();
-            let req_type = caps.get(2).unwrap().as_str();
-            let val = caps.get(3).unwrap().as_str();
-
-            match type_ {
-                "extra" => extra = Some(val.to_owned()),
-                "sys_platform" => {
-                    sys_platform = Some((
-                        ReqType::from_str(req_type)
-                            .unwrap_or_else(|_| panic!("Problem parsing reqtype: {}", req_type)),
-                        crate::Os::from_str(val)
-                            .unwrap_or_else(|_| panic!("Problem parsing Os in extras: {}", val)),
-                    ))
-                }
-                "python_version" => {
-                    // If we parse reqtype and version separately, version will be forced
-                    // to take 3 digits, even if not all 3 are specified.
-                    python_version = Some(
-                        Constraint::from_str(&(req_type.to_owned() + val)).unwrap_or_else(|_| {
-                            panic!("Problem parsing constraint: {} {}", req_type, val)
-                        }),
-                    );
-                }
-                _ => println!("Found unexpected extra: {}", type_),
-            }
-        }
-    } else {
-        extra = None;
-        sys_platform = None;
-        python_version = None;
-    };
-    (extra, sys_platform, python_version)
-}
-
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Req {
     pub name: String,
@@ -710,80 +655,14 @@ impl Req {
     }
 
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
-        // Todo: DRY between versioned and unversioned.
-        let re = if pypi_fmt {
-            // eg saturn (>=0.3.4) or argon2-cffi (>=16.1.0) ; extra == 'argon2'
-            // Note: We specify what chars are acceptable in a name instead of using
-            // wildcard, so we don't accidentally match a semicolon here if a
-            // set of parens appears later. The non-greedy ? in the version-matching
-            // expression's important as well, in some cases of extras.
-            Regex::new(r#"^([a-zA-Z\-0-9._]+)(?:\[(.*?)\])?\s+\(?(.*?)\)?(?:(?:\s*;\s*)(.*))?$"#)
-                .unwrap()
+        (if pypi_fmt {
+            all_consuming(parse_req_pypi_fmt)(s)
         } else {
-            // eg saturn = ">=0.3.4", as in pyproject.toml
-            // todo extras in this format?
-            Regex::new(r#"^(.*?)\s*=\s*["'](.*)["']$"#).unwrap()
-        };
-
-        // Check if no version is specified.
-        let novers_re = if pypi_fmt {
-            Regex::new(r"^([a-zA-Z\-0-9._]+)(?:(?:\s*;\s*)(.*))?$").unwrap()
-        } else {
-            // todo extras
-            Regex::new(r"^([a-zA-Z\-0-9._]+)$").unwrap()
-        };
-
-        if let Some(caps) = re.captures(s) {
-            let name = caps.get(1).unwrap().as_str().to_owned();
-            let reqs_m = caps.get(if pypi_fmt { 3 } else { 2 }).unwrap();
-            let constraints = if reqs_m.as_str().is_empty() {
-                vec![]
-            } else {
-                Constraint::from_str_multiple(reqs_m.as_str())?
-            };
-
-            let (extra, sys_platform, python_version) =
-                parse_extras(caps.get(if pypi_fmt { 4 } else { 3 }));
-
-            // Now handle extras in brackets. Assume it's a simple string of the name.
-            let mut install_with_extras = None;
-            if extra.is_none() && pypi_fmt {
-                if let Some(ex) = caps.get(2) {
-                    // todo: Handle multiple install_with_extras.
-                    install_with_extras = Some(vec![ex.as_str().to_owned()])
-                }
-            }
-
-            return Ok(Self {
-                name,
-                constraints,
-                extra,
-                sys_platform,
-                python_version,
-                install_with_extras,
-                path: None,
-                git: None,
-            });
-        };
-
-        if let Some(caps) = novers_re.captures(s) {
-            let (extra, sys_platform, python_version) = parse_extras(caps.get(2));
-
-            return Ok(Self {
-                name: caps.get(1).unwrap().as_str().to_string(),
-                constraints: vec![],
-                extra,
-                sys_platform,
-                python_version,
-                install_with_extras: None,
-                path: None,
-                git: None,
-            });
-        }
-        Err(DependencyError::new(&format!(
-            "Problem parsing version requirement: {}",
-            s
-        )))
+            all_consuming(parse_req)(s)
+        }).map_err(|_| DependencyError::new(&format!(
+                "Problem parsing version requirement: {}",
+                s
+        ))).map(|x| x.1)
     }
 
     /// We use this for parsing requirements.txt.

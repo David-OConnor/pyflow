@@ -1,7 +1,7 @@
 use crate::dep_types::{Version, VersionModifier, ReqType, Constraint, Req, Extras, DependencyError};
 use nom::{IResult, InputTakeAtPosition, AsChar};
 use nom::sequence::{tuple, preceded, separated_pair, delimited, terminated};
-use nom::character::complete::{digit1, space0};
+use nom::character::complete::{digit1, space0, space1};
 use nom::bytes::complete::tag;
 use nom::combinator::{opt, map, value, map_res, flat_map};
 use nom::branch::alt;
@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::io::ErrorKind;
 use nom::multi::{many0, many_m_n, separated_list};
 use crate::util::Os;
+use crate::install::download_and_install_package;
 
 enum ExtrasPart {
     Extra(String),
@@ -36,18 +37,25 @@ pub fn parse_req_pypi_fmt(input: &str) -> IResult<&str, Req> {
     // wildcard, so we don't accidentally match a semicolon here if a
     // set of parens appears later. The non-greedy ? in the version-matching
     // expression's important as well, in some cases of extras.
-    map(tuple((
-        parse_package_name,
-        space0,
-        delimited(tag("("), parse_constraints, tag(")")),
-        opt(preceded(tuple((space0, tag(";"), space0)), parse_extras)),
+    map(alt((
+        tuple((
+            tuple((parse_package_name, opt(parse_install_with_extras))),
+            alt((
+                preceded(space0, delimited(tag("("), parse_constraints, tag(")"))),
+                preceded(space1, parse_constraints),
+            )),
+            opt(preceded(tuple((space0, tag(";"), space0)), parse_extras)),
+        )),
+        map(tuple((parse_package_name, opt(parse_install_with_extras))), |x| (x, vec![], None)),
     )),
-        |(name, _, constraints, extras_opt)| {
-            if let Some(extras)  = extras_opt {
+        |((name, install_with_extras), constraints, extras_opt)| {
+            let mut r = if let Some(extras)  = extras_opt {
                 Req::new_with_extras(name.to_string(), constraints, extras)
             } else {
                 Req::new(name.to_string(), constraints)
-            }
+            };
+            r.install_with_extras = install_with_extras;
+            r
         })(input)
 }
 
@@ -58,8 +66,15 @@ fn quote(input: &str) -> IResult<&str, &str> {
     ))(input)
 }
 
+fn parse_install_with_extras(input: &str) -> IResult<&str, Vec<String>> {
+    map(
+        delimited(tag("["), separated_list(tag(","), parse_package_name), tag("]")),
+        |extras| extras.iter().map(|x| x.to_string()).collect()
+    )(input)
+}
+
 pub fn parse_extras(input: &str) -> IResult<&str, Extras> {
-    map(separated_list(tag(","), parse_extra_part), |ps| {
+    map(separated_list(delimited(space0, tag("and"), space0), parse_extra_part), |ps| {
         let mut extra = None;
         let mut sys_platform = None;
         let mut python_version = None;
@@ -89,7 +104,7 @@ fn parse_extra_part(input: &str) -> IResult<&str, ExtrasPart> {
         move |input: &str| {
             match type_ {
                 "extra" => { map(
-                    preceded(tag("=="), parse_package_name),
+                    preceded(separated_pair(space0, tag("=="), space0), delimited(quote, parse_package_name, quote)),
                     |x| ExtrasPart::Extra(x.to_string()))(input) },
                 "sys_platform" => { map(tuple((parse_req_type, parse_package_name)), |(r, o)| {
                     ExtrasPart::SysPlatform(r, Os::from_str(o).unwrap())
