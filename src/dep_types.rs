@@ -609,6 +609,7 @@ pub fn intersection(
     result
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Extras {
     pub extra: Option<String>,
     pub sys_platform: Option<(ReqType, util::Os)>,

@@ -46,7 +46,10 @@ pub fn parse_req_pypi_fmt(input: &str) -> IResult<&str, Req> {
             )),
             opt(preceded(tuple((space0, tag(";"), space0)), parse_extras)),
         )),
-        map(tuple((parse_package_name, opt(parse_install_with_extras))), |x| (x, vec![], None)),
+        map(tuple((
+            tuple((parse_package_name, opt(parse_install_with_extras))),
+            opt(preceded(tuple((space0, tag(";"), space0)), parse_extras)),
+       )), |(x, y)| (x, vec![], y)),
     )),
         |((name, install_with_extras), constraints, extras_opt)| {
             let mut r = if let Some(extras)  = extras_opt {
@@ -74,25 +77,31 @@ fn parse_install_with_extras(input: &str) -> IResult<&str, Vec<String>> {
 }
 
 pub fn parse_extras(input: &str) -> IResult<&str, Extras> {
-    map(separated_list(delimited(space0, tag("and"), space0), parse_extra_part), |ps| {
-        let mut extra = None;
-        let mut sys_platform = None;
-        let mut python_version = None;
+    map(
+        separated_list(delimited(space0, tag("and"), space0), delimited(
+            opt(preceded(tag("("), space0)),
+            parse_extra_part,
+            opt(preceded(space0, tag(")"))),
+        )),
+        |ps| {
+            let mut extra = None;
+            let mut sys_platform = None;
+            let mut python_version = None;
 
-        for p in ps {
-            match p {
-                ExtrasPart::Extra(s) => extra = Some(s),
-                ExtrasPart::SysPlatform(r, o) => sys_platform = Some((r, o)),
-                ExtrasPart::PythonVersion(c) => python_version = Some(c),
+            for p in ps {
+                match p {
+                    ExtrasPart::Extra(s) => extra = Some(s),
+                    ExtrasPart::SysPlatform(r, o) => sys_platform = Some((r, o)),
+                    ExtrasPart::PythonVersion(c) => python_version = Some(c),
+                }
             }
-        }
 
-        Extras {
-            extra,
-            sys_platform,
-            python_version,
-        }
-    })(input)
+            Extras {
+                extra,
+                sys_platform,
+                python_version,
+            }
+        })(input)
 }
 
 fn parse_extra_part(input: &str) -> IResult<&str, ExtrasPart> {
@@ -104,12 +113,25 @@ fn parse_extra_part(input: &str) -> IResult<&str, ExtrasPart> {
         move |input: &str| {
             match type_ {
                 "extra" => { map(
-                    preceded(separated_pair(space0, tag("=="), space0), delimited(quote, parse_package_name, quote)),
-                    |x| ExtrasPart::Extra(x.to_string()))(input) },
-                "sys_platform" => { map(tuple((parse_req_type, parse_package_name)), |(r, o)| {
-                    ExtrasPart::SysPlatform(r, Os::from_str(o).unwrap())
+                    preceded(
+                        separated_pair(space0, tag("=="), space0),
+                        delimited(quote, parse_package_name, quote)
+                    ),
+                    |x| ExtrasPart::Extra(x.to_string()))(input)
+                },
+                "sys_platform" => { map(
+                    tuple((delimited(space0, tag("=="), space0),
+                           delimited(quote, parse_package_name, quote)
+                    )), |(r, o)| {
+                    ExtrasPart::SysPlatform(ReqType::Exact, Os::from_str(o).unwrap())
                 })(input) },
-                "python_version" => { map(parse_constraint, |x| ExtrasPart::PythonVersion(x))(input) },
+                "python_version" => {
+                    map(tuple((
+                        delimited(space0, parse_req_type, space0),
+                        delimited(quote, parse_version, quote)
+                    )), |(r, v)| ExtrasPart::PythonVersion(
+                        Constraint::new(r, v)
+                    ))(input) },
                 _ => panic!("Found unexpected")
             }
         }
@@ -305,6 +327,52 @@ mod tests {
     )]
     fn test_parse_package_name(input: &str, expected: IResult<&str, &str>) {
         assert_eq!(parse_package_name(input), expected);
+    }
+
+    #[rstest(input, expected,
+        case(
+            "extra == \"test\" and ( python_version == \"2.7\")",
+            Ok(("", Extras{
+                extra: Some("test".to_string()),
+                sys_platform: None,
+                python_version: Some(Constraint{ type_: ReqType::Exact, version: Version::new(2, 7, 0)})
+            }))
+        ),
+       case(
+            "( python_version == \"2.7\")",
+            Ok(("", Extras{
+                extra: None,
+                sys_platform: None,
+                python_version: Some(Constraint{ type_: ReqType::Exact, version: Version::new(2, 7, 0)})
+            }))
+        ),
+       case(
+            "python_version == \"2.7\"",
+            Ok(("", Extras{
+                extra: None,
+                sys_platform: None,
+                python_version: Some(Constraint{ type_: ReqType::Exact, version: Version::new(2, 7, 0)})
+            }))
+        ),
+        case(
+            "( python_version==\"2.7\")",
+            Ok(("", Extras{
+                extra: None,
+                sys_platform: None,
+                python_version: Some(Constraint{ type_: ReqType::Exact, version: Version::new(2, 7, 0)})
+            }))
+        ),
+        case(
+            "sys_platform == \"win32\" and python_version < \"3.6\"",
+            Ok(("", Extras{
+                extra: None,
+                sys_platform: Some((ReqType::Exact, Os::Windows32)),
+                python_version: Some(Constraint{ type_: ReqType::Lt, version: Version::new(3, 6, 0)})
+            }))
+        ),
+    )]
+    fn test_parse_extras(input: &str, expected: IResult<&str, Extras>) {
+        assert_eq!(parse_extras(input), expected);
     }
 
     #[rstest(input, expected,
