@@ -1,4 +1,4 @@
-mod dep_parser;
+#![allow(clippy::non_ascii_literal)]
 
 use crate::dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version};
 use crate::util::{abort, Os};
