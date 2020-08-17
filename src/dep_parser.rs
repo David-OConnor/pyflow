@@ -1,15 +1,17 @@
-use crate::dep_types::{Version, VersionModifier, ReqType, Constraint, Req, Extras, DependencyError};
-use nom::{IResult, InputTakeAtPosition, AsChar};
-use nom::sequence::{tuple, preceded, separated_pair, delimited, terminated};
-use nom::character::complete::{digit1, space0, space1};
-use nom::bytes::complete::{tag, take};
-use nom::combinator::{opt, map, value, map_res, flat_map, map_parser};
-use nom::branch::alt;
-use std::str::FromStr;
 use std::io::ErrorKind;
+use std::str::FromStr;
+
+use nom::{AsChar, InputTakeAtPosition, IResult};
+use nom::branch::alt;
+use nom::bytes::complete::{tag, take};
+use nom::character::complete::{digit1, space0, space1};
+use nom::combinator::{flat_map, map, map_parser, map_res, opt, value};
 use nom::multi::{many0, many_m_n, separated_list};
-use crate::util::Os;
+use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
+
+use crate::dep_types::{Constraint, DependencyError, Extras, Req, ReqType, Version, VersionModifier};
 use crate::install::download_and_install_package;
+use crate::util::Os;
 
 enum ExtrasPart {
     Extra(String),
@@ -277,7 +279,9 @@ fn parse_modifier_version(input: &str) -> IResult<&str, VersionModifier> {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+
     use crate::dep_types::{Version, VersionModifier};
+
     use super::*;
 
     #[test]
