@@ -2,8 +2,8 @@ use crate::dep_types::{Version, VersionModifier, ReqType, Constraint, Req, Extra
 use nom::{IResult, InputTakeAtPosition, AsChar};
 use nom::sequence::{tuple, preceded, separated_pair, delimited, terminated};
 use nom::character::complete::{digit1, space0, space1};
-use nom::bytes::complete::tag;
-use nom::combinator::{opt, map, value, map_res, flat_map};
+use nom::bytes::complete::{tag, take};
+use nom::combinator::{opt, map, value, map_res, flat_map, map_parser};
 use nom::branch::alt;
 use std::str::FromStr;
 use std::io::ErrorKind;
@@ -69,6 +69,43 @@ pub fn parse_pip_str(input: &str) -> IResult<&str, Req> {
             Req::new(name.to_string(), constraint.into_iter().collect())
         }
     )(input)
+}
+
+pub fn parse_wh_py_vers(input: &str) -> IResult<&str, Vec<Constraint>> {
+    alt((
+        map(tag("any"),
+            |_| vec![Constraint::new(
+                ReqType::Gte, Version::new(2, 0, 0))],
+        ),
+        map(parse_version,
+            |v| vec![Constraint::new(ReqType::Caret, v)]
+        ),
+        separated_list(tag("."), parse_wh_py_ver),
+    ))(input)
+}
+
+fn parse_wh_py_ver(input: &str) -> IResult<&str, Constraint> {
+    map(tuple((
+        alt((tag("cp"), tag("py"), tag("pp"))),
+        alt((tag("2"), tag("3"), tag("4"))),
+        opt(map_parser(take(1u8), digit1)),
+    )), |(_, major, minor): (_, &str, Option<&str>)| {
+        let major: u32 = major.parse().unwrap();
+        match minor {
+            Some(mi) => {
+                Constraint::new(
+                    ReqType::Exact,
+                    Version::new_short(major, mi.parse().unwrap()))
+            },
+            Nome => {
+                if major == 2 {
+                    Constraint::new(ReqType::Lte, Version::new_short(2, 10))
+                } else {
+                    Constraint::new(ReqType::Gte, Version::new_short(3, 0))
+                }
+            }
+        }
+    })(input)
 }
 
 fn quote(input: &str) -> IResult<&str, &str> {
