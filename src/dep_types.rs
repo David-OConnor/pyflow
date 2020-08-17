@@ -1,11 +1,10 @@
 use crate::{dep_resolution, util};
 use crossterm::{Color, Colored};
-use regex::{Match, Regex};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
-use crate::dep_parser::{parse_version, parse_constraint, parse_req_pypi_fmt, parse_req, parse_pip_str};
+use crate::dep_parser::{parse_version, parse_constraint, parse_req_pypi_fmt, parse_req, parse_pip_str, parse_wh_py_vers};
 use nom::combinator::all_consuming;
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
@@ -366,41 +365,9 @@ impl Constraint {
     /// Important: The result is intended to be used in an "any" way. Ie "cp35.36" should match
     /// either Python 3.5 or 3.6.
     pub fn from_wh_py_vers(s: &str) -> Result<Vec<Self>, DependencyError> {
-        if s == "any" {
-            return Ok(vec![Self::new(ReqType::Gte, Version::new(2, 0, 0))]);
-        }
-
-        if let Ok(parsed) = Version::from_str(s) {
-            // Note the `Caret` req type; if passed in this format, assuming packages marked
-            // `3.6` are valid for `3.7+`.
-            return Ok(vec![Self::new(ReqType::Caret, parsed)]);
-        }
-
-        let s_split = s.split('.');
-        let re = Regex::new(r"^(?:cp|py|pp)?([234])(\d)?$").unwrap();
-
-        let mut result = vec![];
-        for part in s_split {
-            if let Some(caps) = re.captures(part) {
-                let major = caps.get(1).unwrap().as_str().parse::<u32>()?;
-                match caps.get(2) {
-                    Some(mi) => {
-                        let minor = mi.as_str().parse::<u32>()?;
-                        result.push(Self::new(ReqType::Exact, Version::new_short(major, minor)));
-                    }
-                    // eg, py2.py3 will add Gte 2.0.0 and Gte 3.0.0
-                    None => {
-                        if major == 2 {
-                            result.push(Self::new(ReqType::Lte, Version::new_short(2, 10)));
-                        } else {
-                            result.push(Self::new(ReqType::Gte, Version::new_short(3, 0)));
-                        }
-                    }
-                };
-            }
-        }
-
-        Ok(result)
+        all_consuming(parse_wh_py_vers)(s)
+            .map_err(|_| DependencyError::new(&format!("Problem parsing wh_py_vers: {}", s)))
+            .map(|(_, vs)| vs)
     }
 
     /// Called `to_string2` to avoid shadowing `Display`
