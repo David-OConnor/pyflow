@@ -15,6 +15,7 @@ mod build;
 mod commands;
 mod dep_resolution;
 mod dep_types;
+mod dep_parser;
 mod files;
 mod install;
 mod py_versions;
