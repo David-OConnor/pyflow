@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
-use crate::dep_parser::{parse_version, parse_constraint, parse_req_pypi_fmt, parse_req};
+use crate::dep_parser::{parse_version, parse_constraint, parse_req_pypi_fmt, parse_req, parse_pip_str};
 use nom::combinator::all_consuming;
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
@@ -669,28 +669,7 @@ impl Req {
     /// We use this for parsing requirements.txt.
     pub fn from_pip_str(s: &str) -> Option<Self> {
         // todo multiple ie single quotes support?
-        // Check if no version is specified.
-        if Regex::new(r"^([a-zA-Z\-0-9]+)$")
-            .unwrap()
-            .captures(s)
-            .is_some()
-        {
-            return Some(Self::new(s.to_string(), vec![]));
-        }
-
-        let re = Regex::new(r"^(.*?)((?:\^|~|==|<=|>=|<|>|!=).*)$").unwrap();
-
-        let caps = match re.captures(s) {
-            Some(c) => c,
-            // todo: Figure out how to return an error
-            None => return None,
-        };
-
-        let name = caps.get(1).unwrap().as_str().to_string();
-        let req = Constraint::from_str(caps.get(2).unwrap().as_str())
-            .expect("Problem parsing requirement");
-
-        Some(Self::new(name, vec![req]))
+        all_consuming(parse_pip_str)(s).ok().map(|x| x.1)
     }
 
     /// eg `saturn = "^0.3.1"` or `matplotlib = "3.1.1"`

@@ -62,6 +62,15 @@ pub fn parse_req_pypi_fmt(input: &str) -> IResult<&str, Req> {
         })(input)
 }
 
+pub fn parse_pip_str(input: &str) -> IResult<&str, Req> {
+    map(
+        tuple((parse_package_name, opt(parse_constraint))),
+        |(name, constraint)| {
+            Req::new(name.to_string(), constraint.into_iter().collect())
+        }
+    )(input)
+}
+
 fn quote(input: &str) -> IResult<&str, &str> {
     alt((
         tag("\""),
