@@ -173,10 +173,11 @@ pub fn build(
     // Twine has too many dependencies to install when the environment, like we do with `wheel`, and
     // for now, it's easier to install using pip
     // todo: Install using own tools instead of pip; this is the last dependence on pip.
-    Command::new(paths.bin.join("python"))
+    let output = Command::new(paths.bin.join("python"))
         .args(&["-m", "pip", "install", "twine"])
-        .status()
+        .output()
         .expect("Problem installing Twine");
+    util::check_command_output(&output, "failed to install twine");
 
     //    let twine_url = "https://files.pythonhosted.org/packages/c4/43/b9c56d378f5d0b9bee7be564b5c5fb65c65e5da6e82a97b6f50c2769249a/twine-2.0.0-py3-none-any.whl";
     //    install::download_and_install_package(
@@ -197,10 +198,11 @@ pub fn build(
     println!("🛠️️ Building the package...");
     // todo: Run build script first, right?
     if let Some(build_file) = &cfg.build {
-        Command::new(paths.bin.join("python"))
+        let output = Command::new(paths.bin.join("python"))
             .arg(&build_file)
-            .status()
+            .output()
             .unwrap_or_else(|_| panic!("Problem building using {}", build_file));
+        util::check_command_output(&output, "failed to run build script");
     }
 
     //    Command::new(paths.bin.join("python"))
@@ -228,10 +230,11 @@ pub(crate) fn publish(bin_path: &PathBuf, cfg: &crate::Config) {
     };
 
     println!("Uploading to {}", repo_url);
-    Command::new(bin_path.join("twine"))
+    let output = Command::new(bin_path.join("twine"))
         .args(&["upload", "--repository-url", &repo_url, "dist/*"])
-        .status()
+        .output()
         .expect("Problem publishing");
+    util::check_command_output(&output, "publishing");
 }
 
 #[cfg(test)]

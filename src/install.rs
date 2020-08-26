@@ -351,38 +351,65 @@ pub fn download_and_install_package(
             replace_distutils(&extracted_parent.join("setup.py"));
 
             #[cfg(target_os = "windows")]
-            Command::new(paths.bin.join("python"))
-                .current_dir(&extracted_parent)
-                .args(&["setup.py", "bdist_wheel"])
-                .output()
-                .expect(&format!(
-                    "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
-                    &extracted_parent,
-                    paths.bin.join("python")
-                ));
-
+            {
+                let output = Command::new(paths.bin.join("python"))
+                    .current_dir(&extracted_parent)
+                    .args(&["setup.py", "bdist_wheel"])
+                    .output()
+                    .expect(&format!(
+                        "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+                        &extracted_parent,
+                        paths.bin.join("python")
+                    ));
+                util::check_command_output_with(&output, |s| {
+                    panic!(
+                        "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
+                        s
+                    )
+                });
+            }
             // The Linux and Mac builds appear to be unable to build wheels due to
             // missing the ctypes library; revert to system python.
             #[cfg(target_os = "linux")]
-            Command::new("python3")
-                .current_dir(&extracted_parent)
-                .args(&["setup.py", "bdist_wheel"])
-                .output()
-                .expect(&format!(
-                    "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
-                    &extracted_parent,
-                    paths.bin.join("python")
-                ));
+            {
+                let output = Command::new("python3")
+                    .current_dir(&extracted_parent)
+                    .args(&["setup.py", "bdist_wheel"])
+                    .output()
+                    .expect(&format!(
+                        "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+                        &extracted_parent,
+                        paths.bin.join("python")
+                    ));
+                util::check_command_output_with(&output, |s| {
+                    panic!(
+                        "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
+                        &extracted_parent,
+                        paths.bin.join("python"),
+                        s
+                    );
+                });
+            }
             #[cfg(target_os = "macos")]
-            Command::new("python3")
-                .current_dir(&extracted_parent)
-                .args(&["setup.py", "bdist_wheel"])
-                .output()
-                .expect(&format!(
-                    "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
-                    &extracted_parent,
-                    paths.bin.join("python")
-                ));
+            {
+                let output = Command::new("python3")
+                    .current_dir(&extracted_parent)
+                    .args(&["setup.py", "bdist_wheel"])
+                    .output()
+                    .expect(&format!(
+                        "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+                        &extracted_parent,
+                        paths.bin.join("python")
+                    ));
+                util::check_command_output_with(&output, |s| {
+                    panic!(
+                        "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
+                        &extracted_parent,
+                        paths.bin.join("python"),
+                        s
+                    );
+                });
+            }
 
             let dist_path = &extracted_parent.join("dist");
             if !dist_path.exists() {
@@ -621,13 +648,14 @@ pub fn download_and_install_git(
       //}
 
     // Build a wheel from the repo
-    Command::new(paths.bin.join("python"))
+    let output = Command::new(paths.bin.join("python"))
         // We assume that the module code is in the repo's immediate subfolder that has
         // the package's name.
         .current_dir(&git_path.join(&folder_name))
         .args(&["setup.py", "bdist_wheel"])
         .output()
         .expect("Problem running setup.py bdist_wheel");
+    util::check_command_output(&output, "running setup.py bdist_wheel");
 
     let archive_path = util::find_first_file(&git_path.join(folder_name).join("dist"));
     let filename = archive_path

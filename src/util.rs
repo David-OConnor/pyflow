@@ -888,3 +888,21 @@ pub fn find_dont_uninstall(reqs: &[Req], dev_reqs: &[Req]) -> Vec<String> {
 
     result
 }
+
+// Internal function to handle error reporting for commands.
+//
+// Panics on subprocess failure printing error message
+pub(crate) fn check_command_output(output: &process::Output, msg: &str) {
+    check_command_output_with(output, |s| panic!("{}: {}", msg, s));
+}
+
+// Internal function to handle error reporting for commands.
+//
+// Panics on subprocess failure printing error message
+pub(crate) fn check_command_output_with(output: &process::Output, f: impl Fn(&str)) {
+    if !output.status.success() {
+        let stderr =
+            std::str::from_utf8(&output.stderr).expect("building string from command output");
+        f(&stderr)
+    }
+}

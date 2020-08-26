@@ -83,10 +83,11 @@ pub fn find_py_version(alias: &str) -> Option<crate::Version> {
 /// Additionally, create the __pypackages__ directory if not already created.
 pub fn create_venv(py_alias: &str, lib_path: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
-    Command::new(py_alias)
+    let output = Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))
         .output()?;
+    util::check_command_output(&output, "creating virtual environment");
 
     Ok(())
 }
@@ -94,10 +95,11 @@ pub fn create_venv(py_alias: &str, lib_path: &Path, name: &str) -> Result<(), Bo
 // todo: DRY for using a path instead of str. use impl Into<PathBuf> ?
 pub fn create_venv2(py_alias: &Path, lib_path: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     // While creating the lib path, we're creating the __pypackages__ structure.
-    Command::new(py_alias)
+    let output = Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))
         .output()?;
+    util::check_command_output(&output, "creating virtual environment");
 
     Ok(())
 }
@@ -108,7 +110,8 @@ pub fn run_python(
     args: &[String],
 ) -> Result<(), Box<dyn Error>> {
     util::set_pythonpath(lib_paths);
-    Command::new(bin_path.join("python")).args(args).status()?;
+    let output = Command::new(bin_path.join("python")).args(args).output()?;
+    util::check_command_output(&output, "running python");
     Ok(())
 }
 
@@ -119,18 +122,20 @@ pub fn download_git_repo(repo: &str, dest_path: &Path) -> Result<(), Box<dyn Err
         util::abort("Can't find Git on the PATH. Is it installed?");
     }
 
-    Command::new("git")
+    let output = Command::new("git")
         .current_dir(dest_path)
         .args(&["clone", repo])
-        .status()?;
+        .output()?;
+    util::check_command_output(&output, "cloning repo");
     Ok(())
 }
 
 /// Initialize a new git repo.
 pub fn git_init(dir: &Path) -> Result<(), Box<dyn Error>> {
-    Command::new("git")
+    let output = Command::new("git")
         .current_dir(dir)
         .args(&["init", "--quiet"])
-        .status()?;
+        .output()?;
+    util::check_command_output(&output, "initializing git repository");
     Ok(())
 }
