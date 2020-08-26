@@ -285,15 +285,13 @@ pub fn download_and_install_package(
                                             .unwrap()
                                             .to_lowercase()
                                             .contains("readme")
+                                            && fs::File::create(&paths.lib.join(f.path().unwrap()))
+                                                .is_err()
                                         {
-                                            if let Err(_) =
-                                                fs::File::create(&paths.lib.join(f.path().unwrap()))
-                                            {
-                                                print_color(
-                                                    "Problem creating dummy readme",
-                                                    Color::DarkYellow,
-                                                );
-                                            }
+                                            print_color(
+                                                "Problem creating dummy readme",
+                                                Color::DarkYellow,
+                                            );
                                         }
                                     }
                                 };
@@ -356,11 +354,13 @@ pub fn download_and_install_package(
                     .current_dir(&extracted_parent)
                     .args(&["setup.py", "bdist_wheel"])
                     .output()
-                    .expect(&format!(
-                        "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
-                        &extracted_parent,
-                        paths.bin.join("python")
-                    ));
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+                            &extracted_parent,
+                            paths.bin.join("python")
+                        )
+                    });
                 util::check_command_output_with(&output, |s| {
                     panic!(
                         "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
@@ -376,11 +376,13 @@ pub fn download_and_install_package(
                     .current_dir(&extracted_parent)
                     .args(&["setup.py", "bdist_wheel"])
                     .output()
-                    .expect(&format!(
-                        "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
-                        &extracted_parent,
-                        paths.bin.join("python")
-                    ));
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+                            &extracted_parent,
+                            paths.bin.join("python")
+                        )
+                    });
                 util::check_command_output_with(&output, |s| {
                     panic!(
                         "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
@@ -396,11 +398,13 @@ pub fn download_and_install_package(
                     .current_dir(&extracted_parent)
                     .args(&["setup.py", "bdist_wheel"])
                     .output()
-                    .expect(&format!(
-                        "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
-                        &extracted_parent,
-                        paths.bin.join("python")
-                    ));
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+                            &extracted_parent,
+                            paths.bin.join("python")
+                        )
+                    });
                 util::check_command_output_with(&output, |s| {
                     panic!(
                         "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",

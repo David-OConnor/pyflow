@@ -1006,7 +1006,7 @@ fn run_script(
         Err(_) => Lock::default(),
     };
 
-    let lockpacks = lock.package.unwrap_or_else(|| vec![]);
+    let lockpacks = lock.package.unwrap_or_else(Vec::new);
 
     let reqs: Vec<Req> = deps
         .iter()
@@ -1463,7 +1463,7 @@ fn main() {
         Err(_) => Lock::default(),
     };
 
-    let lockpacks = lock.package.unwrap_or_else(|| vec![]);
+    let lockpacks = lock.package.unwrap_or_else(Vec::new);
 
     sync(
         &paths,
@@ -1583,7 +1583,7 @@ fn main() {
                 &paths,
                 &lockpacks,
                 &updated_reqs,
-                &cfg.dev_reqs.clone(),
+                &cfg.dev_reqs,
                 &[],
                 os,
                 &py_vers,
