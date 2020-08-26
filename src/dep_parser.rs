@@ -233,7 +233,7 @@ pub fn parse_req_type(input: &str) -> IResult<&str, ReqType> {
             tag("~="),
             tag("~"),
         )),
-        |x| ReqType::from_str(x),
+        ReqType::from_str,
     )(input)
 }
 
