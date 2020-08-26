@@ -1,11 +1,13 @@
+use crate::dep_parser::{
+    parse_constraint, parse_pip_str, parse_req, parse_req_pypi_fmt, parse_version, parse_wh_py_vers,
+};
 use crate::{dep_resolution, util};
 use crossterm::{Color, Colored};
+use nom::combinator::all_consuming;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::{cmp, fmt, num, str::FromStr};
-use crate::dep_parser::{parse_version, parse_constraint, parse_req_pypi_fmt, parse_req, parse_pip_str, parse_wh_py_vers};
-use nom::combinator::all_consuming;
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 
@@ -627,10 +629,9 @@ impl Req {
             all_consuming(parse_req_pypi_fmt)(s)
         } else {
             all_consuming(parse_req)(s)
-        }).map_err(|_| DependencyError::new(&format!(
-                "Problem parsing version requirement: {}",
-                s
-        ))).map(|x| x.1)
+        })
+        .map_err(|_| DependencyError::new(&format!("Problem parsing version requirement: {}", s)))
+        .map(|x| x.1)
     }
 
     /// We use this for parsing requirements.txt.
