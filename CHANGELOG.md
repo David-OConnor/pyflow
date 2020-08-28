@@ -1,7 +1,12 @@
 # Changelog
 
 ## v0.2.8
-- `pyflow init` now prompts for the Python version to use.
+- Fixed some warnings, and check status codes of every subprocess
+- `pyflow init` now prompts for the Python version to use
+- Refactored parsing mechanism (internal)
+- Fixed some bugs related to `manylinux2014` targets
+- Fixed a bug from prev release on Linux/mac Cargo version
+
 
 ## v0.2.7
 - Fixed a recently-introduced bug with installing zip files from source.

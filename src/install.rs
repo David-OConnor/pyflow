@@ -364,8 +364,10 @@ pub fn download_and_install_package(
                 util::check_command_output_with(&output, |s| {
                     panic!(
                         "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
+                        &extracted_parent,
+                        paths.bin.join("python"),
                         s
-                    )
+                    );
                 });
             }
             // The Linux and Mac builds appear to be unable to build wheels due to
