@@ -3,7 +3,7 @@ use regex::Regex;
 use std::{error::Error, fmt};
 use std::{
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 
 #[derive(Debug)]
@@ -110,8 +110,12 @@ pub fn run_python(
     args: &[String],
 ) -> Result<(), Box<dyn Error>> {
     util::set_pythonpath(lib_paths);
-    let output = Command::new(bin_path.join("python")).args(args).output()?;
-    util::check_command_output(&output, "running python");
+    Command::new(bin_path.join("python"))
+        .args(args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .output()?;
     Ok(())
 }
 
