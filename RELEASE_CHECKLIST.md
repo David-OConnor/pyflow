@@ -43,3 +43,18 @@ users, and binaries built on other OSes appear not to work on these due to OpenS
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
 1. Upload the following binaries to the release page: zipped Windows binary (This is all `Scoop` needs),
  Linux binary, Msi, Deb, Rpm.
+
+
+
+Note on buildling python binaries for the Pybin repo:
+## Windows: 
+Install, copy the file from Appdata/Local/programs/python,
+and match the filename/compression format with existing entries
+ 
+## Linux:
+Download source. Run these:
+```bash
+./configure --prefix=$HOME/python_built
+make
+sudo make install
+```

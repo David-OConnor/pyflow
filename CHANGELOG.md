@@ -1,7 +1,7 @@
 # Changelog
 
 ## v0.2.9
-- Added Python 3.9 support
+- Pyflow no longer requires updates to use future versions of python.
 
 ## v0.2.8
 - Fixed some warnings, and check status codes of every subprocess
