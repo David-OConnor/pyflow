@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.9
+- Added Python 3.9 support
+
 ## v0.2.8
 - Fixed some warnings, and check status codes of every subprocess
 - `pyflow init` now prompts for the Python version to use
