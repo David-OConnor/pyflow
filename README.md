@@ -180,8 +180,8 @@ These tools have different scopes and purposes:
 
 ## Use
 - Optionally, create a `pyproject.toml` file in your project directory. Otherwise, this
-file will be created automatically. You may wish to use `pyproject new` to create a basic
-project folder (With a .gitignore, source directory etc), or `pyproject init` to populate
+file will be created automatically. You may wish to use `pyflow new` to create a basic
+project folder (With a .gitignore, source directory etc), or `pyflow init` to populate
 info from `requirements.txt` or `Pipfile`. See
 [PEP 518](https://www.python.org/dev/peps/pep-0518/) for details.
 
