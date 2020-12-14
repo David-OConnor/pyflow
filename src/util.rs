@@ -66,6 +66,7 @@ impl FromStr for Os {
             | "manylinux1_x86_64"
             | "manylinux2010_x86_64"
             | "manylinux2014_aarch64"
+            | "manylinux2014_ppc64le"
             | "manylinux2014_x86_64" => Self::Linux,
             "win32" => Self::Windows32,
             "windows" | "win" | "win_amd64" => Self::Windows,
