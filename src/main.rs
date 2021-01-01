@@ -927,6 +927,7 @@ fn find_deps_from_script(file_path: &Path) -> Vec<String> {
                             .replace("\"", "")
                             .replace("'", "")
                     })
+                    .filter(|d| !d.is_empty())
                     .collect();
             }
         }
