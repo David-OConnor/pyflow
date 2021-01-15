@@ -71,17 +71,7 @@ pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), D
     let all_versions = data
         .releases
         .keys()
-        .filter_map(|v| {
-            if Version::from_str(v).is_ok() {
-                Some(
-                    Version::from_str(v)
-                        .expect("Trouble parsing version while getting version info"),
-                )
-            } else {
-                None
-            }
-        })
-        // todo: way to do this in one step, like filter_map?
+        .filter_map(|v| Version::from_str(v).ok())
         .collect();
 
     match Version::from_str(&data.info.version) {
@@ -134,14 +124,7 @@ impl ReqCache {
     fn reqs(&self) -> Vec<Req> {
         self.requires_dist
             .iter()
-            // todo: way to filter ok?
-            .filter_map(|vr| {
-                if Req::from_str(vr, true).is_ok() {
-                    Some(Req::from_str(vr, true).unwrap())
-                } else {
-                    None
-                }
-            })
+            .filter_map(|vr| Req::from_str(vr, true).ok())
             //            .expect("Problem parsing req: ")  // todo how do I do this?
             .collect()
     }
