@@ -566,7 +566,7 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
 
     // Remove the data directory, if it exists.
     fs::remove_dir_all(lib_path.join(format!("{}-{}.data", name_ins, vers_ins.to_string())))
-        .unwrap_or_else(|_| ());
+        .unwrap_or(());
 
     // Remove console scripts.
     remove_scripts(&[name_ins.into()], &lib_path.join("../bin"));

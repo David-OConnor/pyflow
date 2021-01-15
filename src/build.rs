@@ -64,7 +64,7 @@ fn cfg_to_setup(cfg: &crate::Config) -> String {
     let mut keywords = String::new();
     for (i, kw) in cfg.keywords.iter().enumerate() {
         if i != 0 {
-            keywords.push_str(" ");
+            keywords.push(' ');
         }
         keywords.push_str(kw);
     }

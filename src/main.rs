@@ -532,7 +532,7 @@ impl Config {
             result.push_str(&(format!("version = \"{}\"", vers.to_string2()) + "\n"));
         } else {
             result.push_str("version = \"0.1.0\"");
-            result.push_str("\n");
+            result.push('\n');
         }
         if !self.authors.is_empty() {
             result.push_str("authors = [\"");
@@ -554,25 +554,25 @@ impl Config {
 
         // todo: More fields
 
-        result.push_str("\n");
+        result.push('\n');
         result.push_str("[tool.pyflow.scripts]\n");
         for (name, mod_fn) in &self.scripts {
             result.push_str(&(format!("{} = \"{}\"", name, mod_fn) + "\n"));
         }
 
-        result.push_str("\n");
+        result.push('\n');
         result.push_str("[tool.pyflow.dependencies]\n");
         for dep in &self.reqs {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
 
-        result.push_str("\n");
+        result.push('\n');
         result.push_str("[tool.pyflow.dev-dependencies]\n");
         for dep in &self.dev_reqs {
             result.push_str(&(dep.to_cfg_string() + "\n"));
         }
 
-        result.push_str("\n"); // trailing newline
+        result.push('\n'); // trailing newline
 
         if fs::write(file, result).is_err() {
             abort("Problem writing `pyproject.toml`")
@@ -608,10 +608,12 @@ __pypackages__/
     fs::write(&format!("{}/.gitignore", name), gitignore_init)?;
     fs::write(&format!("{}/README.md", name), readme_init)?;
 
-    let mut cfg = Config::default();
-    cfg.name = Some(name.to_string());
-    cfg.authors = util::get_git_author();
-    cfg.py_version = Some(util::prompt_py_vers());
+    let cfg = Config {
+        name: Some(name.to_string()),
+        authors: util::get_git_author(),
+        py_version: Some(util::prompt_py_vers()),
+        ..Default::default()
+    };
 
     cfg.write_file(&PathBuf::from(format!("{}/pyproject.toml", name)));
 

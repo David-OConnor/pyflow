@@ -198,17 +198,17 @@ fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
         if i == insertion_pt && dep_start != 0 {
             for req in added {
                 result.push_str(&req.to_cfg_string());
-                result.push_str("\n");
+                result.push('\n');
             }
         }
         if i == dev_insertion_pt && dev_dep_start != 0 {
             for req in added_dev {
                 result.push_str(&req.to_cfg_string());
-                result.push_str("\n");
+                result.push('\n');
             }
         }
         result.push_str(line);
-        result.push_str("\n");
+        result.push('\n');
     }
 
     // If the sections don't exist, create them.
@@ -218,18 +218,18 @@ fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
         result.push_str("[tool.pyflow.dependencies]\n");
         for req in added {
             result.push_str(&req.to_cfg_string());
-            result.push_str("\n");
+            result.push('\n');
         }
-        result.push_str("\n");
+        result.push('\n');
     }
 
     if dev_dep_start == 0 {
         result.push_str("[tool.pyflow.dev-dependencies]\n");
         for req in added_dev {
             result.push_str(&req.to_cfg_string());
-            result.push_str("\n");
+            result.push('\n');
         }
-        result.push_str("\n");
+        result.push('\n');
     }
 
     result
@@ -263,7 +263,7 @@ pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
         if line.starts_with('#') || line.is_empty() {
             // todo handle mid-line comements
             result.push_str(line);
-            result.push_str("\n");
+            result.push('\n');
             continue;
         }
 
@@ -271,7 +271,7 @@ pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
             in_dep = true;
             _in_dev_dep = false;
             result.push_str(line);
-            result.push_str("\n");
+            result.push('\n');
             continue;
         }
 
@@ -279,7 +279,7 @@ pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
             in_dep = true;
             _in_dev_dep = false;
             result.push_str(line);
-            result.push_str("\n");
+            result.push('\n');
             continue;
         }
 
@@ -292,7 +292,7 @@ pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
                 r
             } else {
                 result.push_str(line);
-                result.push_str("\n");
+                result.push('\n');
                 continue; // Could be caused by a git etc req.
                           //                util::abort(&format!(
                           //                    "Can't parse this line in `pyproject.toml`: {}",
@@ -310,7 +310,7 @@ pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
             }
         }
         result.push_str(line);
-        result.push_str("\n");
+        result.push('\n');
     }
 
     fs::write(cfg_path, result)
@@ -352,7 +352,7 @@ pub fn change_py_vers(cfg_path: &Path, specified: &Version) {
                 ));
             } else {
                 new_data.push_str(&l);
-                new_data.push_str("\n");
+                new_data.push('\n');
             }
         }
     }
