@@ -383,7 +383,7 @@ impl Constraint {
         };
         if pip_style {
             match self.type_ {
-                ReqType::Caret | ReqType::Tilde => type_str.push_str("="),
+                ReqType::Caret | ReqType::Tilde => type_str.push('='),
                 _ => (),
             }
         }
