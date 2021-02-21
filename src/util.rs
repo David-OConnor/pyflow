@@ -458,8 +458,9 @@ pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
     let mut tar: Vec<u8> = Vec::new();
     let mut decompressor = XzDecoder::new(&archive_bytes[..]);
     if decompressor.read_to_end(&mut tar).is_err() {
-        abort(&format!("Problem decompressing the archive: {:?}. This may be due to a failed downoad. Try deleting \
-        it, then trying again.", archive_path))
+        abort(&format!("Problem decompressing the archive: {:?}. This may be due to a failed downoad. \
+        Try deleting it, then trying again. Note that Pyflow will only install officially-released \
+        Python versions. If you'd like to use a pre-release, you must install it manually.", archive_path))
     }
 
     // We've decompressed the .xz; now unpack the tar.
