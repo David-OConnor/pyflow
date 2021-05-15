@@ -185,17 +185,62 @@ impl Version {
     }
 
     /// unlike Display, which overwrites to_string, don't add colors.
-    pub fn to_string2(&self) -> String {
-        let mut result = format!("{}.{}.{}", self.major, self.minor, self.patch);
-        self.add_str_mod(&mut result);
-        result
-    }
-
-    /// unlike Display, which overwrites to_string, don't add colors.
     pub fn to_string_no_patch(&self) -> String {
         let mut result = format!("{}.{}", self.major, self.minor);
         self.add_str_mod(&mut result);
         result
+    }
+
+    pub fn to_string_color(&self) -> String {
+        let bufwtr = BufferWriter::stdout(CliConfig::current().color_choice);
+        let mut buf: Buffer = bufwtr.buffer();
+        let num_c = Some(Color::Blue);
+        let dot_c = Some(Color::Yellow); // Dark
+
+        let mut suffix = "".to_string();
+        if let Some(num) = self.extra_num {
+            suffix.push('.');
+            suffix.push_str(&num.to_string());
+        }
+        if let Some((modifier, num)) = self.modifier {
+            suffix.push_str(&modifier.to_string());
+            suffix.push_str(&num.to_string());
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, "{}", self.major) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(dot_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, ".") {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, "{}", self.minor) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(dot_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, ".") {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, "{}{}", self.patch, suffix) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.reset() {
+            panic!("An Error occurred formatting Version")
+        }
+
+        String::from_utf8_lossy(buf.as_slice()).to_string()
     }
 }
 
@@ -247,11 +292,6 @@ impl PartialOrd for Version {
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let bufwtr = BufferWriter::stdout(CliConfig::current().color_choice);
-        let mut buf: Buffer = bufwtr.buffer();
-        let num_c = Some(Color::Blue);
-        let dot_c = Some(Color::Yellow); // Dark
-
         let mut suffix = "".to_string();
         if let Some(num) = self.extra_num {
             suffix.push('.');
@@ -261,41 +301,8 @@ impl fmt::Display for Version {
             suffix.push_str(&modifier.to_string());
             suffix.push_str(&num.to_string());
         }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, "{}", self.major) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(dot_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, ".") {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, "{}", self.minor) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(dot_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, ".") {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, "{}{}", self.patch, suffix) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.reset() {
-            panic!("An Error occurred formatting Version")
-        }
 
-        write!(f, "{}", String::from_utf8_lossy(buf.as_slice()))
+        write!(f, "{}.{}.{}{}", self.major, self.minor, self.patch, suffix)
     }
 }
 
@@ -419,7 +426,7 @@ impl Constraint {
                 _ => (),
             }
         }
-        format!("{}{}", type_str, self.version.to_string2())
+        format!("{}{}", type_str, self.version.to_string())
     }
 
     /// Find the lowest and highest compatible versions. Return a vec, since the != requirement type

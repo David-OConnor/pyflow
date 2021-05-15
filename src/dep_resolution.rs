@@ -96,7 +96,7 @@ pub fn get_warehouse_release(
     let data = get_warehouse_data(name)?;
 
     // If there are 0s in the version, and unable to find one, try 1 and 2 digit versions on Pypi.
-    let mut release_data = data.releases.get(&version.to_string2());
+    let mut release_data = data.releases.get(&version.to_string());
     if release_data.is_none() && version.patch == 0 {
         release_data = data.releases.get(&version.to_string_med());
         if release_data.is_none() && version.minor == 0 {
@@ -144,7 +144,7 @@ fn get_req_cache_multiple(
     // parse strings here.
     let mut packages2 = HashMap::new();
     for (name, versions) in packages.iter() {
-        let versions = versions.iter().map(Version::to_string2).collect();
+        let versions = versions.iter().map(Version::to_string).collect();
         packages2.insert(name.to_owned(), versions);
     }
 

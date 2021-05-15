@@ -7,7 +7,6 @@ use regex::Regex;
 use serde::Deserialize;
 use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, str::FromStr};
 
-use atty;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -536,7 +535,7 @@ impl Config {
             result.push_str(&("py_version = \"3.8\"".to_owned() + "\n"));
         }
         if let Some(vers) = self.version {
-            result.push_str(&(format!("version = \"{}\"", vers.to_string2()) + "\n"));
+            result.push_str(&(format!("version = \"{}\"", vers.to_string() + "\n")));
         } else {
             result.push_str("version = \"0.1.0\"");
             result.push('\n');
@@ -784,7 +783,7 @@ fn sync_deps(
         util::print_color_(&format!("⬇ Installing {}", &name), Color::Cyan);
         #[cfg(target_os = "macos")]
         util::print_color_(&format!("⬇ Installing {}", &name), Color::Cyan);
-        println!("{} ...", &version);
+        println!(" {} ...", &version.to_string_color());
 
         if install::download_and_install_package(
             name,
@@ -827,7 +826,7 @@ fn sync_deps(
             install::rename_metadata(
                 &paths
                     .lib
-                    .join(&format!("{}-{}.dist-info", name, version.to_string2())),
+                    .join(&format!("{}-{}.dist-info", name, version.to_string())),
                 name,
                 new,
             );
@@ -997,7 +996,7 @@ fn run_script(
 
         fs::File::create(&py_vers_path)
             .expect("Problem creating a file to store the Python version for this script");
-        fs::write(py_vers_path, &cfg_vers.to_string2())
+        fs::write(py_vers_path, &cfg_vers.to_string())
             .expect("Problem writing Python version file.");
     }
 
@@ -1153,10 +1152,7 @@ fn sync(
             .map(|(_, name, version)| {
                 format!(
                     "{} {} pypi+https://pypi.org/pypi/{}/{}/json",
-                    name,
-                    version.to_string2(),
-                    name,
-                    version.to_string2(),
+                    name, version, name, version,
                 )
             })
             .collect();
@@ -1287,7 +1283,7 @@ fn main() {
 
     let opt = Opt::from_args();
     // Handle color option
-    let choice = match opt.color.unwrap_or(String::from("auto")).as_str() {
+    let choice = match opt.color.unwrap_or_else(|| String::from("auto")).as_str() {
         "always" => ColorChoice::Always,
         "ansi" => ColorChoice::AlwaysAnsi,
         "auto" => {

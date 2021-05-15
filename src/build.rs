@@ -57,7 +57,7 @@ fn cfg_to_setup(cfg: &crate::Config) -> String {
     let cfg = cfg.clone();
 
     let version = match cfg.version {
-        Some(v) => v.to_string2(),
+        Some(v) => v.to_string(),
         None => "".into(),
     };
 
