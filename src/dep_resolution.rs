@@ -5,11 +5,11 @@ use crate::{
     util,
 };
 
-use crossterm::Color;
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::str::FromStr;
+use termcolor::Color;
 
 #[derive(Debug, Deserialize)]
 struct WarehouseInfo {
@@ -478,7 +478,7 @@ fn make_renamed_packs(
              your package may not be published unless this is resolved...",
             name
         ),
-        Color::DarkYellow,
+        Color::Yellow, // Dark
     );
 
     let dep_display: Vec<String> = deps

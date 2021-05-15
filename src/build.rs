@@ -1,8 +1,8 @@
 use crate::{dep_types::Req, util};
-use crossterm::Color;
 use regex::Regex;
 use std::collections::HashMap;
 use std::{env, fs, path::PathBuf, process::Command};
+use termcolor::Color;
 
 // https://packaging.python.org/tutorials/packaging-projects/
 
@@ -57,7 +57,7 @@ fn cfg_to_setup(cfg: &crate::Config) -> String {
     let cfg = cfg.clone();
 
     let version = match cfg.version {
-        Some(v) => v.to_string(),
+        Some(v) => v.to_string2(),
         None => "".into(),
     };
 

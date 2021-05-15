@@ -2,14 +2,17 @@
 
 use crate::dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version};
 use crate::util::{abort, Os};
-use crossterm::{Color, Colored};
+
 use regex::Regex;
 use serde::Deserialize;
 use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, str::FromStr};
 
+use atty;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::sync::{Arc, RwLock};
 use structopt::StructOpt;
+use termcolor::{Color, ColorChoice};
 
 mod build;
 mod commands;
@@ -42,6 +45,10 @@ struct Opt {
 
     #[structopt(short = "ms", long)]
     ms: Vec<String>,
+
+    /// Force a color option: auto (default), always, ansi, never
+    #[structopt(short, long)]
+    color: Option<String>,
 }
 
 #[derive(StructOpt, Debug)]
@@ -580,6 +587,32 @@ impl Config {
     }
 }
 
+/// Cli Config to hold command line options
+struct CliConfig {
+    pub color_choice: ColorChoice,
+}
+
+impl Default for CliConfig {
+    fn default() -> Self {
+        Self {
+            color_choice: ColorChoice::Auto,
+        }
+    }
+}
+
+impl CliConfig {
+    pub fn current() -> Arc<CliConfig> {
+        CLI_CONFIG.with(|c| c.read().unwrap().clone())
+    }
+    pub fn make_current(self) {
+        CLI_CONFIG.with(|c| *c.write().unwrap() = Arc::new(self))
+    }
+}
+
+thread_local! {
+    static CLI_CONFIG: RwLock<Arc<CliConfig>> = RwLock::new(Default::default());
+}
+
 /// Create a template directory for a python project.
 pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
     if !PathBuf::from(name).exists() {
@@ -620,7 +653,7 @@ __pypackages__/
     if commands::git_init(Path::new(name)).is_err() {
         util::print_color(
             "Unable to initialize a git repo for your project",
-            Color::DarkYellow,
+            Color::Yellow, // Dark
         );
     };
 
@@ -746,29 +779,12 @@ fn sync_deps(
         // Powershell  doesn't like emojis
         // todo format literal issues, so repeating this whole statement.
         #[cfg(target_os = "windows")]
-        println!(
-            "Installing {}{}{} {} ...",
-            Colored::Fg(Color::Cyan),
-            &name,
-            Colored::Fg(Color::Reset),
-            &version
-        );
+        util::print_color_(&format!("Installing {}", &name), Color::Cyan);
         #[cfg(target_os = "linux")]
-        println!(
-            "⬇ Installing {}{}{} {} ...",
-            Colored::Fg(Color::Cyan),
-            &name,
-            Colored::Fg(Color::Reset),
-            &version
-        );
+        util::print_color_(&format!("⬇ Installing {}", &name), Color::Cyan);
         #[cfg(target_os = "macos")]
-        println!(
-            "⬇ Installing {}{}{} {} ...",
-            Colored::Fg(Color::Cyan),
-            &name,
-            Colored::Fg(Color::Reset),
-            &version
-        );
+        util::print_color_(&format!("⬇ Installing {}", &name), Color::Cyan);
+        println!("{} ...", &version);
 
         if install::download_and_install_package(
             name,
@@ -1269,9 +1285,28 @@ fn main() {
     #[cfg(target_os = "macos")]
     let os = Os::Mac;
 
+    let opt = Opt::from_args();
+    // Handle color option
+    let choice = match opt.color.unwrap_or(String::from("auto")).as_str() {
+        "always" => ColorChoice::Always,
+        "ansi" => ColorChoice::AlwaysAnsi,
+        "auto" => {
+            if atty::is(atty::Stream::Stdout) {
+                ColorChoice::Auto
+            } else {
+                ColorChoice::Never
+            }
+        }
+        _ => ColorChoice::Never,
+    };
+
+    CliConfig {
+        color_choice: choice,
+    }
+    .make_current();
+
     // Handle commands that don't involve operating out of a project before one that do, with setup
     // code in-between.
-    let opt = Opt::from_args();
     let subcmd = match opt.subcmds {
         Some(sc) => sc,
         None => {
@@ -1360,7 +1395,7 @@ fn main() {
                 "To get started, run `pyflow new projname` to create a project folder, or \
             `pyflow init` to start a project in this folder. For a list of what you can do, run \
             `pyflow help`.",
-                Color::DarkCyan,
+                Color::Cyan, // Dark
             );
             return;
         }
