@@ -883,6 +883,7 @@ pub fn prompt_py_vers() -> Version {
     );
     let default_ver = default_python();
     print!("Default [{}]:", default_ver);
+    std::io::stdout().flush().unwrap();
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
