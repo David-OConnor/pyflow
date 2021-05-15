@@ -173,10 +173,10 @@ pub fn download_and_install_package(
     rename: &Option<(u32, String)>,
 ) -> Result<(), reqwest::Error> {
     if !paths.lib.exists() {
-        fs::create_dir(&paths.lib).expect("Problem creating lib directory");
+        fs::create_dir_all(&paths.lib).expect("Problem creating lib directory");
     }
     if !paths.cache.exists() {
-        fs::create_dir(&paths.cache).expect("Problem creating cache directory");
+        fs::create_dir_all(&paths.cache).expect("Problem creating cache directory");
     }
     let archive_path = paths.cache.join(filename);
 
