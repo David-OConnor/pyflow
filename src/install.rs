@@ -488,7 +488,11 @@ pub fn download_and_install_package(
 
 pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
     #[cfg(target_os = "windows")]
-    println!("Uninstalling {}: {}...", name_ins, vers_ins.to_string());
+    println!(
+        "Uninstalling {}: {}...",
+        name_ins,
+        vers_ins.to_string_color()
+    );
     #[cfg(target_os = "linux")]
     println!("🗑 Uninstalling {}: {}...", name_ins, vers_ins.to_string());
     #[cfg(target_os = "macos")]
@@ -558,7 +562,7 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
             &format!(
                 "Problem uninstalling metadata for {}: {}",
                 name_ins,
-                vers_ins.to_string(),
+                vers_ins.to_string_color(),
             ),
             Color::Red, // Dark
         );

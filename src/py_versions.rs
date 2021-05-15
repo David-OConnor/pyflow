@@ -408,7 +408,7 @@ pub fn create_venv(
     let installed_versions = find_installed_versions(pyflow_dir);
     for iv in &installed_versions {
         if iv.major == cfg_v.major && iv.minor == cfg_v.minor {
-            let folder_name = format!("python-{}", iv.to_string2());
+            let folder_name = format!("python-{}", iv.to_string());
             alias_path = Some(pyflow_dir.join(folder_name).join(&py_name));
             py_ver = Some(*iv);
             break;

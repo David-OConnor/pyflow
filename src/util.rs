@@ -215,7 +215,7 @@ pub fn show_installed(lib_path: &Path, path_reqs: &[Req]) {
         print_color("These packages are installed:", Color::Blue); // Dark
         for (name, version, _tops) in installed {
             print_color_(&name, Color::Cyan);
-            print_color(&format!("{}", version), Color::White);
+            print_color(&format!("=={}", version.to_string_color()), Color::White);
         }
         for req in path_reqs {
             print_color_(&req.name, Color::Cyan);
@@ -739,7 +739,7 @@ pub fn find_best_release(
             abort(&format!(
                 "Unable to find a compatible release for {}: {}",
                 name,
-                version.to_string()
+                version.to_string_color()
             ));
             unreachable!()
         } else {
