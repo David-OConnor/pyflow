@@ -1,13 +1,14 @@
 use crate::dep_parser::{
     parse_constraint, parse_pip_str, parse_req, parse_req_pypi_fmt, parse_version, parse_wh_py_vers,
 };
-use crate::{dep_resolution, util};
-use crossterm::{Color, Colored};
+use crate::{dep_resolution, util, CliConfig};
 use nom::combinator::all_consuming;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
+use std::io::Write;
 use std::{cmp, fmt, num, str::FromStr};
+use termcolor::{Buffer, BufferWriter, Color, ColorSpec, WriteColor};
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 
@@ -246,9 +247,10 @@ impl PartialOrd for Version {
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let num_c = Colored::Fg(Color::Blue);
-        let dot_c = Colored::Fg(Color::DarkYellow);
-        let r = Colored::Fg(Color::Reset);
+        let bufwtr = BufferWriter::stdout(CliConfig::current().color_choice);
+        let mut buf: Buffer = bufwtr.buffer();
+        let num_c = Some(Color::Blue);
+        let dot_c = Some(Color::Yellow); // Dark
 
         let mut suffix = "".to_string();
         if let Some(num) = self.extra_num {
@@ -259,11 +261,41 @@ impl fmt::Display for Version {
             suffix.push_str(&modifier.to_string());
             suffix.push_str(&num.to_string());
         }
-        write!(
-            f,
-            "{}{}{}.{}{}{}.{}{}{}{}",
-            num_c, self.major, dot_c, num_c, self.minor, dot_c, num_c, self.patch, suffix, r
-        )
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, "{}", self.major) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(dot_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, ".") {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, "{}", self.minor) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(dot_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, ".") {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = write!(buf, "{}{}", self.patch, suffix) {
+            panic!("An Error occurred formatting Version")
+        }
+        if let Err(_e) = buf.reset() {
+            panic!("An Error occurred formatting Version")
+        }
+
+        write!(f, "{}", String::from_utf8_lossy(buf.as_slice()))
     }
 }
 
@@ -387,7 +419,7 @@ impl Constraint {
                 _ => (),
             }
         }
-        format!("{}{}", type_str, self.version.to_string())
+        format!("{}{}", type_str, self.version.to_string2())
     }
 
     /// Find the lowest and highest compatible versions. Return a vec, since the != requirement type
@@ -692,14 +724,19 @@ impl fmt::Display for Req {
         for constr in &self.constraints {
             constraints.push_str(&format!("{}", constr));
         }
-        write!(
-            f,
-            "{}{} {}{}",
-            Colored::Fg(Color::DarkCyan),
-            self.name,
-            constraints,
-            Colored::Fg(Color::Reset)
-        )
+        let bufwtr = BufferWriter::stdout(CliConfig::current().color_choice);
+        let mut buf = bufwtr.buffer();
+        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(Some(Color::Cyan))) {
+            // Dark
+            panic!("An Error occurred formatting Req")
+        }
+        if let Err(_e) = write!(buf, "{} {}", self.name, constraints) {
+            panic!("An Error occurred formatting Req")
+        }
+        if let Err(_e) = buf.reset() {
+            panic!("An Error occurred formatting Req")
+        }
+        write!(f, "{}", String::from_utf8_lossy(buf.as_slice()))
     }
 }
 

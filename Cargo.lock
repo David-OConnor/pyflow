@@ -21,7 +21,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
 dependencies = [
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -44,7 +44,7 @@ checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
 dependencies = [
  "hermit-abi",
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -283,148 +283,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossterm"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57512e27b69eccc2a3068f2bc962a24186e9e6e2904538aad5885d4877f8c187"
-dependencies = [
- "crossterm_cursor 0.3.1",
- "crossterm_input 0.4.1",
- "crossterm_screen",
- "crossterm_style",
- "crossterm_terminal",
- "crossterm_utils 0.3.1",
-]
-
-[[package]]
-name = "crossterm_cursor"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c0b733adeee9b605fec8b1087dc3a17c9849a16c561d5b36f459a2a55135f47"
-dependencies = [
- "crossterm_utils 0.3.1",
- "crossterm_winapi 0.2.1",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_cursor"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c48e70d4c84ca3080e43f95bcc69fbea4750dd8ae7e864f54ab2847c9fa842fb"
-dependencies = [
- "crossterm_input 0.5.0",
- "crossterm_utils 0.4.0",
- "crossterm_winapi 0.3.0",
- "lazy_static",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_input"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa27cd549d7967837781e2682aae1adf04c0c4e523099291ad0ffe16ed705c9"
-dependencies = [
- "crossterm_screen",
- "crossterm_utils 0.3.1",
- "crossterm_winapi 0.2.1",
- "libc",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_input"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39fafa96a623903f0d9232a13ee43f69334caa770fb412f4319772a9db25952c"
-dependencies = [
- "crossterm_screen",
- "crossterm_utils 0.4.0",
- "crossterm_winapi 0.3.0",
- "lazy_static",
- "libc",
- "mio",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_screen"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a08dfba7fade62a6c2c48ad6451e288f15fd9ffa640078fc4b08948e81d19db7"
-dependencies = [
- "crossterm_utils 0.4.0",
- "crossterm_winapi 0.3.0",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_style"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b456402b03be74b9f765c85edf36e34f8292d3839312b458b015e52f1fc81d86"
-dependencies = [
- "crossterm_utils 0.4.0",
- "crossterm_winapi 0.3.0",
- "lazy_static",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_terminal"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3f09b946c37159123fa3fd70215e4ac99dbd660a80b3878f4612f1b9ed4bc88"
-dependencies = [
- "crossterm_cursor 0.4.0",
- "crossterm_utils 0.4.0",
- "crossterm_winapi 0.3.0",
- "libc",
-]
-
-[[package]]
-name = "crossterm_utils"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1b46df236ff59f418afe87b2f19941e050ac205f1f1aa0bdba114b820201477"
-dependencies = [
- "crossterm_winapi 0.2.1",
- "libc",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_utils"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c13047e5f7265fe853d54211dbb9bce57220f62d952d48556299f7a65d564a3"
-dependencies = [
- "crossterm_winapi 0.3.0",
- "lazy_static",
- "libc",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_winapi"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1521f4476da2d62ec558221bf3136d834cc08c585b1bcb2c072f89e47b27f138"
-dependencies = [
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "crossterm_winapi"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df25e92a352488d9b3e0215e4e99402945993026159f98b477047719f16a6530"
-dependencies = [
- "winapi 0.3.8",
-]
-
-[[package]]
 name = "ct-logs"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -458,7 +316,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_users",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -522,7 +380,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_syscall",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -796,9 +654,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.69"
+version = "0.2.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99e85c08494b21a9054e7fe1374a732aeadaff3980b6990b94bfd3a70f690005"
+checksum = "18794a8ad5b29321f790b55d93dfba91e125cb1a9edbd4f8e3150acc771c1a5e"
 
 [[package]]
 name = "lock_api"
@@ -920,7 +778,7 @@ checksum = "42550d9fb7b6684a6d404d9fa7250c2eb2646df731d1c06afc06dcee9e1bcf88"
 dependencies = [
  "cfg-if",
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -967,7 +825,7 @@ dependencies = [
  "redox_syscall",
  "rustc_version",
  "smallvec 0.6.13",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1046,7 +904,7 @@ dependencies = [
 name = "pyflow"
 version = "0.2.9"
 dependencies = [
- "crossterm",
+ "atty",
  "data-encoding",
  "directories",
  "flate2",
@@ -1060,6 +918,7 @@ dependencies = [
  "serde",
  "structopt",
  "tar",
+ "termcolor",
  "toml",
  "xz2",
  "zip",
@@ -1090,7 +949,7 @@ dependencies = [
  "rand_os",
  "rand_pcg",
  "rand_xorshift",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1144,7 +1003,7 @@ checksum = "1166d5c91dc97b88d1decc3285bb0a99ed84b05cfd0bc2341bdf2d43fc41e39b"
 dependencies = [
  "libc",
  "rand_core 0.4.2",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1158,7 +1017,7 @@ dependencies = [
  "libc",
  "rand_core 0.4.2",
  "rdrand",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1272,7 +1131,7 @@ dependencies = [
  "spin",
  "untrusted",
  "web-sys",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1431,9 +1290,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.4.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7cb5678e1615754284ec264d9bb5b4c27d2018577fd90ac0ceb578591ed5ee4"
+checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
 name = "spin"
@@ -1538,6 +1397,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "termcolor"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
+dependencies = [
+ "winapi-util",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1563,7 +1431,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
 dependencies = [
  "libc",
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -1761,7 +1629,7 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5479532badd04e128284890390c1e876ef7a993d0570b3597ae43dfa1d59afa4"
 dependencies = [
- "smallvec 1.4.0",
+ "smallvec 1.6.1",
 ]
 
 [[package]]
@@ -1933,9 +1801,9 @@ checksum = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
 
 [[package]]
 name = "winapi"
-version = "0.3.8"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8093091eeb260906a183e6ae1abdba2ef5ef2257a21801128899c3fc699229c6"
+checksum = "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419"
 dependencies = [
  "winapi-i686-pc-windows-gnu",
  "winapi-x86_64-pc-windows-gnu",
@@ -1954,6 +1822,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
 
 [[package]]
+name = "winapi-util"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70ec6ce85bb158151cae5e5c87f95a8e97d2c0c4b001223f33a334e3ce5de178"
+dependencies = [
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1965,7 +1842,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2986deb581c4fe11b621998a5e53361efe6b48a151178d0cd9eeffa4dc6acc9"
 dependencies = [
- "winapi 0.3.8",
+ "winapi 0.3.9",
 ]
 
 [[package]]

@@ -2,13 +2,13 @@ use crate::{
     dep_types::{Req, Version},
     util, Config,
 };
-use crossterm::Color;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use termcolor::Color;
 
 #[derive(Debug, Deserialize)]
 pub struct Pipfile {

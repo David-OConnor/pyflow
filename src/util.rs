@@ -3,13 +3,12 @@ use crate::{
     dep_types::{Constraint, DependencyError, Req, ReqType, Version},
     files,
     install::{self, PackageType},
-    py_versions,
+    py_versions, CliConfig,
 };
-use crossterm::{Color, Colored};
 use ini::Ini;
 use regex::Regex;
 use serde::Deserialize;
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::str::FromStr;
 use std::{
     collections::HashMap,
@@ -18,6 +17,7 @@ use std::{
     process, thread, time,
 };
 use tar::Archive;
+use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use xz2::read::XzDecoder;
 
 #[derive(Debug)]
@@ -77,26 +77,41 @@ impl FromStr for Os {
     }
 }
 
-/// Print in a color, then reset formatting.
+/// Print line in a color, then reset formatting.
 pub fn print_color(message: &str, color: Color) {
-    println!(
-        "{}{}{}",
-        Colored::Fg(color),
-        message,
-        Colored::Fg(Color::Reset)
-    );
+    if let Err(_e) = print_color_res(message, color) {
+        panic!("Error printing in color")
+    }
+}
+
+fn print_color_res(message: &str, color: Color) -> io::Result<()> {
+    let mut stdout = StandardStream::stdout(CliConfig::current().color_choice);
+    stdout.set_color(ColorSpec::new().set_fg(Some(color)))?;
+    writeln!(&mut stdout, "{}", message)?;
+    stdout.reset()?;
+    Ok(())
+}
+
+/// Print in a color, then reset formatting. (no newline)
+pub fn print_color_(message: &str, color: Color) {
+    if let Err(_e) = print_color_res_(message, color) {
+        panic!("Error printing in color")
+    }
+}
+
+fn print_color_res_(message: &str, color: Color) -> io::Result<()> {
+    let mut stdout = StandardStream::stdout(CliConfig::current().color_choice);
+    stdout.set_color(ColorSpec::new().set_fg(Some(color)))?;
+    write!(&mut stdout, "{}", message)?;
+    stdout.reset()?;
+    Ok(())
 }
 
 /// Used when the program should exit from a condition that may arise normally from program use,
 /// like incorrect info in config files, problems with dependencies, or internet connection problems.
 /// We use `expect`, `panic!` etc for problems that indicate a bug in this program.
 pub fn abort(message: &str) {
-    println!(
-        "{}{}{}",
-        Colored::Fg(Color::Red),
-        message,
-        Colored::Fg(Color::Reset)
-    );
+    print_color(message, Color::Red);
     process::exit(1)
 }
 
@@ -185,36 +200,28 @@ pub fn show_installed(lib_path: &Path, path_reqs: &[Req]) {
     let scripts = find_console_scripts(&lib_path.join("../bin"));
 
     if installed.is_empty() {
-        print_color("No packages are installed.", Color::DarkBlue);
+        print_color("No packages are installed.", Color::Blue); // Dark
     } else {
-        print_color("These packages are installed:", Color::DarkBlue);
+        print_color("These packages are installed:", Color::Blue); // Dark
         for (name, version, _tops) in installed {
-            //        print_color(&format!("{} == \"{}\"", name, version.to_string()), Color::Magenta);
-            println!(
-                "{}{}{} == {}",
-                Colored::Fg(Color::Cyan),
-                name,
-                Colored::Fg(Color::Reset),
-                version
-            );
+            print_color_(&name, Color::Cyan);
+            print_color(&format!("{}", version), Color::White);
         }
         for req in path_reqs {
-            println!(
-                "{}{}{}, at path: {}",
-                Colored::Fg(Color::Cyan),
-                req.name,
-                Colored::Fg(Color::Reset),
-                req.path.as_ref().unwrap(),
+            print_color_(&req.name, Color::Cyan);
+            print_color(
+                &format!(", at path: {}", req.path.as_ref().unwrap()),
+                Color::White,
             );
         }
     }
 
     if scripts.is_empty() {
-        print_color("\nNo console scripts are installed.", Color::DarkBlue);
+        print_color("\nNo console scripts are installed.", Color::Blue); // Dark
     } else {
-        print_color("\nThese console scripts are installed:", Color::DarkBlue);
+        print_color("\nThese console scripts are installed:", Color::Blue); // Dark
         for script in scripts {
-            print_color(&script, Color::DarkCyan);
+            print_color(&script, Color::Cyan); // Dark
         }
     }
 }
