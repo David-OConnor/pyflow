@@ -850,12 +850,39 @@ pub fn find_folders(path: &Path) -> Vec<String> {
     result
 }
 
+fn default_python() -> Version {
+    #[cfg(target_os = "windows")]
+    let py_cmd = "python.exe";
+    #[cfg(target_os = "linux")]
+    let py_cmd = "python";
+    #[cfg(target_os = "macos")]
+    let py_cmd = "python";
+    match std::process::Command::new(py_cmd).arg("--version").output() {
+        Ok(output) => {
+            let py_str = String::from_utf8_lossy(&output.stdout);
+            let py_str = py_str.replace("Python", "");
+            let py_str = py_str.trim_matches(|c| c == '\r' || c == '\n' || c == ' ');
+
+            match Version::from_str(&py_str) {
+                Ok(f) => f,
+                Err(_e) => Version::new_short(3, 9),
+            }
+        }
+        Err(e) => {
+            println!("{}", e);
+            Version::new_short(3, 9)
+        }
+    }
+}
+
 /// Ask the user what Python version to use.
 pub fn prompt_py_vers() -> Version {
     print_color(
         "Please enter the Python version for this project: (eg: 3.8)",
         Color::Magenta,
     );
+    let default_ver = default_python();
+    print!("Default [{}]:", default_ver);
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
@@ -863,8 +890,11 @@ pub fn prompt_py_vers() -> Version {
 
     input.pop(); // Remove trailing newline.
     let input = input.replace("\n", "").replace("\r", "");
-
-    fallible_v_parse(&input)
+    if !input.is_empty() {
+        fallible_v_parse(&input)
+    } else {
+        default_ver
+    }
 }
 
 /// We've removed the git repos from packages to install form pypi, but make
