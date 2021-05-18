@@ -975,7 +975,7 @@ fn run_script(
     // todo: Consider a metadata file, but for now, we'll use folders
     //    let scripts_data_path = script_env_path.join("scripts.toml");
 
-    let env_path = script_env_path.join(&filename);
+    let env_path = util::canon_join(script_env_path, &filename);
     if !env_path.exists() {
         fs::create_dir_all(&env_path).expect("Problem creating environment for the script");
     }

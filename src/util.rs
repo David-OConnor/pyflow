@@ -908,6 +908,27 @@ pub(crate) fn check_command_output_with(output: &process::Output, f: impl Fn(&st
     }
 }
 
+/// Take the canonicalized `path` and join `extend` onto it
+pub fn canon_join(path: &Path, extend: &str) -> PathBuf {
+    let ex_path = Path::new(extend);
+    let canon = match ex_path.canonicalize() {
+        Ok(c) => c,
+        Err(e) => {
+            abort(&format!("{}\n\"{}\"", e, extend));
+            unreachable!()
+        }
+    };
+    let mut new_path = path.to_path_buf();
+
+    for comp in canon.components() {
+        new_path = match comp {
+            std::path::Component::Normal(c) => new_path.join(c),
+            _ => new_path.join(""),
+        }
+    }
+    new_path
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
