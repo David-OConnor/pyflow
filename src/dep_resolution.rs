@@ -94,17 +94,19 @@ pub fn get_warehouse_release(
     version: &Version,
 ) -> Result<Vec<WarehouseRelease>, reqwest::Error> {
     let data = get_warehouse_data(name)?;
-
-    // If there are 0s in the version, and unable to find one, try 1 and 2 digit versions on Pypi.
-    let mut release_data = data.releases.get(&version.to_string());
-    if release_data.is_none() && version.patch == 0 {
-        release_data = data.releases.get(&version.to_string_med());
-        if release_data.is_none() && version.minor == 0 {
-            release_data = data.releases.get(&version.to_string_short());
-        }
+    // some packages 0-pad their version numbers or have less digits. Lets map
+    // the parsed version to the key.
+    let mut version_map = HashMap::new();
+    for key in data.releases.keys() {
+        version_map.insert(Version::from_str(&key).unwrap(), key.as_str());
     }
 
-    let release_data = release_data
+    let key = version_map
+        .get(version)
+        .expect("Unable to reverse mapping of Version to release key");
+    let release_data = data
+        .releases
+        .get::<str>(key)
         .unwrap_or_else(|| panic!("Unable to find a release for {} = \"{}\"", name, version));
 
     Ok(release_data.clone())
