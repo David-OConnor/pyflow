@@ -411,7 +411,7 @@ impl Config {
                     }
                     if &name.to_lowercase() == "python" {
                         if let Some(constr) = constraints.get(0) {
-                            result.py_version = Some(constr.version)
+                            result.py_version = Some(constr.version.clone())
                         }
                     } else {
                         result.reqs.push(Req {
@@ -534,7 +534,7 @@ impl Config {
         } else {
             result.push_str(&("py_version = \"3.8\"".to_owned() + "\n"));
         }
-        if let Some(vers) = self.version {
+        if let Some(vers) = self.version.clone() {
             result.push_str(&(format!("version = \"{}\"", vers.to_string() + "\n")));
         } else {
             result.push_str("version = \"0.1.0\"");
@@ -714,7 +714,7 @@ fn sync_deps(
     let installed: Vec<(String, Version)> = installed
         .iter()
         // Don't standardize name here; see note below in to_uninstall.
-        .map(|t| (t.0.clone(), t.1))
+        .map(|t| (t.0.clone(), t.1.clone()))
         .collect();
 
     // Filter by not-already-installed.
@@ -742,7 +742,7 @@ fn sync_deps(
         .filter(|inst| {
             // Don't standardize the name here; we need original capitalization to uninstall
             // metadata etc.
-            let inst = (inst.0.clone(), inst.1);
+            let inst = (inst.0.clone(), inst.1.clone());
             let mut contains = false;
             // We can't just use the contains method, due to needing compare_names().
             for pack in &packages_only {
@@ -1134,7 +1134,7 @@ fn sync(
     let mut updated_lock_packs = vec![];
 
     for package in &resolved {
-        let dummy_constraints = vec![Constraint::new(ReqType::Exact, package.version)];
+        let dummy_constraints = vec![Constraint::new(ReqType::Exact, package.version.clone())];
         if already_locked(&locked, &package.name, &dummy_constraints) {
             let existing: Vec<&LockPackage> = lockpacks
                 .iter()
@@ -1423,8 +1423,8 @@ fn main() {
         }
         SubCommand::Switch { version } => {
             // Updates `pyproject.toml` with a new python version
-            let specified = util::fallible_v_parse(&version);
-            cfg.py_version = Some(specified);
+            let specified = util::fallible_v_parse(&version.clone());
+            cfg.py_version = Some(specified.clone());
             files::change_py_vers(&PathBuf::from(&cfg_path), &specified);
             util::print_color(
                 &format!(
@@ -1454,7 +1454,7 @@ fn main() {
         _ => (),
     }
 
-    let cfg_vers = if let Some(v) = cfg.py_version {
+    let cfg_vers = if let Some(v) = cfg.py_version.clone() {
         v
     } else {
         let specified = util::prompt_py_vers();

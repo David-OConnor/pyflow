@@ -271,7 +271,7 @@ fn parse_modifier_version(input: &str) -> IResult<&str, VersionModifier> {
             "b" => VersionModifier::Beta,
             "rc" => VersionModifier::ReleaseCandidate,
             "dep" => VersionModifier::Dep,
-            _ => panic!("not execute this code"),
+            x => VersionModifier::Other(x.to_string()),
         },
     )(input)
 }
@@ -354,13 +354,20 @@ mod tests {
             extra_num: None,
             modifier: None,
         }))),
-        case("19.3b0", Ok(("", Version {
-            major: 19,
-            minor: 3,
-            patch: 0,
-            extra_num: None,
-            modifier: Some((VersionModifier::Beta, 0)),
-        }))),
+             case("19.3b0", Ok(("", Version {
+                 major: 19,
+                 minor: 3,
+                 patch: 0,
+                 extra_num: None,
+                 modifier: Some((VersionModifier::Beta, 0)),
+             }))),
+             case("0.4.3.dev0", Ok(("", Version {
+                 major: 0,
+                 minor: 4,
+                 patch: 3,
+                 extra_num: None,
+                 modifier: Some((VersionModifier::Other(".dev".to_string()), 0)),
+             }))),
     )]
     fn test_parse_version(input: &str, expected: IResult<&str, Version>) {
         assert_eq!(parse_version(input), expected);

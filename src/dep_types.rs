@@ -66,7 +66,7 @@ impl From<reqwest::Error> for DependencyError {
 }
 
 /// Ideally we won't deal with these much, but include for compatibility.
-#[derive(Debug, Clone, Copy, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Eq, Hash, PartialEq)]
 pub enum VersionModifier {
     Alpha,
     Beta,
@@ -74,6 +74,7 @@ pub enum VersionModifier {
     Dep, // todo: Not sure what this is, but have found it.
     // Used to allow comparisons between versions that have and don't have modifiers.
     Null,
+    Other(String),
 }
 
 impl FromStr for VersionModifier {
@@ -85,7 +86,8 @@ impl FromStr for VersionModifier {
             "b" => Self::Beta,
             "rc" => Self::ReleaseCandidate,
             "dep" => Self::Dep,
-            _ => return Err(DependencyError::new("Problem parsing version modifier")),
+            //_ => return Err(DependencyError::new("Problem parsing version modifier")),
+            _x => Self::Other(s.to_string()),
         };
         Ok(result)
     }
@@ -99,6 +101,7 @@ impl ToString for VersionModifier {
             Self::ReleaseCandidate => "rc".into(),
             Self::Dep => "dep".into(),
             Self::Null => panic!("Can't convert Null to string; misused"),
+            Self::Other(x) => x.into(),
         }
     }
 }
@@ -106,18 +109,19 @@ impl ToString for VersionModifier {
 impl VersionModifier {
     fn orderval(self) -> u8 {
         match self {
-            Self::Null => 4,
-            Self::ReleaseCandidate => 3,
-            Self::Beta => 2,
-            Self::Alpha => 1,
-            Self::Dep => 0,
+            Self::Null => 5,
+            Self::ReleaseCandidate => 4,
+            Self::Beta => 3,
+            Self::Alpha => 2,
+            Self::Dep => 1,
+            Self::Other(_x) => 0,
         }
     }
 }
 
 impl Ord for VersionModifier {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.orderval().cmp(&other.orderval())
+        self.clone().orderval().cmp(&other.clone().orderval())
     }
 }
 
@@ -128,7 +132,7 @@ impl PartialOrd for VersionModifier {
 }
 
 /// An exact, 3-number Semver version. With some possible extras.
-#[derive(Clone, Copy, Default, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Default, Deserialize, Eq, Hash, PartialEq)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
@@ -168,7 +172,7 @@ impl Version {
         if let Some(extra_num) = self.extra_num {
             s.push_str(&format!(".{}", extra_num.to_string()));
         }
-        if let Some((modifier, num)) = self.modifier {
+        if let Some((modifier, num)) = self.modifier.clone() {
             s.push_str(&format!("{}{}", modifier.to_string(), num.to_string()));
         }
     }
@@ -202,7 +206,7 @@ impl Version {
             suffix.push('.');
             suffix.push_str(&num.to_string());
         }
-        if let Some((modifier, num)) = self.modifier {
+        if let Some((modifier, num)) = self.modifier.clone() {
             suffix.push_str(&modifier.to_string());
             suffix.push_str(&num.to_string());
         }
@@ -257,8 +261,8 @@ impl FromStr for Version {
 impl Ord for Version {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         // None version modifiers should rank highest. Ie 17.0 > 17.0rc1
-        let self_mod = self.modifier.unwrap_or((VersionModifier::Null, 0));
-        let other_mod = other.modifier.unwrap_or((VersionModifier::Null, 0));
+        let self_mod = self.modifier.clone().unwrap_or((VersionModifier::Null, 0));
+        let other_mod = other.modifier.clone().unwrap_or((VersionModifier::Null, 0));
 
         if self.major != other.major {
             self.major.cmp(&other.major)
@@ -297,7 +301,7 @@ impl fmt::Display for Version {
             suffix.push('.');
             suffix.push_str(&num.to_string());
         }
-        if let Some((modifier, num)) = self.modifier {
+        if let Some((modifier, num)) = self.modifier.clone() {
             suffix.push_str(&modifier.to_string());
             suffix.push_str(&num.to_string());
         }
@@ -461,9 +465,9 @@ impl Constraint {
 
         // Note that other than for not-equals, the the resulting Vec has len 1.
         match self.type_ {
-            ReqType::Exact => vec![(self.version, self.version)],
-            ReqType::Gte => vec![(self.version, highest)],
-            ReqType::Lte => vec![(lowest, self.version)],
+            ReqType::Exact => vec![(self.version.clone(), self.version.clone())],
+            ReqType::Gte => vec![(self.version.clone(), highest)],
+            ReqType::Lte => vec![(lowest, self.version.clone())],
             ReqType::Gt => vec![(
                 Version::new(
                     self.version.major,
@@ -503,7 +507,7 @@ impl Constraint {
                 }
                 // We need to use Lt logic for ^ and ~.
                 let (major, minor, patch) = safely_subtract(max.major, max.minor, max.patch);
-                vec![(self.version, Version::new(major, minor, patch))]
+                vec![(self.version.clone(), Version::new(major, minor, patch))]
             }
             // For tilde, if minor's specified, can only increment patch.
             // If not, can increment minor or patch.
@@ -514,13 +518,13 @@ impl Constraint {
                     max = Version::new(self.version.major + 1, 0, 0);
                 }
                 let (major, minor, patch) = safely_subtract(max.major, max.minor, max.patch);
-                vec![(self.version, Version::new(major, minor, patch))]
+                vec![(self.version.clone(), Version::new(major, minor, patch))]
             }
         }
     }
 
     pub fn is_compatible(&self, version: &Version) -> bool {
-        let min = self.version;
+        let min = self.version.clone();
         let max;
 
         match self.type_ {
@@ -578,9 +582,9 @@ pub fn intersection_many(constrs: &[Constraint]) -> Vec<(Version, Version)> {
         if let ReqType::Ne = constr.type_ {
             rng2 = (Version::new(0, 0, 0), Version::_max());
             // We'll remove nes at the end.
-            nes.push(constr.version);
+            nes.push(constr.version.clone());
         } else {
-            rng2 = rng[0]; // If not Ne, there will be exactly 1.
+            rng2 = rng[0].clone(); // If not Ne, there will be exactly 1.
         }
         ranges.push(rng2);
     }
@@ -594,7 +598,7 @@ fn intersection_many2(reqs: &[(Version, Version)]) -> Vec<(Version, Version)> {
     // todo: Broken for notequals, which involves joining two ranges with OR logic.
     let init = vec![(Version::new(0, 0, 0), Version::new(MAX_VER, 0, 0))];
     reqs.iter().fold(init, |acc, constraint_set| {
-        intersection(&[*constraint_set], &acc)
+        intersection(&[constraint_set.clone()], &acc)
     })
 }
 
@@ -610,7 +614,10 @@ pub fn intersection(
         for rng2 in ranges2 {
             // 0 is min, 1 is max.
             if rng2.1 >= rng1.0 && rng1.1 >= rng2.0 {
-                result.push((cmp::max(rng2.0, rng1.0), cmp::min(rng1.1, rng2.1)));
+                result.push((
+                    cmp::max(rng2.0.clone(), rng1.0.clone()),
+                    cmp::min(rng1.1.clone(), rng2.1.clone()),
+                ));
             }
         }
     }
