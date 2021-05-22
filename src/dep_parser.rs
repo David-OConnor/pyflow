@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
-use nom::branch::alt;
-use nom::bytes::complete::{tag, take};
+use nom::bytes::complete::{tag, take, take_till};
 use nom::character::complete::{digit1, space0, space1};
 use nom::combinator::{flat_map, map, map_parser, map_res, opt, value};
 use nom::multi::separated_list;
 use nom::sequence::{delimited, preceded, separated_pair, tuple};
+use nom::{branch::alt, character::is_alphabetic};
 use nom::{AsChar, IResult, InputTakeAtPosition};
 
 use crate::dep_types::{Constraint, Extras, Req, ReqType, Version, VersionModifier};
@@ -264,16 +264,13 @@ fn parse_modifier(input: &str) -> IResult<&str, Option<(VersionModifier, u32)>> 
 }
 
 fn parse_modifier_version(input: &str) -> IResult<&str, VersionModifier> {
-    map(
-        alt((tag("a"), tag("b"), tag("rc"), tag("dep"))),
-        |x| match x {
-            "a" => VersionModifier::Alpha,
-            "b" => VersionModifier::Beta,
-            "rc" => VersionModifier::ReleaseCandidate,
-            "dep" => VersionModifier::Dep,
-            x => VersionModifier::Other(x.to_string()),
-        },
-    )(input)
+    map(take_till(|c| !is_alphabetic(c as u8)), |x| match x {
+        "a" => VersionModifier::Alpha,
+        "b" => VersionModifier::Beta,
+        "rc" => VersionModifier::ReleaseCandidate,
+        "dep" => VersionModifier::Dep,
+        x => VersionModifier::Other(x.to_string()),
+    })(input)
 }
 
 #[cfg(test)]
@@ -354,20 +351,21 @@ mod tests {
             extra_num: None,
             modifier: None,
         }))),
-             case("19.3b0", Ok(("", Version {
+        case("19.3b0", Ok(("", Version {
                  major: 19,
                  minor: 3,
                  patch: 0,
                  extra_num: None,
                  modifier: Some((VersionModifier::Beta, 0)),
-             }))),
-             case("0.4.3.dev0", Ok(("", Version {
+        }))),
+        // This package version showed up in boltons history
+        case("0.4.3.dev0", Ok(("", Version {
                  major: 0,
                  minor: 4,
                  patch: 3,
                  extra_num: None,
-                 modifier: Some((VersionModifier::Other(".dev".to_string()), 0)),
-             }))),
+                 modifier: Some((VersionModifier::Other("dev".to_string()), 0)),
+        }))),
     )]
     fn test_parse_version(input: &str, expected: IResult<&str, Version>) {
         assert_eq!(parse_version(input), expected);
