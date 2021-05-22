@@ -79,10 +79,11 @@ pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), D
         // Unable to parse the version listed in info; iterate through releases.
         Err(_) => Ok((
             data.info.name,
-            *all_versions
+            all_versions
                 .iter()
                 .max()
-                .unwrap_or_else(|| panic!("Can't find a valid version for {}", name)),
+                .unwrap_or_else(|| panic!("Can't find a valid version for {}", name))
+                .clone(),
             all_versions,
         )),
     }
@@ -214,7 +215,7 @@ fn fetch_req_data(
             };
 
             // Ensure we don't query past the latest.
-            max_v_to_query = min(constr.compatible_range()[i].1, max_v_to_query);
+            max_v_to_query = min(constr.compatible_range()[i].1.clone(), max_v_to_query);
         }
 
         // To minimimize request time, only query the latest compatible version.
@@ -508,7 +509,7 @@ fn make_renamed_packs(
             id: dep.id,
             parent: dep.parent,
             name: dep.name.clone(),
-            version: dep.version,
+            version: dep.version.clone(),
             deps: vec![], // to be filled in after resolution
             rename,
         });
@@ -532,7 +533,7 @@ fn assign_subdeps(packages: &mut Vec<Package>, updated_ids: &HashMap<u32, u32>) 
                     None => p.parent,
                 };
                 if parent_id == package.id {
-                    Some((p.id, p.name.clone(), p.version))
+                    Some((p.id, p.name.clone(), p.version.clone()))
                 } else {
                     None
                 }
@@ -605,7 +606,7 @@ pub fn resolve(
                     id: dep.id,
                     parent: dep.parent,
                     name: fmtd_name,
-                    version: dep.version,
+                    version: dep.version.clone(),
                     deps: vec![], // to be filled in after resolution
                     rename: Rename::No,
                 });
@@ -652,7 +653,7 @@ pub fn resolve(
                         id: best.id,
                         parent: best.parent,
                         name: fmtd_name,
-                        version: best.version,
+                        version: best.version.clone(),
                         deps: vec![], // to be filled in after resolution
                         rename: Rename::No,
                     });
@@ -692,7 +693,7 @@ pub fn resolve(
                                 Some(Dependency {
                                     id: 0, // placeholder; we'll assign an id to the one we pick.
                                     name: fmtd_name.clone(),
-                                    version: *vers,
+                                    version: vers.clone(),
                                     reqs: vec![], // todo
                                     parent: 0,    // todo
                                 })

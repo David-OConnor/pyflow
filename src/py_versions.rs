@@ -234,7 +234,7 @@ fn download(py_install_path: &Path, version: &Version) {
     }
 
     // Match up our version to the closest match (major+minor will match) we've built.
-    let vers_to_dl2: PyVers = (*version, os).into();
+    let vers_to_dl2: PyVers = (version.clone(), os).into();
     let vers_to_dl = vers_to_dl2.to_string();
 
     let url = format!(
@@ -410,7 +410,7 @@ pub fn create_venv(
         if iv.major == cfg_v.major && iv.minor == cfg_v.minor {
             let folder_name = format!("python-{}", iv.to_string());
             alias_path = Some(pyflow_dir.join(folder_name).join(&py_name));
-            py_ver = Some(*iv);
+            py_ver = Some(iv.clone());
             break;
         }
     }
@@ -447,7 +447,7 @@ pub fn create_venv(
         // Download and install the appropriate Python binary, if we can't find either a
         // custom install, or on the Path.
         download(pyflow_dir, cfg_v);
-        let py_ver2: PyVers = (*cfg_v, os).into();
+        let py_ver2: PyVers = (cfg_v.clone(), os).into();
         py_ver = Some(py_ver2.to_vers());
 
         let folder_name = format!("python-{}", py_ver2.to_string());
