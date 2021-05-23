@@ -99,7 +99,11 @@ pub fn get_warehouse_release(
     // the parsed version to the key.
     let mut version_map = HashMap::new();
     for key in data.releases.keys() {
-        version_map.insert(Version::from_str(&key).unwrap(), key.as_str());
+        if let Ok(ver) = Version::from_str(&key) {
+            version_map.insert(ver, key.as_str());
+        } else if cfg!(debug_assertions) {
+            eprintln!("Unable to parse \"{}\" version \"{}\"; skipped.", name, key);
+        }
     }
 
     let key = version_map
