@@ -457,7 +457,7 @@ pub fn create_venv(
         // and we're using its `python`.
         #[cfg(target_os = "linux")]
         {
-            match py_ver.unwrap().minor {
+            match py_ver.clone().unwrap().minor {
                 12 => py_name += ".12",
                 11 => py_name += ".11",
                 10 => py_name += ".10",
