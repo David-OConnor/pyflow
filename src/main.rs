@@ -38,13 +38,12 @@ type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Vers
 #[structopt(name = "pyflow", about = "Python packaging and publishing")]
 struct Opt {
     #[structopt(subcommand)]
-    subcmds: Option<SubCommand>,
-    #[structopt(name = "script")]
-    script: Vec<String>,
+    subcmds: SubCommand,
+    // #[structopt(name = "script")]
+    // script: Vec<String>,
 
-    #[structopt(short = "ms", long)]
-    ms: Vec<String>,
-
+    // #[structopt(short = "ms", long)]
+    // ms: Vec<String>,
     /// Force a color option: auto (default), always, ansi, never
     #[structopt(short, long)]
     color: Option<String>,
@@ -77,13 +76,13 @@ enum SubCommand {
         #[structopt(name = "packages")]
         packages: Vec<String>,
     },
-    /// Run python
-    #[structopt(name = "python")]
-    Python {
-        #[structopt(name = "args")]
-        args: Vec<String>,
-    },
-    /// Display all installed packages and console scripts
+    // /// Run python
+    // #[structopt(name = "python")]
+    // Python {
+    //     #[structopt(name = "args")]
+    //     args: Vec<String>,
+    // },
+    // /// Display all installed packages and console scripts
     #[structopt(name = "list")]
     List,
     /// Build the package - source and wheel
@@ -106,11 +105,11 @@ enum SubCommand {
     Clear,
     /// Run a CLI script like `ipython` or `black`. Note that you can simply run `pyflow black`
     /// as a shortcut.
-    #[structopt(name = "run")] // We don't need to invoke this directly, but the option exists
-    Run {
-        #[structopt(name = "args")]
-        args: Vec<String>,
-    },
+    // #[structopt(name = "run")] // We don't need to invoke this directly, but the option exists
+    // Run {
+    //     #[structopt(name = "args")]
+    //     args: Vec<String>,
+    // },
 
     ////    // todo: Trying to get `python -m myproject` syntax working, ie https://docs.python.org/3/library/__main__.html
     //    #[structopt(short = "m", long = "dashm")]
@@ -118,12 +117,12 @@ enum SubCommand {
     //        #[structopt(name = "args")]
     //        args: Vec<String>,
     //    },
-    /// Run a standalone script not associated with a project
-    #[structopt(name = "script")]
-    Script {
-        #[structopt(name = "args")]
-        args: Vec<String>,
-    },
+    // /// Run a standalone script not associated with a project
+    // #[structopt(name = "script")]
+    // Script {
+    //     #[structopt(name = "args")]
+    //     args: Vec<String>,
+    // },
     //    /// Run a package globally; used for CLI tools like `ipython` and `black`. Doesn't
     //    /// interfere Python installations. Must have been installed with `pyflow install -g black` etc
     //    #[structopt(name = "global")]
@@ -138,8 +137,73 @@ enum SubCommand {
         #[structopt(name = "version")]
         version: String,
     },
+    /// This is documentation for "external" sub commands
+    // TODO: figure out how to document these "external" sub commands
+    #[structopt(external_subcommand, name = "external")]
+    External(Vec<String>),
 }
 
+#[derive(Clone, Debug)]
+enum ExternalSubcommands {
+    Run,
+    Script,
+    Python,
+    ImpliedRun(String),
+    ImpliedPython(String),
+}
+
+impl ToString for ExternalSubcommands {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Run => "run".into(),
+            Self::Script => "script".into(),
+            Self::Python => "python".into(),
+            Self::ImpliedRun(x) => x.into(),
+            Self::ImpliedPython(x) => x.into(),
+        }
+    }
+}
+
+impl FromStr for ExternalSubcommands {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        let result = match s {
+            "run" => Self::Run,
+            "script" => Self::Script,
+            "python" => Self::Python,
+            x if x.ends_with(".py") => Self::ImpliedPython(x.to_string()),
+            x => Self::ImpliedRun(x.to_string()),
+        };
+        Ok(result)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ExternalCommand {
+    cmd: ExternalSubcommands,
+    args: Vec<String>,
+}
+
+impl ExternalCommand {
+    fn from_opt(args: Vec<String>) -> Self {
+        let cmd = ExternalSubcommands::from_str(&args[0]).unwrap();
+        let cmd_args = match cmd {
+            ExternalSubcommands::Run
+            | ExternalSubcommands::Script
+            | ExternalSubcommands::Python => &args[1..],
+            ExternalSubcommands::ImpliedRun(_) | ExternalSubcommands::ImpliedPython(_) => &args,
+        };
+        let cmd = match cmd {
+            ExternalSubcommands::ImpliedRun(_) => ExternalSubcommands::Run,
+            ExternalSubcommands::ImpliedPython(_) => ExternalSubcommands::Python,
+            x => x,
+        };
+        Self {
+            cmd,
+            args: cmd_args.to_vec(),
+        }
+    }
+}
 /// A config, parsed from pyproject.toml
 #[derive(Clone, Debug, Default, Deserialize)]
 // todo: Auto-desr some of these
@@ -961,14 +1025,16 @@ fn run_script(
     script_env_path: &Path,
     dep_cache_path: &Path,
     os: util::Os,
-    args: &mut Vec<String>,
+    args: &Vec<String>,
     pyflow_dir: &Path,
 ) {
+    #[cfg(debug_assertions)]
+    eprintln!("Run script args: {:?}", args);
     // todo: DRY with run_cli_tool and subcommand::Install
     let filename = if let Some(a) = args.get(0) {
         a.clone()
     } else {
-        abort("`run` must be followed by the script to run, eg `pyflow script myscript.py`");
+        abort("`script` must be followed by the script to run, eg `pyflow script myscript.py`");
         unreachable!()
     };
 
@@ -1282,6 +1348,8 @@ fn main() {
     let os = Os::Mac;
 
     let opt = Opt::from_args();
+    #[cfg(debug_assertions)]
+    eprintln!("opts {:?}", opt);
     // Handle color option
     let choice = match opt.color.unwrap_or_else(|| String::from("auto")).as_str() {
         "always" => ColorChoice::Always,
@@ -1303,34 +1371,20 @@ fn main() {
 
     // Handle commands that don't involve operating out of a project before one that do, with setup
     // code in-between.
-    let subcmd = match opt.subcmds {
-        Some(sc) => sc,
-        None => {
-            // This branch runs when none of the specified subcommands are used
-            if opt.script.is_empty() || opt.script[0].ends_with("py") {
-                // Nothing's specified, eg `pyflow`, or a script is specified; run `python`.
-                SubCommand::Python { args: opt.script }
-            } else {
-                //                println!("ARGS: {:?}", &opt.script);
-                if opt.script[0] == "m" {
-                    //                    println!("HMM");
-                }
-                // A command is specified, eg `pyflow black`
-                SubCommand::Run { args: opt.script }
-            }
-        }
+    let subcmd = opt.subcmds;
+
+    let extcmd = if let SubCommand::External(ref x) = subcmd {
+        Some(ExternalCommand::from_opt(x.to_owned()))
+    } else {
+        None
     };
 
     // Run this before parsing the config.
-    if let SubCommand::Script { mut args } = subcmd {
-        run_script(
-            &script_env_path,
-            &dep_cache_path,
-            os,
-            &mut args,
-            &pyflow_path,
-        );
-        return;
+    if let Some(x) = extcmd.clone() {
+        if let ExternalSubcommands::Script = x.cmd {
+            run_script(&script_env_path, &dep_cache_path, os, &x.args, &pyflow_path);
+            return;
+        }
     }
 
     if let SubCommand::New { name } = subcmd {
@@ -1608,6 +1662,7 @@ fn main() {
 
             // Filter reqs here instead of re-reading the config from file.
             let updated_reqs: Vec<Req> = cfg
+                .clone()
                 .reqs
                 .into_iter()
                 .filter(|req| !removed_reqs.contains(&req.name))
@@ -1626,11 +1681,6 @@ fn main() {
             util::print_color("Uninstall complete", Color::Green);
         }
 
-        SubCommand::Python { args } => {
-            if commands::run_python(&paths.bin, &pythonpath, &args).is_err() {
-                abort("Problem running Python");
-            }
-        }
         SubCommand::Package { extras } => {
             sync(
                 &paths,
@@ -1646,9 +1696,7 @@ fn main() {
             build::build(&lockpacks, &paths, &cfg, &extras)
         }
         SubCommand::Publish {} => build::publish(&paths.bin, &cfg),
-        SubCommand::Run { args } => {
-            run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, args);
-        }
+
         //        SubCommand::M { args } => {
         //            run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, args);
         //        }
@@ -1661,6 +1709,25 @@ fn main() {
                 .collect::<Vec<Req>>(),
         ),
         _ => (),
+    }
+
+    if let Some(x) = extcmd {
+        match x.cmd {
+            ExternalSubcommands::Python => {
+                if commands::run_python(&paths.bin, &pythonpath, &x.args).is_err() {
+                    abort("Problem running Python");
+                }
+            }
+            ExternalSubcommands::Run => {
+                run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, x.args);
+            }
+            x => {
+                abort(&format!(
+                    "Sub command {:?} should have been handled already",
+                    x
+                ));
+            }
+        }
     }
 }
 
