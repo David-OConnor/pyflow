@@ -128,7 +128,6 @@ enum SubCommand {
     // #[structopt(name = "external ")]
     #[structopt(external_subcommand, name = "external")]
     External(Vec<String>),
-    // linter is catching this erroneously as unused_braces
 }
 
 #[derive(Clone, Debug)]
