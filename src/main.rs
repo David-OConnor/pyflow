@@ -39,11 +39,7 @@ type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Vers
 struct Opt {
     #[structopt(subcommand)]
     subcmds: SubCommand,
-    // #[structopt(name = "script")]
-    // script: Vec<String>,
 
-    // #[structopt(short = "ms", long)]
-    // ms: Vec<String>,
     /// Force a color option: auto (default), always, ansi, never
     #[structopt(short, long)]
     color: Option<String>,
@@ -76,13 +72,7 @@ enum SubCommand {
         #[structopt(name = "packages")]
         packages: Vec<String>,
     },
-    // /// Run python
-    // #[structopt(name = "python")]
-    // Python {
-    //     #[structopt(name = "args")]
-    //     args: Vec<String>,
-    // },
-    // /// Display all installed packages and console scripts
+    /// Display all installed packages and console scripts
     #[structopt(name = "list")]
     List,
     /// Build the package - source and wheel
@@ -105,24 +95,20 @@ enum SubCommand {
     Clear,
     /// Run a CLI script like `ipython` or `black`. Note that you can simply run `pyflow black`
     /// as a shortcut.
-    // #[structopt(name = "run")] // We don't need to invoke this directly, but the option exists
-    // Run {
-    //     #[structopt(name = "args")]
-    //     args: Vec<String>,
-    // },
+    // Dummy option with space at the end for documentation
+    #[structopt(name = "run ")] // We don't need to invoke this directly, but the option exists
+    Run,
 
-    ////    // todo: Trying to get `python -m myproject` syntax working, ie https://docs.python.org/3/library/__main__.html
-    //    #[structopt(short = "m", long = "dashm")]
-    //    DashM {
-    //        #[structopt(name = "args")]
-    //        args: Vec<String>,
-    //    },
-    // /// Run a standalone script not associated with a project
-    // #[structopt(name = "script")]
-    // Script {
-    //     #[structopt(name = "args")]
-    //     args: Vec<String>,
-    // },
+    /// Run the project python or script with the project python environment.
+    /// As a shortcut you can simply specify a script name ending in `.py`
+    // Dummy option with space at the end for documentation
+    #[structopt(name = "python ")]
+    Python,
+
+    /// Run a standalone script not associated with a project
+    // Dummy option with space at the end for documentation
+    #[structopt(name = "script ")]
+    Script,
     //    /// Run a package globally; used for CLI tools like `ipython` and `black`. Doesn't
     //    /// interfere Python installations. Must have been installed with `pyflow install -g black` etc
     //    #[structopt(name = "global")]
@@ -137,8 +123,9 @@ enum SubCommand {
         #[structopt(name = "version")]
         version: String,
     },
-    /// This is documentation for "external" sub commands
-    // TODO: figure out how to document these "external" sub commands
+    // Documentation for supported external subcommands can be documented by
+    // adding a `dummy` subcommand with the name having a trailing space.
+    // #[structopt(name = "external ")]
     #[structopt(external_subcommand, name = "external")]
     External(Vec<String>),
 }
