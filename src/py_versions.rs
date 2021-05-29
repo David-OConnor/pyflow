@@ -159,10 +159,12 @@ impl PyVers {
 /// todo: How cross-compat are these? Eg work across diff versions of Ubuntu?
 /// todo: 32-bit
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 enum Os {
     // Don't confuse with crate::Os
     Ubuntu, // Builds on Ubuntu 18.04 work on Ubuntu 19.04, Debian, Arch, and Kali
     Centos, // Will this work on Red Hat and Fedora as well?
+    #[cfg(target_os = "windows")]
     Windows,
     Mac,
 }
@@ -354,16 +356,14 @@ fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
     for entry in pyflow_dir
         .read_dir()
         .expect("Can't open python installs path")
+        .flatten()
     {
-        if let Ok(entry) = entry {
-            if !entry.path().is_dir() {
-                continue;
-            }
+        if !entry.path().is_dir() {
+            continue;
+        }
 
-            if let Some(v) = commands::find_py_version(entry.path().join(py_name).to_str().unwrap())
-            {
-                result.push(v);
-            }
+        if let Some(v) = commands::find_py_version(entry.path().join(py_name).to_str().unwrap()) {
+            result.push(v);
         }
     }
     result

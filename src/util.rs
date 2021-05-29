@@ -252,10 +252,8 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
             let mut tops = vec![];
             match fs::File::open(top_level) {
                 Ok(f) => {
-                    for line in BufReader::new(f).lines() {
-                        if let Ok(l) = line {
-                            tops.push(l);
-                        }
+                    for line in BufReader::new(f).lines().flatten() {
+                        tops.push(line);
                     }
                 }
                 Err(_) => tops.push(folder_name.to_owned()),
@@ -274,11 +272,13 @@ pub fn find_console_scripts(bin_path: &Path) -> Vec<String> {
         return vec![];
     }
 
-    for entry in bin_path.read_dir().expect("Trouble opening bin path") {
-        if let Ok(entry) = entry {
-            if entry.file_type().unwrap().is_file() {
-                result.push(entry.file_name().to_str().unwrap().to_owned())
-            }
+    for entry in bin_path
+        .read_dir()
+        .expect("Trouble opening bin path")
+        .flatten()
+    {
+        if entry.file_type().unwrap().is_file() {
+            result.push(entry.file_name().to_str().unwrap().to_owned())
         }
     }
     result
@@ -774,11 +774,10 @@ pub fn find_first_file(path: &Path) -> PathBuf {
         for entry in path
             .read_dir()
             .expect("Trouble reading the directory when finding the first file.")
+            .flatten()
         {
-            if let Ok(entry) = entry {
-                if entry.file_type().unwrap().is_file() {
-                    return entry.path();
-                }
+            if entry.file_type().unwrap().is_file() {
+                return entry.path();
             }
         }
         abort(&format!(
@@ -830,21 +829,19 @@ pub fn parse_metadata(path: &Path) -> Metadata {
 
 pub fn find_folders(path: &Path) -> Vec<String> {
     let mut result = vec![];
-    for entry in path.read_dir().expect("Can't open lib path") {
-        if let Ok(entry) = entry {
-            if entry
-                .file_type()
-                .expect("Problem reading lib path file type")
-                .is_dir()
-            {
-                result.push(
-                    entry
-                        .file_name()
-                        .to_str()
-                        .expect("Problem converting folder name to string")
-                        .to_owned(),
-                );
-            }
+    for entry in path.read_dir().expect("Can't open lib path").flatten() {
+        if entry
+            .file_type()
+            .expect("Problem reading lib path file type")
+            .is_dir()
+        {
+            result.push(
+                entry
+                    .file_name()
+                    .to_str()
+                    .expect("Problem converting folder name to string")
+                    .to_owned(),
+            );
         }
     }
     result
