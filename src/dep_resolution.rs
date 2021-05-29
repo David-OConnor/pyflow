@@ -158,13 +158,13 @@ fn get_req_cache_multiple(
     let url = "https://pydeps.herokuapp.com/multiple/";
     //                let url = "http://localhost:8000/multiple/";
 
-    Ok(reqwest::Client::new()
+    reqwest::Client::new()
         .post(url)
         .json(&MultipleBody {
             packages: packages2,
         })
         .send()?
-        .json()?)
+        .json()
 }
 
 /// Helper fn for `guess_graph`.
@@ -244,6 +244,7 @@ fn fetch_req_data(
 
 // Build a graph: Start by assuming we can pick the newest compatible dependency at each step.
 // If unable to resolve this way, subsequently run this with additional deconfliction reqs.
+#[allow(clippy::clippy::too_many_arguments)]
 fn guess_graph(
     parent_id: u32,
     reqs: &[Req],

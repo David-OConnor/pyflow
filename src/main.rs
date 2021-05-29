@@ -752,11 +752,7 @@ fn sync_deps(
                     util::standardize_name(&lp.name),
                     Version::from_str(&lp.version).expect("Problem parsing lock version"),
                 ),
-                match &lp.rename {
-                    // todo back to our custom type?
-                    Some(rn) => Some(parse_lockpack_rename(rn)),
-                    None => None,
-                },
+                lp.rename.as_ref().map(|rn| parse_lockpack_rename(rn)),
             )
         })
         .collect();
@@ -982,22 +978,20 @@ fn find_deps_from_script(file_path: &Path) -> Vec<String> {
     let re = Regex::new(r"^__requires__\s*=\s*\[(.*?)\]$").unwrap();
 
     let mut result = vec![];
-    for line in BufReader::new(f).lines() {
-        if let Ok(l) = line {
-            if let Some(c) = re.captures(&l) {
-                let deps_list = c.get(1).unwrap().as_str().to_owned();
-                let deps: Vec<&str> = deps_list.split(',').collect();
-                result = deps
-                    .into_iter()
-                    .map(|d| {
-                        d.to_owned()
-                            .replace(" ", "")
-                            .replace("\"", "")
-                            .replace("'", "")
-                    })
-                    .filter(|d| !d.is_empty())
-                    .collect();
-            }
+    for line in BufReader::new(f).lines().flatten() {
+        if let Some(c) = re.captures(&line) {
+            let deps_list = c.get(1).unwrap().as_str().to_owned();
+            let deps: Vec<&str> = deps_list.split(',').collect();
+            result = deps
+                .into_iter()
+                .map(|d| {
+                    d.to_owned()
+                        .replace(" ", "")
+                        .replace("\"", "")
+                        .replace("'", "")
+                })
+                .filter(|d| !d.is_empty())
+                .collect();
         }
     }
 
@@ -1118,6 +1112,7 @@ fn run_script(
 
 /// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
 /// the config and lock files.
+#[allow(clippy::clippy::too_many_arguments)]
 fn sync(
     paths: &util::Paths,
     lockpacks: &[LockPackage],

@@ -252,10 +252,8 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
             let mut tops = vec![];
             match fs::File::open(top_level) {
                 Ok(f) => {
-                    for line in BufReader::new(f).lines() {
-                        if let Ok(l) = line {
-                            tops.push(l);
-                        }
+                    for line in BufReader::new(f).lines().flatten() {
+                        tops.push(line);
                     }
                 }
                 Err(_) => tops.push(folder_name.to_owned()),
@@ -274,11 +272,13 @@ pub fn find_console_scripts(bin_path: &Path) -> Vec<String> {
         return vec![];
     }
 
-    for entry in bin_path.read_dir().expect("Trouble opening bin path") {
-        if let Ok(entry) = entry {
-            if entry.file_type().unwrap().is_file() {
-                result.push(entry.file_name().to_str().unwrap().to_owned())
-            }
+    for entry in bin_path
+        .read_dir()
+        .expect("Trouble opening bin path")
+        .flatten()
+    {
+        if entry.file_type().unwrap().is_file() {
+            result.push(entry.file_name().to_str().unwrap().to_owned())
         }
     }
     result
@@ -405,25 +405,27 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
         let mut file = archive.by_index(i).unwrap();
         // Change name here instead of after in case we've already installed a non-renamed version.
         // (which would be overwritten by this one.)
-        let file_str2 = file.sanitized_name();
+        let file_str2 = file.enclosed_name().unwrap();
         let file_str = file_str2.to_str().expect("Problem converting path to str");
 
         let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
             match rename {
-                Some((old, new)) => file
-                    .sanitized_name()
-                    .to_str()
-                    .unwrap()
-                    .to_owned()
-                    .replace(old, new)
-                    .into(),
-                None => file.sanitized_name(),
+                Some((old, new)) => PathBuf::from_str(
+                    file.enclosed_name()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_owned()
+                        .replace(old, new)
+                        .as_str(),
+                ),
+                None => PathBuf::from_str(file.enclosed_name().unwrap().to_str().unwrap()),
             }
         } else {
-            file.sanitized_name()
+            PathBuf::from_str(file.enclosed_name().unwrap().to_str().unwrap())
         };
 
-        let outpath = out_path.join(extracted_file);
+        let outpath = out_path.join(extracted_file.unwrap());
 
         if (&*file.name()).ends_with('/') {
             fs::create_dir_all(&outpath).unwrap();
@@ -774,11 +776,10 @@ pub fn find_first_file(path: &Path) -> PathBuf {
         for entry in path
             .read_dir()
             .expect("Trouble reading the directory when finding the first file.")
+            .flatten()
         {
-            if let Ok(entry) = entry {
-                if entry.file_type().unwrap().is_file() {
-                    return entry.path();
-                }
+            if entry.file_type().unwrap().is_file() {
+                return entry.path();
             }
         }
         abort(&format!(
@@ -830,21 +831,19 @@ pub fn parse_metadata(path: &Path) -> Metadata {
 
 pub fn find_folders(path: &Path) -> Vec<String> {
     let mut result = vec![];
-    for entry in path.read_dir().expect("Can't open lib path") {
-        if let Ok(entry) = entry {
-            if entry
-                .file_type()
-                .expect("Problem reading lib path file type")
-                .is_dir()
-            {
-                result.push(
-                    entry
-                        .file_name()
-                        .to_str()
-                        .expect("Problem converting folder name to string")
-                        .to_owned(),
-                );
-            }
+    for entry in path.read_dir().expect("Can't open lib path").flatten() {
+        if entry
+            .file_type()
+            .expect("Problem reading lib path file type")
+            .is_dir()
+        {
+            result.push(
+                entry
+                    .file_name()
+                    .to_str()
+                    .expect("Problem converting folder name to string")
+                    .to_owned(),
+            );
         }
     }
     result

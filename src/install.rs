@@ -109,20 +109,18 @@ pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_pa
 
     if let Ok(ep_file) = fs::File::open(&dist_info_path.join("entry_points.txt")) {
         let mut in_scripts_section = false;
-        for line in io::BufReader::new(ep_file).lines() {
-            if let Ok(l) = line {
-                if l.contains("[console_scripts]") {
-                    in_scripts_section = true;
-                    continue;
-                }
-                if l.starts_with('[') {
-                    // no longer in scripts section.
-                    break;
-                }
-                if in_scripts_section && !l.is_empty() {
-                    // Remove potential leading spaces; have seen indents included.
-                    scripts.push(l.clone().replace(" ", ""));
-                }
+        for line in io::BufReader::new(ep_file).lines().flatten() {
+            if line.contains("[console_scripts]") {
+                in_scripts_section = true;
+                continue;
+            }
+            if line.starts_with('[') {
+                // no longer in scripts section.
+                break;
+            }
+            if in_scripts_section && !line.is_empty() {
+                // Remove potential leading spaces; have seen indents included.
+                scripts.push(line.clone().replace(" ", ""));
             }
         }
     } // else: Probably no scripts.
@@ -162,6 +160,7 @@ pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_pa
 
 /// Download and install a package. For wheels, we can just extract the contents into
 /// the lib folder.  For source dists, make a wheel first.
+#[allow(clippy::clippy::too_many_arguments)]
 pub fn download_and_install_package(
     name: &str,
     version: &Version,
@@ -228,10 +227,9 @@ pub fn download_and_install_package(
     // We must re-open the file after computing the hash.
     let archive_file = util::open_archive(&archive_path);
 
-    let rename = match rename.as_ref() {
-        Some((_, new)) => Some((name.to_owned(), new.to_owned())),
-        None => None,
-    };
+    let rename = rename
+        .as_ref()
+        .map(|(_, new)| (name.to_owned(), new.to_owned()));
 
     match package_type {
         PackageType::Wheel => {
@@ -526,10 +524,8 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
     let folder_names = match fs::File::open(dist_info_path.join("top_level.txt")) {
         Ok(f) => {
             let mut names = vec![];
-            for line in io::BufReader::new(f).lines() {
-                if let Ok(l) = line {
-                    names.push(l);
-                }
+            for line in io::BufReader::new(f).lines().flatten() {
+                names.push(line);
             }
             names
         }
