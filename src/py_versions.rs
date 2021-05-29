@@ -164,7 +164,6 @@ enum Os {
     // Don't confuse with crate::Os
     Ubuntu, // Builds on Ubuntu 18.04 work on Ubuntu 19.04, Debian, Arch, and Kali
     Centos, // Will this work on Red Hat and Fedora as well?
-    #[cfg(target_os = "windows")]
     Windows,
     Mac,
 }
