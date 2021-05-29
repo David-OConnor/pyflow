@@ -1006,7 +1006,7 @@ fn run_script(
     script_env_path: &Path,
     dep_cache_path: &Path,
     os: util::Os,
-    args: &[String],
+    args: &Vec<String>,
     pyflow_dir: &Path,
 ) {
     #[cfg(debug_assertions)]
