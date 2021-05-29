@@ -31,16 +31,16 @@ pub struct Tool {
     pub poetry: Option<Poetry>,
 }
 
-#[serde(untagged)]
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
 /// Allows use of both Strings, ie "ipython = "^7.7.0", and maps: "ipython = {version = "^7.7.0", extras=["qtconsole"]}"
 pub enum DepComponentWrapper {
     A(String),
     B(DepComponent),
 }
 
-#[serde(untagged)]
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
 pub enum DepComponentWrapperPoetry {
     A(String),
     B(DepComponentPoetry),
@@ -323,18 +323,16 @@ pub fn parse_req_dot_text(cfg: &mut Config, path: &Path) {
         Err(_) => return,
     };
 
-    for line in BufReader::new(file).lines() {
-        if let Ok(l) = line {
-            match Req::from_pip_str(&l) {
-                Some(r) => {
-                    cfg.reqs.push(r.clone());
-                }
-                None => util::print_color(
-                    &format!("Problem parsing {} from requirements.txt", l),
-                    Color::Red,
-                ),
-            };
-        }
+    for line in BufReader::new(file).lines().flatten() {
+        match Req::from_pip_str(&line) {
+            Some(r) => {
+                cfg.reqs.push(r.clone());
+            }
+            None => util::print_color(
+                &format!("Problem parsing {} from requirements.txt", line),
+                Color::Red,
+            ),
+        };
     }
 }
 
@@ -343,17 +341,15 @@ pub fn change_py_vers(cfg_path: &Path, specified: &Version) {
     let f = fs::File::open(&cfg_path)
         .expect("Unable to read pyproject.toml while adding Python version");
     let mut new_data = String::new();
-    for line in BufReader::new(f).lines() {
-        if let Ok(l) = line {
-            if l.starts_with("py_version") {
-                new_data.push_str(&format!(
-                    "py_version = \"{}.{}\"\n",
-                    specified.major, specified.minor
-                ));
-            } else {
-                new_data.push_str(&l);
-                new_data.push('\n');
-            }
+    for line in BufReader::new(f).lines().flatten() {
+        if line.starts_with("py_version") {
+            new_data.push_str(&format!(
+                "py_version = \"{}.{}\"\n",
+                specified.major, specified.minor
+            ));
+        } else {
+            new_data.push_str(&line);
+            new_data.push('\n');
         }
     }
 
