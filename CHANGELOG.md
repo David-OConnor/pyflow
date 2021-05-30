@@ -15,7 +15,6 @@
 - Fixed some bugs related to `manylinux2014` targets
 - Fixed a bug from prev release on Linux/mac Cargo version
 
-
 ## v0.2.7
 - Fixed a recently-introduced bug with installing zip files from source.
 
