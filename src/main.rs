@@ -1006,7 +1006,7 @@ fn run_script(
     script_env_path: &Path,
     dep_cache_path: &Path,
     os: util::Os,
-    args: &Vec<String>,
+    args: &[String],
     pyflow_dir: &Path,
 ) {
     #[cfg(debug_assertions)]
@@ -1463,10 +1463,7 @@ fn main() {
             cfg.py_version = Some(specified.clone());
             files::change_py_vers(&PathBuf::from(&cfg_path), &specified);
             util::print_color(
-                &format!(
-                    "Switched to Python version {}.{}",
-                    &specified.major, &specified.minor
-                ),
+                &format!("Switched to Python version {}", specified.to_string()),
                 Color::Green,
             );
             // Don't return; now that we've changed the cfg version, let's run the normal flow.

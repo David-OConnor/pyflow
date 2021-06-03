@@ -486,7 +486,7 @@ pub fn find_or_create_venv(
     // The version's explicitly specified; check if an environment for that version
     let compatible_venvs: Vec<&(u32, u32)> = venvs
         .iter()
-        .filter(|(ma, mi)| cfg_vers.major == *ma && cfg_vers.minor == *mi)
+        .filter(|(ma, mi)| cfg_vers.major == *ma && cfg_vers.minor == Some(*mi))
         .collect();
 
     let vers_path;
@@ -495,8 +495,8 @@ pub fn find_or_create_venv(
         0 => {
             let vers =
                 py_versions::create_venv(cfg_vers, pypackages_dir, pyflow_dir, dep_cache_path);
-            vers_path = pypackages_dir.join(&format!("{}.{}", vers.major, vers.minor));
-            py_vers = Version::new_short(vers.major, vers.minor); // Don't include patch.
+            vers_path = pypackages_dir.join(vers.to_string_med());
+            py_vers = Version::new_opt(vers.major, vers.minor, None); // Don't include patch.
         }
         1 => {
             vers_path = pypackages_dir.join(&format!(
