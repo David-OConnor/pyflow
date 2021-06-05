@@ -1,4 +1,5 @@
 use crate::{
+    commands,
     dep_resolution::{self, WarehouseRelease},
     dep_types::{Constraint, DependencyError, Req, ReqType, Version},
     files,
@@ -850,27 +851,9 @@ pub fn find_folders(path: &Path) -> Vec<String> {
 }
 
 fn default_python() -> Version {
-    #[cfg(target_os = "windows")]
-    let py_cmd = "python.exe";
-    #[cfg(target_os = "linux")]
-    let py_cmd = "python";
-    #[cfg(target_os = "macos")]
-    let py_cmd = "python";
-    match std::process::Command::new(py_cmd).arg("--version").output() {
-        Ok(output) => {
-            let py_str = String::from_utf8_lossy(&output.stdout);
-            let py_str = py_str.replace("Python", "");
-            let py_str = py_str.trim_matches(|c| c == '\r' || c == '\n' || c == ' ');
-
-            match Version::from_str(&py_str) {
-                Ok(f) => f,
-                Err(_e) => Version::new_short(3, 9),
-            }
-        }
-        Err(e) => {
-            println!("{}", e);
-            Version::new_short(3, 9)
-        }
+    match commands::find_py_version("python") {
+        Some(x) => x,
+        None => Version::new_short(3, 9),
     }
 }
 
