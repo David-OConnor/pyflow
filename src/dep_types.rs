@@ -496,27 +496,14 @@ impl Constraint {
                     ),
                 ]
             }
-            // This section DRY from `compatible`.
             ReqType::Caret => {
-                if self.version.major > 0 {
-                    max = Version::new(self.version.major + 1, 0, 0);
-                } else if self.version.minor > 0 {
-                    max = Version::new(0, self.version.minor + 1, 0);
-                } else {
-                    max = Version::new(0, 0, self.version.patch + 2);
-                }
+                max = self.get_max_version();
                 // We need to use Lt logic for ^ and ~.
                 let (major, minor, patch) = safely_subtract(max.major, max.minor, max.patch);
                 vec![(self.version.clone(), Version::new(major, minor, patch))]
             }
-            // For tilde, if minor's specified, can only increment patch.
-            // If not, can increment minor or patch.
             ReqType::Tilde => {
-                if self.version.minor > 0 {
-                    max = Version::new(self.version.major, self.version.minor + 1, 0);
-                } else {
-                    max = Version::new(self.version.major + 1, 0, 0);
-                }
+                max = self.get_max_version();
                 let (major, minor, patch) = safely_subtract(max.major, max.minor, max.patch);
                 vec![(self.version.clone(), Version::new(major, minor, patch))]
             }
@@ -535,26 +522,41 @@ impl Constraint {
             ReqType::Lt => self.version > *version,
             ReqType::Ne => self.version != *version,
             ReqType::Caret => {
-                if self.version.major > 0 {
-                    max = Version::new(self.version.major + 1, 0, 0);
-                } else if self.version.minor > 0 {
-                    max = Version::new(0, self.version.minor + 1, 0);
-                } else {
-                    max = Version::new(0, 0, self.version.patch + 2);
-                }
-
+                max = self.get_max_version();
                 min <= *version && *version < max
             }
             // For tilde, if minor's specified, can only increment patch.
             // If not, can increment minor or patch.
             ReqType::Tilde => {
-                if self.version.minor > 0 {
-                    max = Version::new(self.version.major, self.version.minor + 1, 0);
-                } else {
-                    max = Version::new(self.version.major + 1, 0, 0);
-                }
-
+                max = self.get_max_version();
                 min <= *version && *version < max
+            }
+        }
+    }
+
+    /// This internal function is to DRY Caret and Tilde max versions
+    fn get_max_version(&self) -> Version {
+        match self.type_ {
+            ReqType::Caret => {
+                if self.version.major > 0 {
+                    Version::new(self.version.major + 1, 0, 0)
+                } else if self.version.minor > 0 {
+                    Version::new(0, self.version.minor + 1, 0)
+                } else {
+                    Version::new(0, 0, self.version.patch + 1)
+                }
+            }
+            // For tilde, if minor's specified, can only increment patch.
+            // If not, can increment minor or patch.
+            ReqType::Tilde => {
+                if self.version.minor > 0 {
+                    Version::new(self.version.major, self.version.minor + 1, 0)
+                } else {
+                    Version::new(self.version.major + 1, 0, 0)
+                }
+            }
+            _ => {
+                panic!("Misuse of `get_max_version` on ReqType");
             }
         }
     }
