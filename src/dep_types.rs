@@ -796,44 +796,135 @@ pub struct Lock {
 
 #[cfg(test)]
 pub mod tests {
+    use rstest::rstest;
     use ReqType::*;
     use VersionModifier::*;
 
     use super::*;
 
-    #[test]
-    fn compat_caret() {
-        let req1 = Constraint::new(Caret, Version::new(1, 2, 3));
-        let req2 = Constraint::new(Caret, Version::new(0, 2, 3));
-        let req3 = Constraint::new(Caret, Version::new(0, 0, 3));
-        let req4 = Constraint::new(Caret, Version::new(0, 0, 3));
-
-        assert!(req1.is_compatible(&Version::new(1, 9, 9)));
-        assert!(!req1.is_compatible(&Version::new(2, 0, 0)));
-        assert!(req2.is_compatible(&Version::new(0, 2, 9)));
-        assert!(!req2.is_compatible(&Version::new(0, 3, 0)));
-        assert!(req3.is_compatible(&Version::new(0, 0, 3)));
-        assert!(!req3.is_compatible(&Version::new(0, 0, 5)));
-        // Caret requirements below major and minor v 0 must be exact.
-        assert!(req4.is_compatible(&Version::new(0, 0, 3)));
-        //        assert!(!req4.is_compatible(&Version::new(0, 0, 4)));
-        assert!(!req4.is_compatible(&Version::new(0, 0, 5)));
-    }
-
-    #[test]
-    fn compat_gt_eq() {
-        let req1 = Constraint::new(Gte, Version::new(1, 2, 3));
-        let req2 = Constraint::new(Gt, Version::new(0, 2, 3));
-        let req3 = Constraint::new(Exact, Version::new(0, 0, 3));
-
-        assert!(req1.is_compatible(&Version::new(1, 2, 3)));
-        assert!(req1.is_compatible(&Version::new_short(4, 2)));
-        assert!(!req1.is_compatible(&Version::new(1, 2, 2)));
-        assert!(req2.is_compatible(&Version::new(0, 2, 9)));
-        assert!(!req2.is_compatible(&Version::new(0, 1, 0)));
-        assert!(!req2.is_compatible(&Version::new(0, 2, 3)));
-        assert!(req3.is_compatible(&Version::new(0, 0, 3)));
-        assert!(!req3.is_compatible(&Version::new(0, 0, 5)));
+    #[rstest(
+        req,
+        max_compat,
+        not_compat,
+        case::caret_full_version(
+            Constraint::new(Caret, Version::new(1, 2, 3)),
+            Version::new(1, 9, MAX_VER),
+            Version::new(2, 0, 0)
+        ),
+        case::caret_minor_version(
+            Constraint::new(Caret, Version::new(0, 2, 3)),
+            Version::new(0, 2, MAX_VER),
+            Version::new(0, 3, 0)
+        ),
+        case::caret_patch_version_is_exact_over(
+            Constraint::new(Caret, Version::new(0, 0, 3)),
+            Version::new(0, 0, 3),
+            Version::new(0, 0, 4)
+        ),
+        case::caret_patch_version_is_exact_under(
+            Constraint::new(Caret, Version::new(0, 0, 3)),
+            Version::new(0, 0, 3),
+            Version::new(0, 0, 2)
+        ),
+        case::gte_max(
+            Constraint::new(Gte, Version::new(1, 2, 3)),
+            Version::_max(),
+            Version::new(1, 2, 2)
+        ),
+        case::gte_eq(
+            Constraint::new(Gte, Version::new(1, 2, 3)),
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 2)
+        ),
+        case::gte_misc(
+            Constraint::new(Gte, Version::new(1, 2, 3)),
+            Version::new(2, 1, 2),
+            Version::new(1, 2, 2)
+        ),
+        case::gt_max(
+            Constraint::new(Gt, Version::new(0, 2, 3)),
+            Version::_max(),
+            Version::new(0, 2, 3)
+        ),
+        case::gt_first(
+            Constraint::new(Gt, Version::new(0, 2, 3)),
+            Version::new(0, 2, 4),
+            Version::new(0, 2, 3)
+        ),
+        case::exact_over(
+            Constraint::new(Exact, Version::new(1, 2, 3)),
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 4)
+        ),
+        case::exact_under(
+            Constraint::new(Exact, Version::new(1, 2, 3)),
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 2)
+        ),
+        case::ne_over(
+            Constraint::new(Ne, Version::new(1, 2, 3)),
+            Version::new(1, 2, 4),
+            Version::new(1, 2, 3)
+        ),
+        case::ne_under(
+            Constraint::new(Ne, Version::new(1, 2, 3)),
+            Version::new(1, 2, 2),
+            Version::new(1, 2, 3)
+        ),
+        case::lt_max(
+            Constraint::new(Lt, Version::new(1, 2, 3)),
+            Version::new(1, 2, 2),
+            Version::new(1, 2, 3)
+        ),
+        case::lt_min(
+            Constraint::new(Lt, Version::new(1, 2, 3)),
+            Version::new(0, 0, 0),
+            Version::new(1, 2, 3)
+        ),
+        case::lte_max(
+            Constraint::new(Lte, Version::new(1, 2, 3)),
+            Version::new(1, 2, 3),
+            Version::new(1, 2, 4)
+        ),
+        case::lte_min(
+            Constraint::new(Lte, Version::new(1, 2, 3)),
+            Version::new(0, 0, 0),
+            Version::new(1, 2, 4)
+        ),
+        case::tilde_full_version_max(
+            Constraint::new(Tilde, Version::new(1, 2, 3)),
+            Version::new(1, 2, MAX_VER),
+            Version::new(1, 3, 0)
+        ),
+        case::tilde_full_version_min(
+            Constraint::new(Tilde, Version::new(1, 2, 3)),
+            Version::new(1, 2, MAX_VER),
+            Version::new(1, 2, 2)
+        ),
+        case::tilde_minor_version_max(
+            Constraint::new(Tilde, Version::new_short(1, 2)),
+            Version::new(1, 2, MAX_VER),
+            Version::new(1, 3, 0)
+        ),
+        case::tilde_minor_version_min(
+            Constraint::new(Tilde, Version::new_short(1, 2)),
+            Version::new(1, 2, MAX_VER),
+            Version::new(1, 1, MAX_VER)
+        ),
+        case::tilde_major_version_max(
+            Constraint::new(Tilde, Version::new_short(1, 0)),
+            Version::new(1, MAX_VER, MAX_VER),
+            Version::new(2, 0, 0)
+        ),
+        case::tilde_major_version_under(
+            Constraint::new(Tilde, Version::new_short(1, 0)),
+            Version::new(1, MAX_VER, MAX_VER),
+            Version::new(0, MAX_VER, MAX_VER)
+        )
+    )]
+    fn is_compatible(req: Constraint, max_compat: Version, not_compat: Version) {
+        assert!(req.is_compatible(&max_compat));
+        assert!(!req.is_compatible(&not_compat));
     }
 
     #[test]
