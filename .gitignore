@@ -20,3 +20,5 @@ script.py
 build/
 dist/
 
+# grcov
+*.profraw
