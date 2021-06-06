@@ -1407,18 +1407,28 @@ pub mod tests {
         assert!(a > b && b > c && c > d && d > e && e > f && f > g);
     }
 
-    #[test]
-    fn compat_rng() {
-        let actual1 = Constraint::new(Gte, Version::new(5, 1, 0)).compatible_range();
-        let expected1 = vec![(Version::new(5, 1, 0), Version::_max())];
-
-        let actual2 = Constraint::new(Ne, Version::new(5, 1, 3)).compatible_range();
-        let expected2 = vec![
-            (Version::new(0, 0, 0), Version::new(5, 1, 2)),
-            (Version::new(5, 1, 4), Version::_max()),
-        ];
-        assert_eq!(expected1, actual1);
-        assert_eq!(expected2, actual2);
+    #[rstest(actual,
+             expected,
+             case::gt(Constraint::new(Gt, Version::new(5, 1, 3)),
+                      vec![(Version::new(5, 1, 4), Version::_max())]),
+             case::gte(Constraint::new(Gte, Version::new(5, 1, 0)),
+                       vec![(Version::new(5, 1, 0), Version::_max())] ),
+             case::ne(Constraint::new(Ne, Version::new(5, 1, 3)),
+                      vec![(Version::new(0, 0, 0), Version::new(5, 1, 2)),
+                           (Version::new(5, 1, 4), Version::_max()),]),
+             case::lt(Constraint::new(Lt, Version::new(5, 1, 3)),
+                      vec![(Version::new(0, 0, 0), Version::new(5, 1, 2))]),
+             case::lte(Constraint::new(Lte, Version::new(5, 1, 3)),
+                       vec![(Version::new(0, 0, 0), Version::new(5, 1, 3))]),
+             case::caret(Constraint::new(Caret, Version::new(1,2,3)),
+                         vec![(Version::new(1,2,3), Version::new(1,MAX_VER,MAX_VER))]
+             ),
+             case::tilde(Constraint::new(Tilde, Version::new(1,2,3)),
+                         vec![(Version::new(1,2,3), Version::new(1,2,MAX_VER))]
+             )
+    )]
+    fn compat_rng(actual: Constraint, expected: Vec<(Version, Version)>) {
+        assert_eq!(actual.compatible_range(), expected);
     }
 
     #[test]
