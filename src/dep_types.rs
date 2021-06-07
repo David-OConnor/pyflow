@@ -196,6 +196,10 @@ impl Version {
     }
 
     pub fn to_string_color(&self) -> String {
+        self.colorize().unwrap_or(self.to_string())
+    }
+
+    fn colorize(&self) -> anyhow::Result<String> {
         let bufwtr = BufferWriter::stdout(CliConfig::current().color_choice);
         let mut buf: Buffer = bufwtr.buffer();
         let num_c = Some(Color::Blue);
@@ -210,41 +214,19 @@ impl Version {
             suffix.push_str(&modifier.to_string());
             suffix.push_str(&num.to_string());
         }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, "{}", self.major) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(dot_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, ".") {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, "{}", self.minor) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(dot_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, ".") {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.set_color(ColorSpec::new().set_fg(num_c)) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = write!(buf, "{}{}", self.patch, suffix) {
-            panic!("An Error occurred formatting Version")
-        }
-        if let Err(_e) = buf.reset() {
-            panic!("An Error occurred formatting Version")
-        }
+        buf.set_color(ColorSpec::new().set_fg(num_c))?;
+        write!(buf, "{}", self.major)?;
+        buf.set_color(ColorSpec::new().set_fg(dot_c))?;
+        write!(buf, ".")?;
+        buf.set_color(ColorSpec::new().set_fg(num_c))?;
+        write!(buf, "{}", self.minor)?;
+        buf.set_color(ColorSpec::new().set_fg(dot_c))?;
+        write!(buf, ".")?;
+        buf.set_color(ColorSpec::new().set_fg(num_c))?;
+        write!(buf, "{}{}", self.patch, suffix)?;
+        buf.reset()?;
 
-        String::from_utf8_lossy(buf.as_slice()).to_string()
+        Ok(String::from_utf8_lossy(buf.as_slice()).to_string())
     }
 }
 
