@@ -1299,38 +1299,59 @@ pub mod tests {
         )
     }
 
-    #[test]
-    fn req_tostring_single_reqs() {
-        // todo: Expand this with more cases
-
-        let a = Req::new(
-            "package".to_string(),
-            vec![Constraint::new(Exact, Version::new(3, 3, 6))],
-        );
-
-        //        assert_eq!(a._to_pip_string(), "package==3.3.6".to_string());
-        assert_eq!(a.to_cfg_string(), r#"package = "3.3.6""#.to_string());
+    #[rstest(
+        req,
+        expected,
+        case::exact(Req::new("package".to_string(),
+                             vec![
+                                 Constraint::new(Exact, Version::new(1,2,3))
+                             ]),
+                    r#"package = "1.2.3""#),
+        case::gte(Req::new("package".to_string(),
+                           vec![
+                               Constraint::new(Gte, Version::new(1,2,3))
+                           ]),
+                  r#"package = ">=1.2.3""#),
+        case::lte(Req::new("package".to_string(),
+                           vec![
+                               Constraint::new(Lte, Version::new(1,2,3))
+                           ]),
+                  r#"package = "<=1.2.3""#),
+        case::ne(Req::new("package".to_string(),
+                          vec![
+                              Constraint::new(Ne, Version::new(1,2,3))
+                          ]),
+                 r#"package = "!=1.2.3""#),
+        case::gt(Req::new("package".to_string(),
+                          vec![
+                              Constraint::new(Gt, Version::new(1,2,3))
+                          ]),
+                 r#"package = ">1.2.3""#),
+        case::lt(Req::new("package".to_string(),
+                          vec![
+                              Constraint::new(Lt, Version::new(1,2,3))
+                          ]),
+                 r#"package = "<1.2.3""#),
+        case::caret(Req::new("package".to_string(),
+                             vec![
+                                 Constraint::new(Caret, Version::new(1,2,3))
+                             ]),
+                    r#"package = "^1.2.3""#),
+        case::tilde(Req::new("package".to_string(),
+                             vec![
+                                 Constraint::new(Tilde, Version::new(1,2,3))
+                             ]),
+                    r#"package = "~1.2.3""#),
+        case::multi_ne_gte(Req::new("package".to_string(),
+                                    vec![
+                                        Constraint::new(Ne, Version::new(1,2,3)),
+                                        Constraint::new(Gte, Version::new(1,2,0))
+                                    ]),
+                           r#"package = "!=1.2.3, >=1.2.0""#)
+    )]
+    fn req_to_cfg_string(req: Req, expected: &str) {
+        assert_eq!(req.to_cfg_string(), expected.to_string());
     }
-
-    #[test]
-    fn req_tostring_multiple_reqs() {
-        // todo: Expand this with more cases
-
-        let a = Req::new(
-            "package".to_string(),
-            vec![
-                Constraint::new(Ne, Version::new(2, 7, 4)),
-                Constraint::new(Gte, Version::new(3, 7, 0)),
-            ],
-        );
-
-        //        assert_eq!(a._to_pip_string(), "'package!=2.7.4,>=3.7'".to_string());
-        assert_eq!(
-            a.to_cfg_string(),
-            r#"package = "!=2.7.4, >=3.7.0""#.to_string()
-        );
-    }
-
     #[test]
     fn version_ordering() {
         let a = Version::new(4, 9, 4);
