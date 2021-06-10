@@ -1,7 +1,9 @@
 use crate::dep_parser::{
     parse_constraint, parse_pip_str, parse_req, parse_req_pypi_fmt, parse_version, parse_wh_py_vers,
 };
-use crate::{dep_resolution, util, CliConfig};
+#[mockall_double::double]
+use crate::dep_resolution::res;
+use crate::{util, CliConfig};
 use nom::combinator::all_consuming;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -196,7 +198,7 @@ impl Version {
     }
 
     pub fn to_string_color(&self) -> String {
-        self.colorize().unwrap_or(self.to_string())
+        self.colorize().unwrap_or_else(|_| self.to_string())
     }
 
     fn colorize(&self) -> anyhow::Result<String> {
@@ -674,14 +676,13 @@ impl Req {
     pub fn to_cfg_string(&self) -> String {
         match self.constraints.len() {
             0 => {
-                let (name, latest_version) = if let Ok((fmtd_name, version, _)) =
-                    dep_resolution::get_version_info(&self.name)
-                {
-                    (fmtd_name, version)
-                } else {
-                    util::abort(&format!("Unable to find version info for {:?}", &self.name));
-                    unreachable!()
-                };
+                let (name, latest_version) =
+                    if let Ok((fmtd_name, version, _)) = res::get_version_info(&self.name) {
+                        (fmtd_name, version)
+                    } else {
+                        util::abort(&format!("Unable to find version info for {:?}", &self.name));
+                        unreachable!()
+                    };
                 format!(
                     r#"{} = "{}""#,
                     name,
@@ -1352,6 +1353,22 @@ pub mod tests {
     fn req_to_cfg_string(req: Req, expected: &str) {
         assert_eq!(req.to_cfg_string(), expected.to_string());
     }
+
+    #[test]
+    fn req_to_cfg_string_empty_constraints() {
+        let ctx = res::get_version_info_context();
+        ctx.expect().returning(|name| {
+            Ok((
+                name.to_string(),
+                Version::new(1, 2, 3),
+                vec![Version::new(1, 2, 3), Version::new(1, 1, 2)],
+            ))
+        });
+        let req = Req::new("package".to_string(), vec![]);
+        let expected = r#"package = "^1.2.3""#;
+        assert_eq!(req.to_cfg_string(), expected.to_string());
+    }
+
     #[test]
     fn version_ordering() {
         let a = Version::new(4, 9, 4);

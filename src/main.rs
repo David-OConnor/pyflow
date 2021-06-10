@@ -1,5 +1,7 @@
 #![allow(clippy::non_ascii_literal)]
 
+#[mockall_double::double]
+use crate::dep_resolution::res;
 use crate::dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version};
 use crate::util::{abort, Os};
 
@@ -816,8 +818,8 @@ fn sync_deps(
     }
 
     for ((name, version), rename) in &to_install {
-        let data = dep_resolution::get_warehouse_release(name, version)
-            .expect("Problem getting warehouse data");
+        let data =
+            res::get_warehouse_release(name, version).expect("Problem getting warehouse data");
 
         let (best_release, package_type) =
             util::find_best_release(&data, name, version, os, python_vers);
@@ -1006,7 +1008,7 @@ fn run_script(
     script_env_path: &Path,
     dep_cache_path: &Path,
     os: util::Os,
-    args: &Vec<String>,
+    args: &[String],
     pyflow_dir: &Path,
 ) {
     #[cfg(debug_assertions)]
@@ -1085,7 +1087,7 @@ fn run_script(
                     Version::from_str(&lp.version).expect("Problem getting version"),
                 )
             } else {
-                let vinfo = dep_resolution::get_version_info(name)
+                let vinfo = res::get_version_info(name)
                     .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
                 (vinfo.0, vinfo.1)
             };
@@ -1170,7 +1172,7 @@ fn sync(
         combined_reqs.push(dev_req);
     }
 
-    let resolved = if let Ok(r) = dep_resolution::resolve(&combined_reqs, &locked, os, py_vers) {
+    let resolved = if let Ok(r) = res::resolve(&combined_reqs, &locked, os, py_vers) {
         r
     } else {
         abort("Problem resolving dependencies");
