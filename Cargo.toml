@@ -44,8 +44,11 @@ reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-t
 #[target.'cfg(not(target_os = "linux"))'.dependencies]
 #reqwest = "^0.9.21"
 
+mockall_double = "^0.2.0"
+
 [dev-dependencies]
 rstest = "0.6.4"
+mockall = "^0.9"
 
 [package.metadata.deb]
 section = "Python"

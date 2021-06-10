@@ -4,12 +4,14 @@ use crate::{
     },
     util,
 };
-
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::str::FromStr;
 use termcolor::Color;
+
+#[cfg(test)]
+use mockall::automock;
 
 #[derive(Debug, Deserialize)]
 struct WarehouseInfo {
@@ -46,77 +48,6 @@ struct WarehouseData {
     urls: Vec<WarehouseRelease>,
 }
 
-/// Format a name based on how it's listed on `PyPi`. Ie capitalize or convert - to _'
-/// a required.
-fn format_name(name: &str, cache: &HashMap<String, (String, Version, Vec<Version>)>) -> String {
-    match cache.get(name) {
-        Some(vc) => vc.0.clone(),
-        None => name.to_owned(), // ie this is from a locked dep.
-    }
-}
-
-/// Fetch data about a package from the [Pypi Warehouse](https://warehouse.pypa.io/api-reference/json/).
-fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
-    let url = format!("https://pypi.org/pypi/{}/json", name);
-    let resp = reqwest::get(&url)?.json()?;
-    Ok(resp)
-}
-
-/// Find the latest version of a package by querying the warehouse.  Also return
-/// a vec of the versions found, so we can reuse this later without fetching a second time.
-/// Return name to, so we get correct capitalization.
-pub fn get_version_info(name: &str) -> Result<(String, Version, Vec<Version>), DependencyError> {
-    let data = get_warehouse_data(name)?;
-
-    let all_versions = data
-        .releases
-        .keys()
-        .filter_map(|v| Version::from_str(v).ok())
-        .collect();
-
-    match Version::from_str(&data.info.version) {
-        Ok(v) => Ok((data.info.name, v, all_versions)),
-        // Unable to parse the version listed in info; iterate through releases.
-        Err(_) => Ok((
-            data.info.name,
-            all_versions
-                .iter()
-                .max()
-                .unwrap_or_else(|| panic!("Can't find a valid version for {}", name))
-                .clone(),
-            all_versions,
-        )),
-    }
-}
-
-/// Get release data from the warehouse, ie the file url, name, and hash.
-pub fn get_warehouse_release(
-    name: &str,
-    version: &Version,
-) -> Result<Vec<WarehouseRelease>, reqwest::Error> {
-    let data = get_warehouse_data(name)?;
-    // some packages 0-pad their version numbers or have less digits. Lets map
-    // the parsed version to the key.
-    let mut version_map = HashMap::new();
-    for key in data.releases.keys() {
-        if let Ok(ver) = Version::from_str(&key) {
-            version_map.insert(ver, key.as_str());
-        } else if cfg!(debug_assertions) {
-            eprintln!("Unable to parse \"{}\" version \"{}\"; skipped.", name, key);
-        }
-    }
-
-    let key = version_map
-        .get(version)
-        .expect("Unable to reverse mapping of Version to release key");
-    let release_data = data
-        .releases
-        .get::<str>(key)
-        .unwrap_or_else(|| panic!("Unable to find a release for {} = \"{}\"", name, version));
-
-    Ok(release_data.clone())
-}
-
 #[derive(Clone, Debug, Deserialize)]
 struct ReqCache {
     // Name is present from pydeps if gestruct packagetting deps for multiple package names. Otherwise, we ommit
@@ -143,105 +74,8 @@ struct MultipleBody {
     packages: HashMap<String, Vec<String>>,
 }
 
-/// Fetch items from multiple packages; cuts down on API calls.
-fn get_req_cache_multiple(
-    packages: &HashMap<String, Vec<Version>>,
-) -> Result<Vec<ReqCache>, reqwest::Error> {
-    // input tuple is name, min version, max version.
-    // parse strings here.
-    let mut packages2 = HashMap::new();
-    for (name, versions) in packages.iter() {
-        let versions = versions.iter().map(Version::to_string).collect();
-        packages2.insert(name.to_owned(), versions);
-    }
-
-    let url = "https://pydeps.herokuapp.com/multiple/";
-    //                let url = "http://localhost:8000/multiple/";
-
-    reqwest::Client::new()
-        .post(url)
-        .json(&MultipleBody {
-            packages: packages2,
-        })
-        .send()?
-        .json()
-}
-
-/// Helper fn for `guess_graph`.
-fn is_compat(constraints: &[Constraint], vers: &Version) -> bool {
-    for constraint in constraints.iter() {
-        if !constraint.is_compatible(vers) {
-            return false;
-        }
-    }
-    true
-}
-
-/// Pull data on pydeps for a req. Only pull what we need.
-/// todo: Group all reqs and pull with a single call to pydeps to improve speed?
-fn fetch_req_data(
-    reqs: &[Req],
-    vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
-) -> Result<Vec<ReqCache>, DependencyError> {
-    // Narrow-down our list of versions to query.
-
-    let mut query_data = HashMap::new();
-    for req in reqs {
-        // todo: cache version info; currently may get this multiple times.
-        let (_, latest_version, all_versions) = match vers_cache.get(&req.name) {
-            Some(c) => c.clone(),
-            None => {
-                if let Ok(data) = get_version_info(&req.name) {
-                    vers_cache.insert(req.name.clone(), data.clone());
-                    data
-                } else {
-                    util::abort(&format!(
-                        "Can't get version info for the dependency `{}`. \
-                         Is it spelled correctly? Is the internet connection ok?",
-                        &req.name
-                    ));
-                    ("".to_string(), Version::new(0, 0, 0), vec![]) // match-compatibility placeholder
-                }
-            }
-        };
-
-        let mut max_v_to_query = latest_version;
-
-        // Find the maximum version compatible with the constraints.
-        // todo: May need to factor in additional constraints here, and put
-        // todo in fn signature for things that don't resolve with the optimal soln.
-        for constr in &req.constraints {
-            // For Ne, we have two ranges; the second one being ones higher than the version specified.
-            // For other types, we only have one item in the compatible range.
-            let i = match constr.type_ {
-                ReqType::Ne => 1,
-                _ => 0,
-            };
-
-            // Ensure we don't query past the latest.
-            max_v_to_query = min(constr.compatible_range()[i].1.clone(), max_v_to_query);
-        }
-
-        // To minimimize request time, only query the latest compatible version.
-        let best_version = match all_versions
-            .into_iter()
-            .filter(|v| *v <= max_v_to_query)
-            .max()
-        {
-            Some(v) => vec![v],
-            None => vec![],
-        };
-
-        query_data.insert(req.name.to_owned(), best_version);
-    }
-
-    if query_data.is_empty() {
-        return Ok(vec![]);
-    }
-
-    Ok(get_req_cache_multiple(&query_data)?)
-}
-
+// TODO: figure out lifetimes so we can automock this function
+// guess_graph removed from mod res because of lifetime issue with automock
 // Build a graph: Start by assuming we can pick the newest compatible dependency at each step.
 // If unable to resolve this way, subsequently run this with additional deconfliction reqs.
 #[allow(clippy::clippy::too_many_arguments)]
@@ -327,7 +161,7 @@ fn guess_graph(
                 continue;
             }
 
-            if is_compat(&req.constraints, &package.version) {
+            if res::is_compat(&req.constraints, &package.version) {
                 locked_reqs.push((*req).clone());
                 found_in_locked = true;
                 break;
@@ -339,7 +173,7 @@ fn guess_graph(
     }
 
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
-    let mut query_data = if let Ok(d) = fetch_req_data(&non_locked_reqs, vers_cache) {
+    let mut query_data = if let Ok(d) = res::fetch_req_data(&non_locked_reqs, vers_cache) {
         d
     } else {
         util::abort(&format!(
@@ -396,7 +230,7 @@ fn guess_graph(
             .into_iter()
             // Our query data should already be compat, but QC here.
             .filter_map(|r| {
-                if is_compat(&req.constraints, &Version::from_str(&r.version).unwrap()) {
+                if res::is_compat(&req.constraints, &Version::from_str(&r.version).unwrap()) {
                     Some(Dependency {
                         id: result.iter().map(|d| d.id).max().unwrap_or(0) + 1,
                         name: req.name.to_owned(),
@@ -440,315 +274,492 @@ fn guess_graph(
     Ok(())
 }
 
-fn find_constraints(
-    all_reqs: &[Req],
-    all_deps: &[Dependency],
-    relevant_deps: &[Dependency],
-) -> Vec<Constraint> {
-    let mut result = vec![];
+#[cfg_attr(test, automock())]
+pub(super) mod res {
+    use super::*;
 
-    for dep in relevant_deps.iter() {
-        let parent = match all_deps.iter().find(|d| d.id == dep.parent) {
-            Some(p) => p.clone(),
-            // ie top-level; set up a dummy
-            None => Dependency {
-                id: 999,
-                name: "top".to_owned(),
-                version: Version::new(0, 0, 0),
-                reqs: all_reqs.to_vec(),
-                parent: 0,
-            },
-        };
-
-        for req in parent
-            .clone()
-            .reqs
-            .iter()
-            .filter(|r| util::compare_names(&r.name, &dep.name))
-        {
-            result.append(&mut req.constraints.clone())
+    /// Format a name based on how it's listed on `PyPi`. Ie capitalize or convert - to _'
+    /// a required.
+    fn format_name(name: &str, cache: &HashMap<String, (String, Version, Vec<Version>)>) -> String {
+        match cache.get(name) {
+            Some(vc) => vc.0.clone(),
+            None => name.to_owned(), // ie this is from a locked dep.
         }
     }
-    result
-}
 
-/// We've determined we need to add all the included packages, and renamed all but one.
-fn make_renamed_packs(
-    _vers_cache: &HashMap<String, (String, Version, Vec<Version>)>,
-    deps: &[Dependency],
-    //    all_deps: &[Dependency],
-    name: &str,
-) -> Vec<Package> {
-    util::print_color(
-        &format!(
-            "Installing multiple versions for {}. If this package uses \
+    /// Fetch data about a package from the [Pypi Warehouse](https://warehouse.pypa.io/api-reference/json/).
+    fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
+        let url = format!("https://pypi.org/pypi/{}/json", name);
+        let resp = reqwest::get(&url)?.json()?;
+        Ok(resp)
+    }
+
+    /// Find the latest version of a package by querying the warehouse.  Also return
+    /// a vec of the versions found, so we can reuse this later without fetching a second time.
+    /// Return name to, so we get correct capitalization.
+    pub fn get_version_info(
+        name: &str,
+    ) -> Result<(String, Version, Vec<Version>), DependencyError> {
+        let data = get_warehouse_data(name)?;
+
+        let all_versions = data
+            .releases
+            .keys()
+            .filter_map(|v| Version::from_str(v).ok())
+            .collect();
+
+        match Version::from_str(&data.info.version) {
+            Ok(v) => Ok((data.info.name, v, all_versions)),
+            // Unable to parse the version listed in info; iterate through releases.
+            Err(_) => Ok((
+                data.info.name,
+                all_versions
+                    .iter()
+                    .max()
+                    .unwrap_or_else(|| panic!("Can't find a valid version for {}", name))
+                    .clone(),
+                all_versions,
+            )),
+        }
+    }
+
+    /// Get release data from the warehouse, ie the file url, name, and hash.
+    pub fn get_warehouse_release(
+        name: &str,
+        version: &Version,
+    ) -> Result<Vec<WarehouseRelease>, reqwest::Error> {
+        let data = get_warehouse_data(name)?;
+        // some packages 0-pad their version numbers or have less digits. Lets map
+        // the parsed version to the key.
+        let mut version_map = HashMap::new();
+        for key in data.releases.keys() {
+            if let Ok(ver) = Version::from_str(&key) {
+                version_map.insert(ver, key.as_str());
+            } else if cfg!(debug_assertions) {
+                eprintln!("Unable to parse \"{}\" version \"{}\"; skipped.", name, key);
+            }
+        }
+
+        let key = version_map
+            .get(version)
+            .expect("Unable to reverse mapping of Version to release key");
+        let release_data = data
+            .releases
+            .get::<str>(key)
+            .unwrap_or_else(|| panic!("Unable to find a release for {} = \"{}\"", name, version));
+
+        Ok(release_data.clone())
+    }
+
+    /// Fetch items from multiple packages; cuts down on API calls.
+    fn get_req_cache_multiple(
+        packages: &HashMap<String, Vec<Version>>,
+    ) -> Result<Vec<ReqCache>, reqwest::Error> {
+        // input tuple is name, min version, max version.
+        // parse strings here.
+        let mut packages2 = HashMap::new();
+        for (name, versions) in packages.iter() {
+            let versions = versions.iter().map(Version::to_string).collect();
+            packages2.insert(name.to_owned(), versions);
+        }
+
+        let url = "https://pydeps.herokuapp.com/multiple/";
+        //                let url = "http://localhost:8000/multiple/";
+
+        reqwest::Client::new()
+            .post(url)
+            .json(&MultipleBody {
+                packages: packages2,
+            })
+            .send()?
+            .json()
+    }
+
+    /// Helper fn for `guess_graph`.
+    pub(super) fn is_compat(constraints: &[Constraint], vers: &Version) -> bool {
+        for constraint in constraints.iter() {
+            if !constraint.is_compatible(vers) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Pull data on pydeps for a req. Only pull what we need.
+    /// todo: Group all reqs and pull with a single call to pydeps to improve speed?
+    pub(super) fn fetch_req_data(
+        reqs: &[Req],
+        vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
+    ) -> Result<Vec<ReqCache>, DependencyError> {
+        // Narrow-down our list of versions to query.
+
+        let mut query_data = HashMap::new();
+        for req in reqs {
+            // todo: cache version info; currently may get this multiple times.
+            let (_, latest_version, all_versions) = match vers_cache.get(&req.name) {
+                Some(c) => c.clone(),
+                None => {
+                    if let Ok(data) = get_version_info(&req.name) {
+                        vers_cache.insert(req.name.clone(), data.clone());
+                        data
+                    } else {
+                        util::abort(&format!(
+                            "Can't get version info for the dependency `{}`. \
+                         Is it spelled correctly? Is the internet connection ok?",
+                            &req.name
+                        ));
+                        ("".to_string(), Version::new(0, 0, 0), vec![]) // match-compatibility placeholder
+                    }
+                }
+            };
+
+            let mut max_v_to_query = latest_version;
+
+            // Find the maximum version compatible with the constraints.
+            // todo: May need to factor in additional constraints here, and put
+            // todo in fn signature for things that don't resolve with the optimal soln.
+            for constr in &req.constraints {
+                // For Ne, we have two ranges; the second one being ones higher than the version specified.
+                // For other types, we only have one item in the compatible range.
+                let i = match constr.type_ {
+                    ReqType::Ne => 1,
+                    _ => 0,
+                };
+
+                // Ensure we don't query past the latest.
+                max_v_to_query = min(constr.compatible_range()[i].1.clone(), max_v_to_query);
+            }
+
+            // To minimimize request time, only query the latest compatible version.
+            let best_version = match all_versions
+                .into_iter()
+                .filter(|v| *v <= max_v_to_query)
+                .max()
+            {
+                Some(v) => vec![v],
+                None => vec![],
+            };
+
+            query_data.insert(req.name.to_owned(), best_version);
+        }
+
+        if query_data.is_empty() {
+            return Ok(vec![]);
+        }
+
+        Ok(get_req_cache_multiple(&query_data)?)
+    }
+
+    fn find_constraints(
+        all_reqs: &[Req],
+        all_deps: &[Dependency],
+        relevant_deps: &[Dependency],
+    ) -> Vec<Constraint> {
+        let mut result = vec![];
+
+        for dep in relevant_deps.iter() {
+            let parent = match all_deps.iter().find(|d| d.id == dep.parent) {
+                Some(p) => p.clone(),
+                // ie top-level; set up a dummy
+                None => Dependency {
+                    id: 999,
+                    name: "top".to_owned(),
+                    version: Version::new(0, 0, 0),
+                    reqs: all_reqs.to_vec(),
+                    parent: 0,
+                },
+            };
+
+            for req in parent
+                .clone()
+                .reqs
+                .iter()
+                .filter(|r| util::compare_names(&r.name, &dep.name))
+            {
+                result.append(&mut req.constraints.clone())
+            }
+        }
+        result
+    }
+
+    /// We've determined we need to add all the included packages, and renamed all but one.
+    fn make_renamed_packs(
+        _vers_cache: &HashMap<String, (String, Version, Vec<Version>)>,
+        deps: &[Dependency],
+        //    all_deps: &[Dependency],
+        name: &str,
+    ) -> Vec<Package> {
+        util::print_color(
+            &format!(
+                "Installing multiple versions for {}. If this package uses \
              compiled code or importlib, this may fail when importing. Note that \
              your package may not be published unless this is resolved...",
-            name
-        ),
-        Color::Yellow, // Dark
-    );
+                name
+            ),
+            Color::Yellow, // Dark
+        );
 
-    let dep_display: Vec<String> = deps
-        .iter()
-        .map(|d| {
-            format!(
-                "name: {}, version: {}, parent: {:?}",
-                d.name, d.version, d.parent
-            )
-        })
-        .collect();
-    println!("Installing these versions: {:#?}", &dep_display);
-
-    let mut result = vec![];
-    // We were unable to resolve using the newest version; add and rename packages.
-    for (i, dep) in deps.iter().enumerate() {
-        // Don't rename the first one.
-        let rename = if i == 0 {
-            Rename::No
-        } else {
-            Rename::Yes(dep.parent, dep.id, format!("{}_renamed_{}", dep.name, i))
-        };
-
-        result.push(Package {
-            id: dep.id,
-            parent: dep.parent,
-            name: dep.name.clone(),
-            version: dep.version.clone(),
-            deps: vec![], // to be filled in after resolution
-            rename,
-        });
-    }
-    result
-}
-
-/// Assign dependencies to packages-to-install, for use in the lock file.
-/// Do this only after the dependencies are resolved.
-fn assign_subdeps(packages: &mut Vec<Package>, updated_ids: &HashMap<u32, u32>) {
-    // We run through the non-cleaned deps first, since the parent may point to
-    // one that didn't make the cut, including cases where the versions were identical.
-    let packs2 = packages.clone(); // to search
-    for package in packages.iter_mut() {
-        let mut children: Vec<(u32, String, Version)> = packs2
+        let dep_display: Vec<String> = deps
             .iter()
-            .filter_map(|p| {
-                // If there wee multiple instances of this dep, the parent id may have been updated.
-                let parent_id = match updated_ids.get(&p.parent) {
-                    Some(updated_parent) => *updated_parent,
-                    None => p.parent,
-                };
-                if parent_id == package.id {
-                    Some((p.id, p.name.clone(), p.version.clone()))
-                } else {
-                    None
-                }
+            .map(|d| {
+                format!(
+                    "name: {}, version: {}, parent: {:?}",
+                    d.name, d.version, d.parent
+                )
             })
             .collect();
-        package.deps.append(&mut children);
-    }
-}
+        println!("Installing these versions: {:#?}", &dep_display);
 
-/// Determine which dependencies we need to install, using the newest ones which meet
-/// all constraints. Gets data from a cached repo, and Pypi. Returns name, version, and name/version of its deps.
-pub fn resolve(
-    reqs: &[Req],
-    locked: &[crate::Package],
-    os: util::Os,
-    py_vers: &Version,
-    //) -> Result<Vec<(String, Version, Vec<Req>)>, reqwest::Error> {
-) -> Result<Vec<crate::Package>, reqwest::Error> {
-    let mut result = Vec::new();
-    let mut cache = HashMap::new();
-    let mut reqs_searched = Vec::new();
+        let mut result = vec![];
+        // We were unable to resolve using the newest version; add and rename packages.
+        for (i, dep) in deps.iter().enumerate() {
+            // Don't rename the first one.
+            let rename = if i == 0 {
+                Rename::No
+            } else {
+                Rename::Yes(dep.parent, dep.id, format!("{}_renamed_{}", dep.name, i))
+            };
 
-    let mut version_cache = HashMap::new();
-    if guess_graph(
-        0,
-        reqs,
-        locked,
-        os,
-        &[],
-        py_vers,
-        &mut result,
-        &mut cache,
-        &mut version_cache,
-        &mut reqs_searched,
-    )
-    .is_err()
-    {
-        util::abort("Problem resolving dependencies");
+            result.push(Package {
+                id: dep.id,
+                parent: dep.parent,
+                name: dep.name.clone(),
+                version: dep.version.clone(),
+                deps: vec![], // to be filled in after resolution
+                rename,
+            });
+        }
+        result
     }
 
-    let mut by_name: HashMap<String, Vec<Dependency>> = HashMap::new();
-    for mut dep in result.clone() {
-        // The formatted name may be different from the pypi one. Eg `IPython` vice `ipython`.
-        let fmtd_name = format_name(&dep.name, &version_cache);
-        dep.name = fmtd_name.clone();
-
-        if let Some(k) = by_name.get_mut(&dep.name) {
-            k.push(dep)
-        } else {
-            by_name.insert(fmtd_name, vec![dep]);
+    /// Assign dependencies to packages-to-install, for use in the lock file.
+    /// Do this only after the dependencies are resolved.
+    fn assign_subdeps(packages: &mut Vec<Package>, updated_ids: &HashMap<u32, u32>) {
+        // We run through the non-cleaned deps first, since the parent may point to
+        // one that didn't make the cut, including cases where the versions were identical.
+        let packs2 = packages.clone(); // to search
+        for package in packages.iter_mut() {
+            let mut children: Vec<(u32, String, Version)> = packs2
+                .iter()
+                .filter_map(|p| {
+                    // If there wee multiple instances of this dep, the parent id may have been updated.
+                    let parent_id = match updated_ids.get(&p.parent) {
+                        Some(updated_parent) => *updated_parent,
+                        None => p.parent,
+                    };
+                    if parent_id == package.id {
+                        Some((p.id, p.name.clone(), p.version.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            package.deps.append(&mut children);
         }
     }
 
-    // Deal with duplicates, conflicts etc. The code above assumed no conflicts, and that
-    // we can pick the newest compatible version for each req. We pass only the info
-    // needed to build the locked dependencies, and strip intermediary info like ids.
+    /// Determine which dependencies we need to install, using the newest ones which meet
+    /// all constraints. Gets data from a cached repo, and Pypi. Returns name, version, and name/version of its deps.
+    pub fn resolve(
+        reqs: &[Req],
+        locked: &[crate::Package],
+        os: util::Os,
+        py_vers: &Version,
+        //) -> Result<Vec<(String, Version, Vec<Req>)>, reqwest::Error> {
+    ) -> Result<Vec<crate::Package>, reqwest::Error> {
+        let mut result = Vec::new();
+        let mut cache = HashMap::new();
+        let mut reqs_searched = Vec::new();
 
-    // updated_ids is used to remap lockpack dependencies, when a dep(version) other than their
-    // parent is chosen for the package.
-    let mut updated_ids = HashMap::new();
-    let mut result_cleaned = vec![];
-    for (name, deps) in &by_name {
-        let fmtd_name = format_name(name, &version_cache);
-        match deps.len() {
-            1 => {
-                // This dep is only specified once; no need to resolve conflicts.
-                let dep = &deps[0];
+        let mut version_cache = HashMap::new();
+        if guess_graph(
+            0,
+            reqs,
+            locked,
+            os,
+            &[],
+            py_vers,
+            &mut result,
+            &mut cache,
+            &mut version_cache,
+            &mut reqs_searched,
+        )
+        .is_err()
+        {
+            util::abort("Problem resolving dependencies");
+        }
 
-                result_cleaned.push(Package {
-                    id: dep.id,
-                    parent: dep.parent,
-                    name: fmtd_name,
-                    version: dep.version.clone(),
-                    deps: vec![], // to be filled in after resolution
-                    rename: Rename::No,
-                });
+        let mut by_name: HashMap<String, Vec<Dependency>> = HashMap::new();
+        for mut dep in result.clone() {
+            // The formatted name may be different from the pypi one. Eg `IPython` vice `ipython`.
+            let fmtd_name = format_name(&dep.name, &version_cache);
+            dep.name = fmtd_name.clone();
+
+            if let Some(k) = by_name.get_mut(&dep.name) {
+                k.push(dep)
+            } else {
+                by_name.insert(fmtd_name, vec![dep]);
             }
-            x if x > 1 => {
-                // Find what constraints are driving each dep that shares a name.
-                let constraints = find_constraints(reqs, &result, deps);
+        }
 
-                let _names: Vec<String> = deps.iter().map(|d| d.version.to_string()).collect();
-                let inter = dep_types::intersection_many(&constraints);
+        // Deal with duplicates, conflicts etc. The code above assumed no conflicts, and that
+        // we can pick the newest compatible version for each req. We pass only the info
+        // needed to build the locked dependencies, and strip intermediary info like ids.
 
-                if inter.is_empty() {
-                    result_cleaned.append(&mut make_renamed_packs(
-                        &version_cache,
-                        deps,
-                        &fmtd_name,
-                    ));
-                    continue;
-                }
+        // updated_ids is used to remap lockpack dependencies, when a dep(version) other than their
+        // parent is chosen for the package.
+        let mut updated_ids = HashMap::new();
+        let mut result_cleaned = vec![];
+        for (name, deps) in &by_name {
+            let fmtd_name = format_name(name, &version_cache);
+            match deps.len() {
+                1 => {
+                    // This dep is only specified once; no need to resolve conflicts.
+                    let dep = &deps[0];
 
-                // If a version we've examined meets all constraints for packages that use it, use it -
-                // we've already built the graph to accomodate its sub-deps.
-
-                // If unable, find the highest version that meets the constraints, and determine
-                // what its dependencies are.
-
-                // Otherwise install all,
-                // and rename as-required(By which criteria? the older one?). This ensures our
-                // graph is always resolveable, and avoids diving through the graph recursively,
-                // dealing with cycles etc. There may be ways around this in some cases.
-                // todo: Renaming may not work if the renamed dep uses compiled code.
-
-                let newest_compatible = deps
-                    .iter()
-                    .filter(|dep| {
-                        inter
-                            .iter()
-                            .any(|i| i.0 <= dep.version && dep.version <= i.1)
-                    })
-                    .max_by(|a, b| a.version.cmp(&b.version));
-
-                if let Some(best) = newest_compatible {
                     result_cleaned.push(Package {
-                        id: best.id,
-                        parent: best.parent,
+                        id: dep.id,
+                        parent: dep.parent,
                         name: fmtd_name,
-                        version: best.version.clone(),
+                        version: dep.version.clone(),
                         deps: vec![], // to be filled in after resolution
                         rename: Rename::No,
                     });
+                }
+                x if x > 1 => {
+                    // Find what constraints are driving each dep that shares a name.
+                    let constraints = find_constraints(reqs, &result, deps);
 
-                    // Indicate we need to update the parent. We can't do it here, since
-                    // we don't know if we're pr
-                    // ocessed the parent[s] yet. Not doing this will
-                    // result in incorrect dependencies listed in lock packs.
-                    for dep in deps {
-                        // note that we push the old ids, so we can update the subdeps with the new versions.
-                        //                        updated_ids.insert(dep.id, best.id).expect("Problem inserting updated id");
-                        updated_ids.insert(dep.id, best.id);
-                    }
-                } else {
-                    // We consider the possibility there's a compatible version
-                    // that wasn't one of the best-per-req we queried.
-                    println!("⛏️ Digging deeper to resolve dependencies for {}...", name);
+                    let _names: Vec<String> = deps.iter().map(|d| d.version.to_string()).collect();
+                    let inter = dep_types::intersection_many(&constraints);
 
-                    // I think we should query with the raw name, not fmted?
-                    let versions = &version_cache.get(name).unwrap().2;
-
-                    if versions.is_empty() {
+                    if inter.is_empty() {
                         result_cleaned.append(&mut make_renamed_packs(
                             &version_cache,
                             deps,
-                            //                            &result,
                             &fmtd_name,
                         ));
                         continue;
                     }
 
-                    // Generate dependencies here for all avail versions.
-                    let unresolved_deps: Vec<Dependency> = versions
+                    // If a version we've examined meets all constraints for packages that use it, use it -
+                    // we've already built the graph to accomodate its sub-deps.
+
+                    // If unable, find the highest version that meets the constraints, and determine
+                    // what its dependencies are.
+
+                    // Otherwise install all,
+                    // and rename as-required(By which criteria? the older one?). This ensures our
+                    // graph is always resolveable, and avoids diving through the graph recursively,
+                    // dealing with cycles etc. There may be ways around this in some cases.
+                    // todo: Renaming may not work if the renamed dep uses compiled code.
+
+                    let newest_compatible = deps
                         .iter()
-                        .filter_map(|vers| {
-                            if inter.iter().any(|i| i.0 <= *vers && *vers <= i.1) {
-                                Some(Dependency {
-                                    id: 0, // placeholder; we'll assign an id to the one we pick.
-                                    name: fmtd_name.clone(),
-                                    version: vers.clone(),
-                                    reqs: vec![], // todo
-                                    parent: 0,    // todo
-                                })
-                            } else {
-                                None
-                            }
+                        .filter(|dep| {
+                            inter
+                                .iter()
+                                .any(|i| i.0 <= dep.version && dep.version <= i.1)
                         })
-                        .collect();
+                        .max_by(|a, b| a.version.cmp(&b.version));
 
-                    let mut newest_unresolved = unresolved_deps
-                        .into_iter()
-                        .max_by(|a, b| a.version.cmp(&b.version))
-                        .unwrap();
+                    if let Some(best) = newest_compatible {
+                        result_cleaned.push(Package {
+                            id: best.id,
+                            parent: best.parent,
+                            name: fmtd_name,
+                            version: best.version.clone(),
+                            deps: vec![], // to be filled in after resolution
+                            rename: Rename::No,
+                        });
 
-                    newest_unresolved.id = result.iter().map(|d| d.id).max().unwrap_or(0) + 1;
+                        // Indicate we need to update the parent. We can't do it here, since
+                        // we don't know if we're pr
+                        // ocessed the parent[s] yet. Not doing this will
+                        // result in incorrect dependencies listed in lock packs.
+                        for dep in deps {
+                            // note that we push the old ids, so we can update the subdeps with the new versions.
+                            //                        updated_ids.insert(dep.id, best.id).expect("Problem inserting updated id");
+                            updated_ids.insert(dep.id, best.id);
+                        }
+                    } else {
+                        // We consider the possibility there's a compatible version
+                        // that wasn't one of the best-per-req we queried.
+                        println!("⛏️ Digging deeper to resolve dependencies for {}...", name);
 
-                    result_cleaned.push(Package {
-                        id: newest_unresolved.id,
-                        parent: newest_unresolved.parent,
-                        name: fmtd_name,
-                        version: newest_unresolved.version,
-                        deps: vec![], // to be filled in after resolution
-                        rename: Rename::No,
-                    });
+                        // I think we should query with the raw name, not fmted?
+                        let versions = &version_cache.get(name).unwrap().2;
 
-                    // todo: Do a check on newest_unresolved! If fails, execute renamed plan
+                        if versions.is_empty() {
+                            result_cleaned.append(&mut make_renamed_packs(
+                                &version_cache,
+                                deps,
+                                //                            &result,
+                                &fmtd_name,
+                            ));
+                            continue;
+                        }
 
-                    for dep in deps {
-                        // note that we push the old ids, so we can update the subdeps with the new versions.
-                        updated_ids.insert(dep.id, newest_unresolved.id);
+                        // Generate dependencies here for all avail versions.
+                        let unresolved_deps: Vec<Dependency> = versions
+                            .iter()
+                            .filter_map(|vers| {
+                                if inter.iter().any(|i| i.0 <= *vers && *vers <= i.1) {
+                                    Some(Dependency {
+                                        id: 0, // placeholder; we'll assign an id to the one we pick.
+                                        name: fmtd_name.clone(),
+                                        version: vers.clone(),
+                                        reqs: vec![], // todo
+                                        parent: 0,    // todo
+                                    })
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        let mut newest_unresolved = unresolved_deps
+                            .into_iter()
+                            .max_by(|a, b| a.version.cmp(&b.version))
+                            .unwrap();
+
+                        newest_unresolved.id = result.iter().map(|d| d.id).max().unwrap_or(0) + 1;
+
+                        result_cleaned.push(Package {
+                            id: newest_unresolved.id,
+                            parent: newest_unresolved.parent,
+                            name: fmtd_name,
+                            version: newest_unresolved.version,
+                            deps: vec![], // to be filled in after resolution
+                            rename: Rename::No,
+                        });
+
+                        // todo: Do a check on newest_unresolved! If fails, execute renamed plan
+
+                        for dep in deps {
+                            // note that we push the old ids, so we can update the subdeps with the new versions.
+                            updated_ids.insert(dep.id, newest_unresolved.id);
+                        }
                     }
                 }
+                _ => panic!("We shouldn't be seeing this!"),
             }
-            _ => panic!("We shouldn't be seeing this!"),
         }
+
+        // Now, assign subdeps, so we can store them in the lock.
+        assign_subdeps(&mut result_cleaned, &updated_ids);
+
+        let mut a = result;
+        for b in &mut a {
+            b.reqs = vec![];
+        }
+
+        Ok(result_cleaned)
     }
-
-    // Now, assign subdeps, so we can store them in the lock.
-    assign_subdeps(&mut result_cleaned, &updated_ids);
-
-    let mut a = result;
-    for b in &mut a {
-        b.reqs = vec![];
-    }
-
-    Ok(result_cleaned)
 }
-
 #[cfg(test)]
 pub mod tests {
+    use super::res::*;
     use super::*;
 
     #[test]
