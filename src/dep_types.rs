@@ -605,8 +605,7 @@ impl Constraint {
                 } else if self.version.minor.is_some() {
                     Version::new(self.version.major + 1, 0, 0)
                 } else {
-                    util::abort(&format!("Invalid `~=` constraint for {:?}", self.version));
-                    unreachable!();
+                    panic!("Invalid `~=` constraint for {:?}", self.version);
                 }
             }
             // Not sure we would ever actually use this with other types. So
@@ -967,17 +966,65 @@ pub mod tests {
             Version::new(1, 1, MAX_VER)
         ),
         case::tilde_major_version_max(
-            Constraint::new(Tilde, Version::new_short(1, 0)),
+            Constraint::new(Tilde, Version::new_opt(1, None, None)),
             Version::new(1, MAX_VER, MAX_VER),
             Version::new(2, 0, 0)
         ),
         case::tilde_major_version_under(
-            Constraint::new(Tilde, Version::new_short(1, 0)),
+            Constraint::new(Tilde, Version::new_opt(1, None, None)),
+            Version::new(1, MAX_VER, MAX_VER),
+            Version::new(0, MAX_VER, MAX_VER)
+        ),
+        case::tilde_eq_full_version_max(
+            Constraint::new(TildeEq, Version::new(1, 2, 3)),
+            Version::new(1, 2, MAX_VER),
+            Version::new(1, 3, 0)
+        ),
+        case::tilde_eq_full_version_min(
+            Constraint::new(TildeEq, Version::new(1, 2, 3)),
+            Version::new(1, 2, MAX_VER),
+            Version::new(1, 2, 2)
+        ),
+        case::tilde_eq_minor_version_max(
+            Constraint::new(TildeEq, Version::new_short(1, 2)),
+            Version::new(1, MAX_VER, MAX_VER),
+            Version::new(2, 0, 0)
+        ),
+        case::tilde_eq_minor_version_min(
+            Constraint::new(TildeEq, Version::new_short(1, 2)),
+            Version::new(1, MAX_VER, MAX_VER),
+            Version::new(1, 1, MAX_VER)
+        ),
+        #[should_panic]
+        case::tilde_eq_major_version_max(
+            Constraint::new(TildeEq, Version::new_opt(1, None, None)),
+            Version::new(1, MAX_VER, MAX_VER),
+            Version::new(2, 0, 0)
+        ),
+        #[should_panic]
+        case::tilde_eq_major_version_under(
+            Constraint::new(TildeEq, Version::new_opt(1, None, None)),
             Version::new(1, MAX_VER, MAX_VER),
             Version::new(0, MAX_VER, MAX_VER)
         )
     )]
     fn is_compatible(req: Constraint, max_compat: Version, not_compat: Version) {
+        if !req.is_compatible(&max_compat) {
+            eprintln!(
+                "req: {:?}\nmax_compat: {:?}\ncompat range: {:?}",
+                req,
+                max_compat,
+                req.compatible_range()
+            );
+        }
+        if req.is_compatible(&not_compat) {
+            eprintln!(
+                "req: {:?}\nnot_compat: {:?}\ncompat range: {:?}",
+                req,
+                not_compat,
+                req.compatible_range()
+            );
+        }
         assert!(req.is_compatible(&max_compat));
         assert!(!req.is_compatible(&not_compat));
     }
