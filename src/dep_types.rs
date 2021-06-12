@@ -8,6 +8,7 @@ use nom::combinator::all_consuming;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::{cmp, fmt, num, str::FromStr};
 use termcolor::{Buffer, BufferWriter, Color, ColorSpec, WriteColor};
@@ -134,11 +135,11 @@ impl PartialOrd for VersionModifier {
 }
 
 /// An exact, 3-number Semver version. With some possible extras.
-#[derive(Clone, Default, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Clone, Default, Deserialize, Eq)]
 pub struct Version {
     pub major: u32,
-    pub minor: u32,
-    pub patch: u32,
+    pub minor: Option<u32>,
+    pub patch: Option<u32>,
     pub extra_num: Option<u32>,                   // eg 4.2.3.1
     pub modifier: Option<(VersionModifier, u32)>, // eg a1
 }
@@ -147,8 +148,8 @@ impl Version {
     pub const fn new(major: u32, minor: u32, patch: u32) -> Self {
         Self {
             major,
-            minor,
-            patch,
+            minor: Some(minor),
+            patch: Some(patch),
             extra_num: None,
             modifier: None,
         }
@@ -158,15 +159,25 @@ impl Version {
     pub const fn new_short(major: u32, minor: u32) -> Self {
         Self {
             major,
+            minor: Some(minor),
+            patch: None,
+            extra_num: None,
+            modifier: None,
+        }
+    }
+
+    pub const fn new_opt(major: u32, minor: Option<u32>, patch: Option<u32>) -> Self {
+        Self {
+            major,
             minor,
-            patch: 0,
+            patch,
             extra_num: None,
             modifier: None,
         }
     }
 
     pub const fn _max() -> Self {
-        Self::new(MAX_VER, 0, 0)
+        Self::new_opt(MAX_VER, None, None)
     }
 
     /// Prevents repetition.
@@ -180,7 +191,7 @@ impl Version {
     }
 
     pub fn to_string_med(&self) -> String {
-        let mut result = format!("{}.{}", self.major, self.minor);
+        let mut result = format!("{}.{}", self.major, self.minor.unwrap_or(0));
         self.add_str_mod(&mut result);
         result
     }
@@ -192,7 +203,7 @@ impl Version {
 
     /// unlike Display, which overwrites to_string, don't add colors.
     pub fn to_string_no_patch(&self) -> String {
-        let mut result = format!("{}.{}", self.major, self.minor);
+        let mut result = format!("{}.{}", self.major, self.minor.unwrap_or(0));
         self.add_str_mod(&mut result);
         result
     }
@@ -250,11 +261,11 @@ impl Ord for Version {
 
         if self.major != other.major {
             self.major.cmp(&other.major)
-        } else if self.minor != other.minor {
-            self.minor.cmp(&other.minor)
-        } else if self.patch != other.patch {
-            self.patch.cmp(&other.patch)
-        } else if self.extra_num != other.extra_num {
+        } else if self.minor.unwrap_or(0) != other.minor.unwrap_or(0) {
+            self.minor.unwrap_or(0).cmp(&other.minor.unwrap_or(0))
+        } else if self.patch.unwrap_or(0) != other.patch.unwrap_or(0) {
+            self.patch.unwrap_or(0).cmp(&other.patch.unwrap_or(0))
+        } else if self.extra_num.unwrap_or(0) != other.extra_num.unwrap_or(0) {
             self.extra_num
                 .unwrap_or(0)
                 .cmp(&other.extra_num.unwrap_or(0))
@@ -272,6 +283,25 @@ impl PartialOrd for Version {
     }
 }
 
+impl PartialEq for Version {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(self.cmp(other), cmp::Ordering::Equal)
+    }
+}
+
+impl Hash for Version {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.major.hash(state);
+        self.minor.unwrap_or(0).hash(state);
+        self.patch.unwrap_or(0).hash(state);
+        self.extra_num.unwrap_or(0).hash(state);
+        self.modifier
+            .clone()
+            .unwrap_or((VersionModifier::Null, 0))
+            .hash(state);
+    }
+}
+
 //impl ToString for Version {
 //    fn to_string(&self) -> String {
 //        format!("{}.{}.{}", self.major, self.minor, self.patch)
@@ -280,17 +310,18 @@ impl PartialOrd for Version {
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut suffix = "".to_string();
-        if let Some(num) = self.extra_num {
-            suffix.push('.');
-            suffix.push_str(&num.to_string());
+        let mut version = self.major.to_string();
+        let parts = vec![self.minor, self.patch, self.extra_num];
+        for part in parts.iter().flatten() {
+            version.push('.');
+            version.push_str(&part.to_string());
         }
         if let Some((modifier, num)) = self.modifier.clone() {
-            suffix.push_str(&modifier.to_string());
-            suffix.push_str(&num.to_string());
+            version.push_str(&modifier.to_string());
+            version.push_str(&num.to_string());
         }
 
-        write!(f, "{}.{}.{}{}", self.major, self.minor, self.patch, suffix)
+        write!(f, "{}", version)
     }
 }
 
@@ -311,7 +342,8 @@ pub enum ReqType {
     Lt,
     Caret,
     Tilde,
-    // todo wildcard
+    TildeEq, // PEP440 ~= is different from ~
+             // todo wildcard
 }
 
 impl ToString for ReqType {
@@ -326,6 +358,7 @@ impl ToString for ReqType {
             Self::Ne => "!=".into(),
             Self::Caret => "^".into(),
             Self::Tilde => "~".into(),
+            Self::TildeEq => "~=".into(),
         }
     }
 }
@@ -343,7 +376,7 @@ impl FromStr for ReqType {
             "!=" => Ok(Self::Ne),
             "^" => Ok(Self::Caret),
             "~" => Ok(Self::Tilde),
-            "~=" => Ok(Self::Tilde),
+            "~=" => Ok(Self::TildeEq),
             _ => Err(DependencyError::new("Problem parsing ReqType")),
         }
     }
@@ -420,14 +453,14 @@ impl Constraint {
     /// Find the lowest and highest compatible versions. Return a vec, since the != requirement type
     /// has two ranges.
     pub fn compatible_range(&self) -> Vec<(Version, Version)> {
-        let highest = Version::new(MAX_VER, 0, 0);
+        let highest = Version::_max();
         let lowest = Version::new(0, 0, 0);
         let max;
 
-        let safely_subtract = |major: u32, minor: u32, patch: u32| {
+        let safely_subtract = |major: u32, minor: Option<u32>, patch: Option<u32>| {
             let mut major = major;
-            let mut minor = minor;
-            let mut patch = patch;
+            let mut minor = minor.unwrap_or(0);
+            let mut patch = patch.unwrap_or(0);
             // Don't try to make a negative version component.
             // ie 0.0.0. Return max of 0.0.0
             if major == 0 && minor == 0 && patch == 0 {
@@ -455,8 +488,8 @@ impl Constraint {
             ReqType::Gt => vec![(
                 Version::new(
                     self.version.major,
-                    self.version.minor,
-                    self.version.patch + 1,
+                    self.version.minor.unwrap_or(0),
+                    self.version.patch.unwrap_or(0) + 1,
                 ),
                 highest,
             )],
@@ -473,8 +506,8 @@ impl Constraint {
                     (
                         Version::new(
                             self.version.major,
-                            self.version.minor,
-                            self.version.patch + 1,
+                            self.version.minor.unwrap_or(0),
+                            self.version.patch.unwrap_or(0) + 1,
                         ),
                         highest,
                     ),
@@ -487,6 +520,11 @@ impl Constraint {
                 vec![(self.version.clone(), Version::new(major, minor, patch))]
             }
             ReqType::Tilde => {
+                max = self.get_max_version();
+                let (major, minor, patch) = safely_subtract(max.major, max.minor, max.patch);
+                vec![(self.version.clone(), Version::new(major, minor, patch))]
+            }
+            ReqType::TildeEq => {
                 max = self.get_max_version();
                 let (major, minor, patch) = safely_subtract(max.major, max.minor, max.patch);
                 vec![(self.version.clone(), Version::new(major, minor, patch))]
@@ -515,6 +553,11 @@ impl Constraint {
                 max = self.get_max_version();
                 min <= *version && *version < max
             }
+
+            ReqType::TildeEq => {
+                max = self.get_max_version();
+                min <= *version && *version < max
+            }
         }
     }
 
@@ -524,24 +567,46 @@ impl Constraint {
             ReqType::Caret => {
                 if self.version.major > 0 {
                     Version::new(self.version.major + 1, 0, 0)
-                } else if self.version.minor > 0 {
-                    Version::new(0, self.version.minor + 1, 0)
+                } else if self.version.minor > Some(0) {
+                    Version::new(0, self.version.minor.unwrap() + 1, 0)
                 } else {
-                    Version::new(0, 0, self.version.patch + 1)
+                    Version::new(0, 0, self.version.patch.unwrap_or(0) + 1)
                 }
             }
             // For tilde, if minor's specified, can only increment patch.
             // If not, can increment minor or patch.
             ReqType::Tilde => {
-                if self.version.minor > 0 {
-                    Version::new(self.version.major, self.version.minor + 1, 0)
+                if let Some(x) = self.version.minor {
+                    Version::new(self.version.major, x + 1, 0)
                 } else {
                     Version::new(self.version.major + 1, 0, 0)
                 }
             }
-            _ => {
-                panic!("Misuse of `get_max_version` on ReqType");
+            /*
+            https://www.python.org/dev/peps/pep-0440/#compatible-release
+            This operator MUST NOT be used with a single segment version number such as ~=1.
+            For example, the following groups of version clauses are equivalent:
+
+            ~= 2.2
+            >= 2.2, == 2.*
+
+            ~= 1.4.5
+            >= 1.4.5, == 1.4.*
+
+             */
+            ReqType::TildeEq => {
+                if self.version.patch.is_some() {
+                    Version::new(self.version.major, self.version.minor.unwrap_or(0) + 1, 0)
+                } else if self.version.minor.is_some() {
+                    Version::new(self.version.major + 1, 0, 0)
+                } else {
+                    util::abort(&format!("Invalid `~=` constraint for {:?}", self.version));
+                    unreachable!();
+                }
             }
+            // Not sure we would ever actually use this with other types. So
+            // just return a clone
+            _ => self.version.clone(),
         }
     }
 }
@@ -933,8 +998,8 @@ pub mod tests {
             Version::from_str("19.3b0").unwrap(),
             Version {
                 major: 19,
-                minor: 3,
-                patch: 0,
+                minor: Some(3),
+                patch: Some(0),
                 extra_num: None,
                 modifier: Some((Beta, 0)),
             }
@@ -944,8 +1009,8 @@ pub mod tests {
             Version::from_str("1.3.5rc0").unwrap(),
             Version {
                 major: 1,
-                minor: 3,
-                patch: 5,
+                minor: Some(3),
+                patch: Some(5),
                 extra_num: None,
                 modifier: Some((ReleaseCandidate, 0)),
             }
@@ -955,8 +1020,8 @@ pub mod tests {
             Version::from_str("1.3.5.11").unwrap(),
             Version {
                 major: 1,
-                minor: 3,
-                patch: 5,
+                minor: Some(3),
+                patch: Some(5),
                 extra_num: Some(11),
                 modifier: None,
             }
@@ -966,8 +1031,8 @@ pub mod tests {
             Version::from_str("5.2.5.11b3").unwrap(),
             Version {
                 major: 5,
-                minor: 2,
-                patch: 5,
+                minor: Some(2),
+                patch: Some(5),
                 extra_num: Some(11),
                 modifier: Some((Beta, 3)),
             }
@@ -994,8 +1059,8 @@ pub mod tests {
             Ne,
             Version {
                 major: 2,
-                minor: 3,
-                patch: 0,
+                minor: Some(3),
+                patch: Some(0),
                 extra_num: None,
                 modifier: Some((Beta, 3)),
             },
@@ -1004,8 +1069,8 @@ pub mod tests {
             Caret,
             Version {
                 major: 1,
-                minor: 3,
-                patch: 32,
+                minor: Some(3),
+                patch: Some(32),
                 extra_num: None,
                 modifier: Some((ReleaseCandidate, 1)),
             },
@@ -1014,8 +1079,8 @@ pub mod tests {
             Caret,
             Version {
                 major: 1,
-                minor: 3,
-                patch: 32,
+                minor: Some(3),
+                patch: Some(32),
                 extra_num: None,
                 modifier: Some((Dep, 1)),
             },
@@ -1256,18 +1321,18 @@ pub mod tests {
         assert_eq!(b, Req::new("zc.lockfile".into(), vec![]));
     }
 
-    #[test]
-    fn parse_req_pypi_tilde() {
-        let a = Req::from_str("asgiref (~=3.2)", true).unwrap();
-        let b = Req::from_str("asgiref (~3.2)", true).unwrap();
+    #[rstest(
+        input,
+        expected,
+        case("asgiref (~=3.2)", Constraint::new(TildeEq, Version::new(3, 2, 0))),
+        case("asgiref (~3.2)", Constraint::new(Tilde, Version::new(3, 2, 0)))
+    )]
+    fn parse_req_pypi_tilde(input: &str, expected: Constraint) {
+        let a = Req::from_str(input, true).unwrap();
 
-        let expected = Req::new(
-            "asgiref".into(),
-            vec![Constraint::new(Tilde, Version::new(3, 2, 0))],
-        );
+        let rexpected = Req::new("asgiref".into(), vec![expected]);
 
-        assert_eq!(a, expected);
-        assert_eq!(b, expected);
+        assert_eq!(a, rexpected);
     }
 
     #[test]
@@ -1387,8 +1452,8 @@ pub mod tests {
     fn version_ordering_modded() {
         let a = Version {
             major: 4,
-            minor: 9,
-            patch: 4,
+            minor: Some(9),
+            patch: Some(4),
             extra_num: Some(2),
             modifier: None,
         };
@@ -1396,29 +1461,29 @@ pub mod tests {
 
         let c = Version {
             major: 4,
-            minor: 9,
-            patch: 4,
+            minor: Some(9),
+            patch: Some(4),
             extra_num: None,
             modifier: Some((VersionModifier::ReleaseCandidate, 2)),
         };
         let d = Version {
             major: 4,
-            minor: 9,
-            patch: 4,
+            minor: Some(9),
+            patch: Some(4),
             extra_num: None,
             modifier: Some((VersionModifier::ReleaseCandidate, 1)),
         };
         let e = Version {
             major: 4,
-            minor: 9,
-            patch: 4,
+            minor: Some(9),
+            patch: Some(4),
             extra_num: None,
             modifier: Some((VersionModifier::Beta, 6)),
         };
         let f = Version {
             major: 4,
-            minor: 9,
-            patch: 4,
+            minor: Some(9),
+            patch: Some(4),
             extra_num: None,
             modifier: Some((VersionModifier::Alpha, 7)),
         };
@@ -1469,8 +1534,8 @@ pub mod tests {
 
     #[test]
     fn intersections_simple() {
-        let reqs1 = (Version::new(4, 9, 4), Version::new(MAX_VER, 0, 0));
-        let reqs2 = (Version::new(4, 3, 1), Version::new(MAX_VER, 0, 0));
+        let reqs1 = (Version::new(4, 9, 4), Version::_max());
+        let reqs2 = (Version::new(4, 3, 1), Version::_max());
 
         let reqs3 = (Version::new(3, 0, 0), Version::new(3, 9, 0));
         let reqs4 = (Version::new(3, 3, 6), Version::new(3, 3, 6));

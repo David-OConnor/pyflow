@@ -343,10 +343,7 @@ pub fn change_py_vers(cfg_path: &Path, specified: &Version) {
     let mut new_data = String::new();
     for line in BufReader::new(f).lines().flatten() {
         if line.starts_with("py_version") {
-            new_data.push_str(&format!(
-                "py_version = \"{}.{}\"\n",
-                specified.major, specified.minor
-            ));
+            new_data.push_str(&format!("py_version = \"{}\"\n", specified.to_string()));
         } else {
             new_data.push_str(&line);
             new_data.push('\n');

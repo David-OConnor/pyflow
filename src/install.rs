@@ -99,9 +99,9 @@ pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_pa
     let mut dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
     // If we can't find the dist_info path, it may be due to it not using a full 3-digit semver format.
     // todo: Dry from dep_resolution, release check.
-    if !dist_info_path.exists() && version.patch == 0 {
+    if !dist_info_path.exists() && (version.patch == Some(0) || version.patch == None) {
         dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string_med()));
-        if !dist_info_path.exists() && version.minor == 0 {
+        if !dist_info_path.exists() && (version.minor == Some(0) || version.minor == None) {
             dist_info_path =
                 lib_path.join(format!("{}-{}.dist-info", name, version.to_string_short()));
         }
@@ -502,13 +502,13 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
     let mut dist_info_path =
         lib_path.join(format!("{}-{}.dist-info", name_ins, vers_ins.to_string()));
     // todo: DRY
-    if !dist_info_path.exists() && vers_ins.patch == 0 {
+    if !dist_info_path.exists() && (vers_ins.patch == Some(0) || vers_ins.patch == None) {
         dist_info_path = lib_path.join(format!(
             "{}-{}.dist-info",
             name_ins,
             vers_ins.to_string_med()
         ));
-        if !dist_info_path.exists() && vers_ins.minor == 0 {
+        if !dist_info_path.exists() && (vers_ins.minor == Some(0) || vers_ins.minor == None) {
             dist_info_path = lib_path.join(format!(
                 "{}-{}.dist-info",
                 name_ins,
