@@ -229,14 +229,19 @@ impl Version {
         }
         buf.set_color(ColorSpec::new().set_fg(num_c))?;
         write!(buf, "{}", self.major)?;
-        buf.set_color(ColorSpec::new().set_fg(dot_c))?;
-        write!(buf, ".")?;
-        buf.set_color(ColorSpec::new().set_fg(num_c))?;
-        write!(buf, "{}", self.minor)?;
-        buf.set_color(ColorSpec::new().set_fg(dot_c))?;
-        write!(buf, ".")?;
-        buf.set_color(ColorSpec::new().set_fg(num_c))?;
-        write!(buf, "{}{}", self.patch, suffix)?;
+        if let Some(x) = self.minor {
+            buf.set_color(ColorSpec::new().set_fg(dot_c))?;
+            write!(buf, ".")?;
+            buf.set_color(ColorSpec::new().set_fg(num_c))?;
+            write!(buf, "{}", x)?;
+        }
+        if let Some(x) = self.patch {
+            buf.set_color(ColorSpec::new().set_fg(dot_c))?;
+            write!(buf, ".")?;
+            buf.set_color(ColorSpec::new().set_fg(num_c))?;
+            write!(buf, "{}", x)?;
+        }
+        write!(buf, "{}", suffix)?;
         buf.reset()?;
 
         Ok(String::from_utf8_lossy(buf.as_slice()).to_string())
