@@ -37,7 +37,7 @@ impl From<(Version, Os)> for PyVers {
     fn from(v_o: (Version, Os)) -> Self {
         let unsupported = "Unsupported python version requested; only Python ≥ 3.4 is supported. \
         to fix this, edit the `py_version` line of `pyproject.toml`, or run `pyflow switch 3.7`";
-        if v_o.0.major != 3 {
+        if v_o.0.major != Some(3) {
             util::abort(unsupported);
             unreachable!()
         }

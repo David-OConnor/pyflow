@@ -489,7 +489,7 @@ pub fn find_or_create_venv(
     // The version's explicitly specified; check if an environment for that version
     let compatible_venvs: Vec<&(u32, u32)> = venvs
         .iter()
-        .filter(|(ma, mi)| cfg_vers.major == *ma && cfg_vers.minor == Some(*mi))
+        .filter(|(ma, mi)| cfg_vers.major == Some(*ma) && cfg_vers.minor == Some(*mi))
         .collect();
 
     let vers_path;

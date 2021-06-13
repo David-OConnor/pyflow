@@ -137,47 +137,52 @@ impl PartialOrd for VersionModifier {
 /// An exact, 3-number Semver version. With some possible extras.
 #[derive(Clone, Default, Deserialize, Eq)]
 pub struct Version {
-    pub major: u32,
+    pub major: Option<u32>,
     pub minor: Option<u32>,
     pub patch: Option<u32>,
     pub extra_num: Option<u32>,                   // eg 4.2.3.1
     pub modifier: Option<(VersionModifier, u32)>, // eg a1
+    /// if `true` the star goes in the first `None` slot. Remaining slots should be `None`
+    pub star: bool,
 }
 
 impl Version {
     pub const fn new(major: u32, minor: u32, patch: u32) -> Self {
         Self {
-            major,
+            major: Some(major),
             minor: Some(minor),
             patch: Some(patch),
             extra_num: None,
             modifier: None,
+            star: false,
         }
     }
 
     /// No patch specified.
     pub const fn new_short(major: u32, minor: u32) -> Self {
         Self {
-            major,
+            major: Some(major),
             minor: Some(minor),
             patch: None,
             extra_num: None,
             modifier: None,
+            star: false,
         }
     }
 
-    pub const fn new_opt(major: u32, minor: Option<u32>, patch: Option<u32>) -> Self {
+    pub const fn new_opt(major: Option<u32>, minor: Option<u32>, patch: Option<u32>) -> Self {
         Self {
             major,
             minor,
             patch,
             extra_num: None,
             modifier: None,
+            star: false,
         }
     }
 
     pub const fn _max() -> Self {
-        Self::new_opt(MAX_VER, None, None)
+        Self::new_opt(Some(MAX_VER), None, None)
     }
 
     /// Prevents repetition.
@@ -191,19 +196,19 @@ impl Version {
     }
 
     pub fn to_string_med(&self) -> String {
-        let mut result = format!("{}.{}", self.major, self.minor.unwrap_or(0));
+        let mut result = format!("{}.{}", self.major.unwrap_or(0), self.minor.unwrap_or(0));
         self.add_str_mod(&mut result);
         result
     }
     pub fn to_string_short(&self) -> String {
-        let mut result = format!("{}", self.major);
+        let mut result = format!("{}", self.major.unwrap_or(0));
         self.add_str_mod(&mut result);
         result
     }
 
     /// unlike Display, which overwrites to_string, don't add colors.
     pub fn to_string_no_patch(&self) -> String {
-        let mut result = format!("{}.{}", self.major, self.minor.unwrap_or(0));
+        let mut result = format!("{}.{}", self.major.unwrap_or(0), self.minor.unwrap_or(0));
         self.add_str_mod(&mut result);
         result
     }
@@ -228,7 +233,7 @@ impl Version {
             suffix.push_str(&num.to_string());
         }
         buf.set_color(ColorSpec::new().set_fg(num_c))?;
-        write!(buf, "{}", self.major)?;
+        write!(buf, "{}", self.major.unwrap_or(0))?;
         if let Some(x) = self.minor {
             buf.set_color(ColorSpec::new().set_fg(dot_c))?;
             write!(buf, ".")?;
@@ -315,17 +320,34 @@ impl Hash for Version {
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut version = self.major.to_string();
-        let parts = vec![self.minor, self.patch, self.extra_num];
-        for part in parts.iter().flatten() {
-            version.push('.');
-            version.push_str(&part.to_string());
+        let mut version = if let Some(x) = self.major {
+            x.to_string()
+        } else {
+            "*".to_string()
+        };
+        if self.major.is_some() {
+            let mut star_handled = false;
+            let parts = vec![self.minor, self.patch, self.extra_num];
+            for part in parts.iter() {
+                if let Some(p) = part {
+                    version.push('.');
+                    version.push_str(&p.to_string());
+                } else if self.star && !star_handled {
+                    version.push_str(".*");
+                    star_handled = true;
+                    break;
+                }
+            }
+            if !self.star || !star_handled {
+                if let Some((modifier, num)) = self.modifier.clone() {
+                    version.push_str(&modifier.to_string());
+                    version.push_str(&num.to_string());
+                }
+            }
+            if self.star && !star_handled {
+                version.push('*');
+            }
         }
-        if let Some((modifier, num)) = self.modifier.clone() {
-            version.push_str(&modifier.to_string());
-            version.push_str(&num.to_string());
-        }
-
         write!(f, "{}", version)
     }
 }
@@ -462,8 +484,8 @@ impl Constraint {
         let lowest = Version::new(0, 0, 0);
         let max;
 
-        let safely_subtract = |major: u32, minor: Option<u32>, patch: Option<u32>| {
-            let mut major = major;
+        let safely_subtract = |major: Option<u32>, minor: Option<u32>, patch: Option<u32>| {
+            let mut major = major.unwrap_or(0);
             let mut minor = minor.unwrap_or(0);
             let mut patch = patch.unwrap_or(0);
             // Don't try to make a negative version component.
@@ -492,7 +514,7 @@ impl Constraint {
             ReqType::Lte => vec![(lowest, self.version.clone())],
             ReqType::Gt => vec![(
                 Version::new(
-                    self.version.major,
+                    self.version.major.unwrap_or(0),
                     self.version.minor.unwrap_or(0),
                     self.version.patch.unwrap_or(0) + 1,
                 ),
@@ -510,7 +532,7 @@ impl Constraint {
                     (lowest, Version::new(major, minor, patch)),
                     (
                         Version::new(
-                            self.version.major,
+                            self.version.major.unwrap_or(0),
                             self.version.minor.unwrap_or(0),
                             self.version.patch.unwrap_or(0) + 1,
                         ),
@@ -570,8 +592,8 @@ impl Constraint {
     fn get_max_version(&self) -> Version {
         match self.type_ {
             ReqType::Caret => {
-                if self.version.major > 0 {
-                    Version::new(self.version.major + 1, 0, 0)
+                if self.version.major.unwrap_or(0) > 0 {
+                    Version::new(self.version.major.unwrap_or(0) + 1, 0, 0)
                 } else if self.version.minor > Some(0) {
                     Version::new(0, self.version.minor.unwrap() + 1, 0)
                 } else {
@@ -582,9 +604,9 @@ impl Constraint {
             // If not, can increment minor or patch.
             ReqType::Tilde => {
                 if let Some(x) = self.version.minor {
-                    Version::new(self.version.major, x + 1, 0)
+                    Version::new(self.version.major.unwrap_or(0), x + 1, 0)
                 } else {
-                    Version::new(self.version.major + 1, 0, 0)
+                    Version::new(self.version.major.unwrap_or(0) + 1, 0, 0)
                 }
             }
             /*
@@ -601,9 +623,13 @@ impl Constraint {
              */
             ReqType::TildeEq => {
                 if self.version.patch.is_some() {
-                    Version::new(self.version.major, self.version.minor.unwrap_or(0) + 1, 0)
+                    Version::new(
+                        self.version.major.unwrap_or(0),
+                        self.version.minor.unwrap_or(0) + 1,
+                        0,
+                    )
                 } else if self.version.minor.is_some() {
-                    Version::new(self.version.major + 1, 0, 0)
+                    Version::new(self.version.major.unwrap_or(0) + 1, 0, 0)
                 } else {
                     panic!("Invalid `~=` constraint for {:?}", self.version);
                 }
@@ -966,12 +992,12 @@ pub mod tests {
             Version::new(1, 1, MAX_VER)
         ),
         case::tilde_major_version_max(
-            Constraint::new(Tilde, Version::new_opt(1, None, None)),
+            Constraint::new(Tilde, Version::new_opt(Some(1), None, None)),
             Version::new(1, MAX_VER, MAX_VER),
             Version::new(2, 0, 0)
         ),
         case::tilde_major_version_under(
-            Constraint::new(Tilde, Version::new_opt(1, None, None)),
+            Constraint::new(Tilde, Version::new_opt(Some(1), None, None)),
             Version::new(1, MAX_VER, MAX_VER),
             Version::new(0, MAX_VER, MAX_VER)
         ),
@@ -997,13 +1023,13 @@ pub mod tests {
         ),
         #[should_panic]
         case::tilde_eq_major_version_max(
-            Constraint::new(TildeEq, Version::new_opt(1, None, None)),
+            Constraint::new(TildeEq, Version::new_opt(Some(1), None, None)),
             Version::new(1, MAX_VER, MAX_VER),
             Version::new(2, 0, 0)
         ),
         #[should_panic]
         case::tilde_eq_major_version_under(
-            Constraint::new(TildeEq, Version::new_opt(1, None, None)),
+            Constraint::new(TildeEq, Version::new_opt(Some(1), None, None)),
             Version::new(1, MAX_VER, MAX_VER),
             Version::new(0, MAX_VER, MAX_VER)
         )
@@ -1049,44 +1075,48 @@ pub mod tests {
         assert_eq!(
             Version::from_str("19.3b0").unwrap(),
             Version {
-                major: 19,
+                major: Some(19),
                 minor: Some(3),
                 patch: Some(0),
                 extra_num: None,
                 modifier: Some((Beta, 0)),
+                star: false,
             }
         );
 
         assert_eq!(
             Version::from_str("1.3.5rc0").unwrap(),
             Version {
-                major: 1,
+                major: Some(1),
                 minor: Some(3),
                 patch: Some(5),
                 extra_num: None,
                 modifier: Some((ReleaseCandidate, 0)),
+                star: false,
             }
         );
 
         assert_eq!(
             Version::from_str("1.3.5.11").unwrap(),
             Version {
-                major: 1,
+                major: Some(1),
                 minor: Some(3),
                 patch: Some(5),
                 extra_num: Some(11),
                 modifier: None,
+                star: false,
             }
         );
 
         assert_eq!(
             Version::from_str("5.2.5.11b3").unwrap(),
             Version {
-                major: 5,
+                major: Some(5),
                 minor: Some(2),
                 patch: Some(5),
                 extra_num: Some(11),
                 modifier: Some((Beta, 3)),
+                star: false,
             }
         );
     }
@@ -1110,31 +1140,34 @@ pub mod tests {
         let req_a = Constraint::new(
             Ne,
             Version {
-                major: 2,
+                major: Some(2),
                 minor: Some(3),
                 patch: Some(0),
                 extra_num: None,
                 modifier: Some((Beta, 3)),
+                star: false,
             },
         );
         let req_b = Constraint::new(
             Caret,
             Version {
-                major: 1,
+                major: Some(1),
                 minor: Some(3),
                 patch: Some(32),
                 extra_num: None,
                 modifier: Some((ReleaseCandidate, 1)),
+                star: false,
             },
         );
         let req_c = Constraint::new(
             Caret,
             Version {
-                major: 1,
+                major: Some(1),
                 minor: Some(3),
                 patch: Some(32),
                 extra_num: None,
                 modifier: Some((Dep, 1)),
+                star: false,
             },
         );
 
@@ -1503,41 +1536,46 @@ pub mod tests {
     #[test]
     fn version_ordering_modded() {
         let a = Version {
-            major: 4,
+            major: Some(4),
             minor: Some(9),
             patch: Some(4),
             extra_num: Some(2),
             modifier: None,
+            star: false,
         };
         let b = Version::new(4, 9, 4);
 
         let c = Version {
-            major: 4,
+            major: Some(4),
             minor: Some(9),
             patch: Some(4),
             extra_num: None,
             modifier: Some((VersionModifier::ReleaseCandidate, 2)),
+            star: false,
         };
         let d = Version {
-            major: 4,
+            major: Some(4),
             minor: Some(9),
             patch: Some(4),
             extra_num: None,
             modifier: Some((VersionModifier::ReleaseCandidate, 1)),
+            star: false,
         };
         let e = Version {
-            major: 4,
+            major: Some(4),
             minor: Some(9),
             patch: Some(4),
             extra_num: None,
             modifier: Some((VersionModifier::Beta, 6)),
+            star: false,
         };
         let f = Version {
-            major: 4,
+            major: Some(4),
             minor: Some(9),
             patch: Some(4),
             extra_num: None,
             modifier: Some((VersionModifier::Alpha, 7)),
+            star: false,
         };
         let g = Version::new(4, 9, 2);
 
