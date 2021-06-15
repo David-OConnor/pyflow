@@ -41,7 +41,7 @@ impl From<(Version, Os)> for PyVers {
             util::abort(unsupported);
             unreachable!()
         }
-        match v_o.0.minor {
+        match v_o.0.minor.unwrap_or(0) {
             4 => match v_o.1 {
                 Os::Windows => {
                     abort_helper("3.4", "Windows");
@@ -475,7 +475,7 @@ pub fn create_venv(
 
     let py_ver = py_ver.expect("missing Python version");
 
-    let vers_path = pypackages_dir.join(format!("{}.{}", py_ver.major, py_ver.minor));
+    let vers_path = pypackages_dir.join(py_ver.to_string_med());
 
     let lib_path = vers_path.join("lib");
 
@@ -518,11 +518,9 @@ pub fn create_venv(
     #[cfg(target_os = "windows")]
     let venv_lib_path = "Lib";
     #[cfg(target_os = "linux")]
-    let venv_lib_path =
-        PathBuf::from(lib).join(&format!("python{}.{}", py_ver.major, py_ver.minor));
+    let venv_lib_path = PathBuf::from(lib).join(&format!("python{}", py_ver.to_string_med()));
     #[cfg(target_os = "macos")]
-    let venv_lib_path =
-        PathBuf::from(lib).join(&format!("python{}.{}", py_ver.major, py_ver.minor));
+    let venv_lib_path = PathBuf::from(lib).join(&format!("python{}", py_ver.to_string_med()));
 
     let paths = util::Paths {
         bin: bin_path.clone(),
