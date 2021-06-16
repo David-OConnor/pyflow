@@ -212,11 +212,11 @@ pub fn parse_version(input: &str) -> IResult<&str, Version> {
         opt(preceded(tag("."), parse_digit_or_wildcard)),
     ))(input)?;
     let (remain, modifire) = parse_modifier(remain)?;
-    // TODO: check if u32::MAX in any version. (marker for `*`). then set that field
-    // and any subsequent fields to `None`
     let mut version = Version::new_opt(Some(major), minor, patch);
     version.extra_num = extra_num;
     version.modifier = modifire;
+    // check if u32::MAX in any version. (marker for `*`). then set that field
+    // and any subsequent fields to `None`
     version.star = vec![Some(major), minor, patch, extra_num].contains(&Some(u32::MAX));
     if version.star {
         if version.major == Some(u32::MAX) {
@@ -463,8 +463,23 @@ mod tests {
     }
 
     #[rstest(input, expected,
-        case("saturn = \">=0.3.4\"", Ok(("", Req::new("saturn".to_string(), vec![Constraint::new(ReqType::Gte, Version::new(0, 3, 4))])))),
-        case("saturn", Ok(("", Req::new("saturn".to_string(), vec![])))),
+             case::gte("saturn = \">=0.3.4\"", Ok(("", Req::new(
+                 "saturn".to_string(),
+                 vec![Constraint::new(ReqType::Gte, Version::new(0, 3, 4))])))),
+             case::no_version("saturn", Ok(("", Req::new("saturn".to_string(), vec![])))),
+             case::star_patch("saturn = \"0.3.*\"", Ok(("", Req::new(
+                 "saturn".to_string(),
+                 vec![
+                     Constraint::new(ReqType::Exact, Version::new_star(Some(0), Some(3), None, true))
+                 ]
+             )))),
+             #[should_panic]
+             case::star_patch_should_fail("saturn = \"0.3.*\"", Ok(("", Req::new(
+                 "saturn".to_string(),
+                 vec![
+                     Constraint::new(ReqType::Exact, Version::new_star(Some(0), Some(3), None, false))
+                 ]
+             ))))
     )]
     fn test_parse_req(input: &str, expected: IResult<&str, Req>) {
         assert_eq!(parse_req(input), expected);

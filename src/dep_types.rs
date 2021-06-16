@@ -181,6 +181,35 @@ impl Version {
         }
     }
 
+    /// helper for test
+    #[cfg(test)]
+    pub const fn new_star(
+        major: Option<u32>,
+        minor: Option<u32>,
+        patch: Option<u32>,
+        star: bool,
+    ) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+            extra_num: None,
+            modifier: None,
+            star,
+        }
+    }
+
+    pub fn new_unstar(&self) -> Self {
+        Self {
+            major: Some(self.major.unwrap_or(0)),
+            minor: Some(self.minor.unwrap_or(0)),
+            patch: Some(self.patch.unwrap_or(0)),
+            extra_num: self.extra_num,
+            modifier: self.modifier.clone(),
+            star: false,
+        }
+    }
+
     pub const fn _max() -> Self {
         Self::new_opt(Some(MAX_VER), None, None)
     }
@@ -295,7 +324,7 @@ impl PartialOrd for Version {
 
 impl PartialEq for Version {
     fn eq(&self, other: &Self) -> bool {
-        matches!(self.cmp(other), cmp::Ordering::Equal)
+        matches!(self.cmp(other), cmp::Ordering::Equal) && self.star == other.star
     }
 }
 
@@ -309,6 +338,7 @@ impl Hash for Version {
             .clone()
             .unwrap_or((VersionModifier::Null, 0))
             .hash(state);
+        self.star.hash(state);
     }
 }
 
@@ -509,9 +539,9 @@ impl Constraint {
 
         // Note that other than for not-equals, the the resulting Vec has len 1.
         match self.type_ {
-            ReqType::Exact => vec![(self.version.clone(), self.version.clone())],
-            ReqType::Gte => vec![(self.version.clone(), highest)],
-            ReqType::Lte => vec![(lowest, self.version.clone())],
+            ReqType::Exact => vec![(self.version.new_unstar(), self.get_max_version())],
+            ReqType::Gte => vec![(self.version.new_unstar(), highest)],
+            ReqType::Lte => vec![(lowest, self.version.new_unstar())],
             ReqType::Gt => vec![(
                 Version::new(
                     self.version.major.unwrap_or(0),
@@ -560,11 +590,18 @@ impl Constraint {
     }
 
     pub fn is_compatible(&self, version: &Version) -> bool {
-        let min = self.version.clone();
+        let min = self.version.new_unstar();
         let max;
 
         match self.type_ {
-            ReqType::Exact => self.version == *version,
+            ReqType::Exact => {
+                if !self.version.star {
+                    self.version == *version
+                } else {
+                    max = self.get_max_version();
+                    min <= *version && *version <= max
+                }
+            }
             ReqType::Gte => self.version <= *version,
             ReqType::Lte => self.version >= *version,
             ReqType::Gt => self.version < *version,
@@ -591,6 +628,25 @@ impl Constraint {
     /// This internal function is to DRY Caret and Tilde max versions
     fn get_max_version(&self) -> Version {
         match self.type_ {
+            ReqType::Exact => {
+                if self.version.star {
+                    if self.version.major.is_none() {
+                        Version::new(MAX_VER, MAX_VER, MAX_VER)
+                    } else if self.version.minor.is_none() {
+                        Version::new(self.version.major.unwrap_or(0), MAX_VER, MAX_VER)
+                    } else if self.version.patch.is_none() {
+                        Version::new(
+                            self.version.major.unwrap_or(0),
+                            self.version.minor.unwrap_or(0),
+                            MAX_VER,
+                        )
+                    } else {
+                        self.version.clone()
+                    }
+                } else {
+                    self.version.clone()
+                }
+            }
             ReqType::Caret => {
                 if self.version.major.unwrap_or(0) > 0 {
                     Version::new(self.version.major.unwrap_or(0) + 1, 0, 0)
@@ -1032,7 +1088,32 @@ pub mod tests {
             Constraint::new(TildeEq, Version::new_opt(Some(1), None, None)),
             Version::new(1, MAX_VER, MAX_VER),
             Version::new(0, MAX_VER, MAX_VER)
-        )
+        ),
+        case::star_major_version(
+            Constraint::new(Exact, Version::new_star(None, None, None, true)),
+            Version::_max(),
+            Version::new_star(None, None, None, false)
+        ),
+        case::star_minor_version_min(
+            Constraint::new(Exact, Version::new_star(Some(1), None, None, true)),
+            Version::new(1, MAX_VER, MAX_VER),
+            Version::new(0, MAX_VER, MAX_VER)
+        ),
+        case::star_minor_version_max(
+            Constraint::new(Exact, Version::new_star(Some(1), None, None, true)),
+            Version::new(1, MAX_VER, MAX_VER),
+            Version::new(2, 0, 0)
+        ),
+        case::star_patch_version_min(
+            Constraint::new(Exact, Version::new_star(Some(1), Some(2), None, true)),
+            Version::new(1, 2, MAX_VER),
+            Version::new(0, 1, MAX_VER)
+        ),
+        case::star_minor_version_max(
+            Constraint::new(Exact, Version::new_star(Some(1), Some(2), None, true)),
+            Version::new(1, 2, MAX_VER),
+            Version::new(1, 3, 0)
+        ), // TODO: Test below patch. Right now we don't check compatible below patch level
     )]
     fn is_compatible(req: Constraint, max_compat: Version, not_compat: Version) {
         if !req.is_compatible(&max_compat) {
@@ -1065,9 +1146,18 @@ pub mod tests {
 
     #[test]
     fn version_parse_w_wildcard() {
-        assert_eq!(Version::from_str("3.2.*").unwrap(), Version::new(3, 2, 0));
-        assert_eq!(Version::from_str("1.*").unwrap(), Version::new(1, 0, 0));
-        assert_eq!(Version::from_str("1.*.*").unwrap(), Version::new(1, 0, 0));
+        assert_eq!(
+            Version::from_str("3.2.*").unwrap(),
+            Version::new_star(Some(3), Some(2), None, true)
+        );
+        assert_eq!(
+            Version::from_str("1.*").unwrap(),
+            Version::new_star(Some(1), None, None, true)
+        );
+        assert_eq!(
+            Version::from_str("1.*.*").unwrap(),
+            Version::new_star(Some(1), None, None, true)
+        );
     }
 
     #[test]
