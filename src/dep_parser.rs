@@ -473,11 +473,10 @@ mod tests {
                      Constraint::new(ReqType::Exact, Version::new_star(Some(0), Some(3), None, true))
                  ]
              )))),
-             #[should_panic]
-             case::star_patch_should_fail("saturn = \"0.3.*\"", Ok(("", Req::new(
+             case::star_extra_num("saturn = \"0.3.4.*\"", Ok(("", Req::new(
                  "saturn".to_string(),
                  vec![
-                     Constraint::new(ReqType::Exact, Version::new_star(Some(0), Some(3), None, false))
+                     Constraint::new(ReqType::Exact, Version::new_star(Some(0), Some(3), Some(4), true))
                  ]
              ))))
     )]

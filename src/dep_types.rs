@@ -181,8 +181,7 @@ impl Version {
         }
     }
 
-    /// helper for test
-    #[cfg(test)]
+    /// create new version with star option
     pub const fn new_star(
         major: Option<u32>,
         minor: Option<u32>,
@@ -199,6 +198,7 @@ impl Version {
         }
     }
 
+    /// Create new Version of self with `star` set to false
     pub fn new_unstar(&self) -> Self {
         Self {
             major: Some(self.major.unwrap_or(0)),
@@ -297,21 +297,42 @@ impl Ord for Version {
         // None version modifiers should rank highest. Ie 17.0 > 17.0rc1
         let self_mod = self.modifier.clone().unwrap_or((VersionModifier::Null, 0));
         let other_mod = other.modifier.clone().unwrap_or((VersionModifier::Null, 0));
-
-        if self.major != other.major {
-            self.major.cmp(&other.major)
-        } else if self.minor.unwrap_or(0) != other.minor.unwrap_or(0) {
-            self.minor.unwrap_or(0).cmp(&other.minor.unwrap_or(0))
-        } else if self.patch.unwrap_or(0) != other.patch.unwrap_or(0) {
-            self.patch.unwrap_or(0).cmp(&other.patch.unwrap_or(0))
-        } else if self.extra_num.unwrap_or(0) != other.extra_num.unwrap_or(0) {
-            self.extra_num
-                .unwrap_or(0)
-                .cmp(&other.extra_num.unwrap_or(0))
-        } else if self_mod.0 == other_mod.0 {
-            self_mod.1.cmp(&other_mod.1)
+        // Mirror the set field if we have a star present
+        let cmp_star = |obj: Option<u32>, oth: Option<u32>, star: bool| -> cmp::Ordering {
+            let none_val = if star {
+                if obj.is_none() && oth.is_none() {
+                    0
+                } else if let Some(x) = obj {
+                    x
+                } else {
+                    oth.unwrap_or(0)
+                }
+            } else {
+                0
+            };
+            obj.unwrap_or(none_val).cmp(&oth.unwrap_or(none_val))
+        };
+        let star = self.star || other.star;
+        let maj = cmp_star(self.major, other.major, star);
+        let min = cmp_star(self.minor, other.minor, star);
+        let pat = cmp_star(self.patch, other.patch, star);
+        let ext = cmp_star(self.extra_num, other.extra_num, star);
+        if !matches!(maj, cmp::Ordering::Equal) {
+            maj
+        } else if !matches!(min, cmp::Ordering::Equal) {
+            min
+        } else if !matches!(pat, cmp::Ordering::Equal) {
+            pat
+        } else if !matches!(ext, cmp::Ordering::Equal) {
+            ext
+        } else if !star {
+            if self_mod.0 == other_mod.0 {
+                self_mod.1.cmp(&other_mod.1)
+            } else {
+                self_mod.0.cmp(&other_mod.0)
+            }
         } else {
-            self_mod.0.cmp(&other_mod.0)
+            cmp::Ordering::Equal
         }
     }
 }
@@ -324,7 +345,7 @@ impl PartialOrd for Version {
 
 impl PartialEq for Version {
     fn eq(&self, other: &Self) -> bool {
-        matches!(self.cmp(other), cmp::Ordering::Equal) && self.star == other.star
+        matches!(self.cmp(other), cmp::Ordering::Equal)
     }
 }
 
@@ -590,12 +611,12 @@ impl Constraint {
     }
 
     pub fn is_compatible(&self, version: &Version) -> bool {
-        let min = self.version.new_unstar();
+        let min = self.version.clone();
         let max;
 
         match self.type_ {
             ReqType::Exact => {
-                if !self.version.star {
+                if !self.version.star && !version.star {
                     self.version == *version
                 } else {
                     max = self.get_max_version();
@@ -631,14 +652,15 @@ impl Constraint {
             ReqType::Exact => {
                 if self.version.star {
                     if self.version.major.is_none() {
-                        Version::new(MAX_VER, MAX_VER, MAX_VER)
+                        Version::new_star(Some(MAX_VER), Some(MAX_VER), Some(MAX_VER), true)
                     } else if self.version.minor.is_none() {
-                        Version::new(self.version.major.unwrap_or(0), MAX_VER, MAX_VER)
+                        Version::new_star(self.version.major, Some(MAX_VER), Some(MAX_VER), true)
                     } else if self.version.patch.is_none() {
-                        Version::new(
-                            self.version.major.unwrap_or(0),
-                            self.version.minor.unwrap_or(0),
-                            MAX_VER,
+                        Version::new_star(
+                            self.version.major,
+                            self.version.minor,
+                            Some(MAX_VER),
+                            true,
                         )
                     } else {
                         self.version.clone()
@@ -1089,9 +1111,17 @@ pub mod tests {
             Version::new(1, MAX_VER, MAX_VER),
             Version::new(0, MAX_VER, MAX_VER)
         ),
+        #[should_panic(expected="assertion failed: !req.is_compatible(&not_compat)")]
         case::star_major_version(
             Constraint::new(Exact, Version::new_star(None, None, None, true)),
-            Version::_max(),
+            Version{
+                major: Some(1),
+                minor: Some(2),
+                patch: Some(3),
+                extra_num: Some(MAX_VER),
+                modifier: Some((VersionModifier::Beta, 1)),
+                star: false,
+            },
             Version::new_star(None, None, None, false)
         ),
         case::star_minor_version_min(
@@ -1114,6 +1144,24 @@ pub mod tests {
             Version::new(1, 2, MAX_VER),
             Version::new(1, 3, 0)
         ), // TODO: Test below patch. Right now we don't check compatible below patch level
+        case::star_extra_num_version_max(
+            Constraint::new(Exact, Version{
+                major: Some(1),
+                minor: Some(2),
+                patch: Some(3),
+                extra_num: None,
+                modifier: None,
+                star:true}),
+            Version{
+                major: Some(1),
+                minor: Some(2),
+                patch: Some(3),
+                extra_num: Some(MAX_VER),
+                modifier: Some((VersionModifier::Beta, 1)),
+                star: false,
+            },
+            Version::new(1, 3, 0)
+        ),
     )]
     fn is_compatible(req: Constraint, max_compat: Version, not_compat: Version) {
         if !req.is_compatible(&max_compat) {
@@ -1134,6 +1182,42 @@ pub mod tests {
         }
         assert!(req.is_compatible(&max_compat));
         assert!(!req.is_compatible(&not_compat));
+    }
+
+    #[rstest(
+        ver_str,
+        is_compat,
+        case::exact("==1.1", true),
+        case::zero_padded("==1.1.0", true),
+        case::dev_release("==1.1.dev1", false),
+        case::pre_release("==1.1a1", false),
+        case::post_release("==1.1.post1", false),
+        case::star("==1.1.*", true)
+    )]
+    fn pep440_bare(ver_str: &str, is_compat: bool) {
+        let ver_match = Version::new_short(1, 1);
+        let constraint = Constraint::from_str(ver_str).unwrap();
+        assert_eq!(constraint.is_compatible(&ver_match), is_compat);
+    }
+
+    #[rstest(
+        ver_str,
+        is_compat,
+        case::exact("==1.1.post1", true),
+        case::bare("==1.1", false),
+        case::star("==1.1.*", true)
+    )]
+    fn pep440_post(ver_str: &str, is_compat: bool) {
+        let ver_match = Version::from_str("1.1.post1").unwrap();
+        let constraint = Constraint::from_str(ver_str).unwrap();
+        if constraint.is_compatible(&ver_match) != is_compat {
+            eprintln!(
+                "ver_match: {:?}\nconstraint: {:?}\nshould be compat: {:?}",
+                ver_match, constraint, is_compat
+            );
+        }
+
+        assert_eq!(constraint.is_compatible(&ver_match), is_compat);
     }
 
     #[test]
