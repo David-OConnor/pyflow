@@ -249,6 +249,10 @@ pub fn download_and_install_package(
             let tar = GzDecoder::new(&archive_file);
             let mut archive = Archive::new(tar);
 
+            // Some python archives don't have file create times set which
+            // breaks wheel builds. Don't preserve mtime fixes this.
+            archive.set_preserve_mtime(false);
+
             // We iterate over and copy entries instead of running `Archive.unpack`, since
             // symlinks in the archive may cause the unpack to break. If this happens, we want
             // to continue unpacking the other files.
