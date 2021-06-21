@@ -47,8 +47,7 @@ Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
 [standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.3.0/pyflow)
  and place it somewhere accessible by the PATH. For example, `/usr/bin`.
 
-- **Mac** - Download this [zipped Mac binary](https://github.com/David-OConnor/pyflow/releases/download/0.3.0/pyflow_mac_0.3.0.zip)
- , ance place the file in it somewhere accessible by the PATH. (Props to @russeldavis for building this)
+- **Mac** - Run `brew install pyflow`
 
 - **With Pip** - Run `pip install pyflow`. The linux install using this method is much larger than
 with the above ones, and it doesn't yet work with Mac. This method will likely not work
