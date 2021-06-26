@@ -2,7 +2,9 @@
 
 #[mockall_double::double]
 use crate::dep_resolution::res;
-use crate::dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version};
+use crate::dep_types::{
+    Constraint, Extras, Lock, LockPackage, Package, Rename, Req, ReqType, Version,
+};
 use crate::util::{abort, Os};
 
 use regex::Regex;
@@ -316,10 +318,9 @@ impl Config {
                         git = Some(repo);
                     }
                     if let Some(v) = subdata.python {
-                        python_version = Some(
-                            Constraint::from_str(&v)
-                                .expect("Problem parsing python version in dependency"),
-                        );
+                        let pv = Constraint::from_str(&v)
+                            .expect("Problem parsing python version in dependency");
+                        python_version = Some(vec![pv]);
                     }
                 }
             }
@@ -454,10 +455,9 @@ impl Config {
                                 extras = Some(ex);
                             }
                             if let Some(v) = subdata.python {
-                                python_version = Some(
-                                    Constraint::from_str(&v)
-                                        .expect("Problem parsing python version in dependency"),
-                                );
+                                let pv = Constraint::from_str(&v)
+                                    .expect("Problem parsing python version in dependency");
+                                python_version = Some(vec![pv]);
                             }
                             // todo repository etc
                         }
@@ -1087,8 +1087,15 @@ fn run_script(
                     Version::from_str(&lp.version).expect("Problem getting version"),
                 )
             } else {
-                let vinfo = res::get_version_info(name)
-                    .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
+                let vinfo = res::get_version_info(
+                    name,
+                    Some(Req::new_with_extras(
+                        name.to_string(),
+                        vec![Constraint::new_any()],
+                        Extras::new_py(Constraint::new(ReqType::Exact, py_vers.clone())),
+                    )),
+                )
+                .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
                 (vinfo.0, vinfo.1)
             };
 

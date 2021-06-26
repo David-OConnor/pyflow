@@ -3,6 +3,7 @@ use crate::dep_parser::{
 };
 #[mockall_double::double]
 use crate::dep_resolution::res;
+use crate::dep_resolution::WarehouseRelease;
 use crate::{util, CliConfig};
 use nom::combinator::all_consuming;
 use serde::{Deserialize, Serialize};
@@ -155,6 +156,17 @@ impl Version {
             extra_num: None,
             modifier: None,
             star: false,
+        }
+    }
+
+    pub const fn new_any() -> Self {
+        Self {
+            major: None,
+            minor: None,
+            patch: None,
+            extra_num: None,
+            modifier: None,
+            star: true,
         }
     }
 
@@ -484,10 +496,22 @@ impl Constraint {
         Self { type_, version }
     }
 
+    pub const fn new_any() -> Self {
+        Self {
+            type_: ReqType::Exact,
+            version: Version::new_any(),
+        }
+    }
+
     /// From a comma-separated list
     pub fn from_str_multiple(vers: &str) -> Result<Vec<Self>, DependencyError> {
         let mut result = vec![];
         let vers = vers.replace(" ", "");
+        let vers = if vers.is_empty() {
+            ">=2.0".to_string()
+        } else {
+            vers
+        };
 
         for req in vers.split(',') {
             match Self::from_str(req) {
@@ -790,13 +814,23 @@ pub struct Extras {
     pub python_version: Option<Constraint>,
 }
 
+impl Extras {
+    pub const fn new_py(python_version: Constraint) -> Self {
+        Self {
+            extra: None,
+            sys_platform: None,
+            python_version: Some(python_version),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Req {
     pub name: String,
     pub constraints: Vec<Constraint>,
     pub extra: Option<String>,
     pub sys_platform: Option<(ReqType, util::Os)>,
-    pub python_version: Option<Constraint>,
+    pub python_version: Option<Vec<Constraint>>,
     pub install_with_extras: Option<Vec<String>>,
     pub path: Option<String>,
     pub git: Option<String>, // String is the git repo. // todo: Branch
@@ -822,7 +856,7 @@ impl Req {
             constraints,
             extra: extras.extra,
             sys_platform: extras.sys_platform,
-            python_version: extras.python_version,
+            python_version: extras.python_version.map(|x| vec![x]),
             install_with_extras: None,
             path: None,
             git: None,
@@ -845,17 +879,82 @@ impl Req {
         all_consuming(parse_pip_str)(s).ok().map(|x| x.1)
     }
 
+    pub fn from_warehouse_release(
+        name: String,
+        version: String,
+        release: WarehouseRelease,
+    ) -> Self {
+        let ver = Version::from_str(&version)
+            .ok()
+            .unwrap_or_else(|| Version::new_star(None, None, None, true));
+        let constraint = Constraint::new(ReqType::Exact, ver);
+        let py_ver = Constraint::from_wh_py_vers(&release.python_version);
+        let requires = if let Some(x) = release.requires_python {
+            if x.as_str() > "" {
+                if let Ok(c) = Constraint::from_str_multiple(&x) {
+                    Some(c)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let py_req = requires.unwrap_or_else(|| py_ver.unwrap());
+
+        Self {
+            name,
+            constraints: vec![constraint],
+            extra: None,
+            sys_platform: None,
+            python_version: Some(py_req),
+            install_with_extras: None,
+            path: None,
+            git: None,
+        }
+    }
+
+    /// Clone the Req but set a python requirement if python_version.is_none()
+    pub fn clone_or_default_py(&self, python_version: &Version) -> Self {
+        Self {
+            name: self.name.clone(),
+            constraints: self.constraints.clone(),
+            extra: self.extra.clone(),
+            sys_platform: self.sys_platform,
+            python_version: if let Some(ref pv) = self.python_version {
+                Some(pv.clone())
+            } else {
+                Some(vec![Constraint::new(ReqType::Gte, python_version.clone())])
+            },
+            install_with_extras: self.install_with_extras.clone(),
+            path: self.path.clone(),
+            git: self.path.clone(),
+        }
+    }
+
     /// eg `saturn = "^0.3.1"` or `matplotlib = "3.1.1"`
     pub fn to_cfg_string(&self) -> String {
         match self.constraints.len() {
             0 => {
-                let (name, latest_version) =
-                    if let Ok((fmtd_name, version, _)) = res::get_version_info(&self.name) {
-                        (fmtd_name, version)
-                    } else {
-                        util::abort(&format!("Unable to find version info for {:?}", &self.name));
-                        unreachable!()
-                    };
+                let (name, latest_version) = if let Ok((fmtd_name, version, _)) =
+                    res::get_version_info(
+                        &self.name,
+                        Some(Req::new_with_extras(
+                            self.name.clone(),
+                            vec![Constraint::new_any()],
+                            Extras::new_py(Constraint::new(
+                                ReqType::Exact,
+                                self.py_ver_or_default(),
+                            )),
+                        )),
+                    ) {
+                    (fmtd_name, version)
+                } else {
+                    util::abort(&format!("Unable to find version info for {:?}", &self.name));
+                    unreachable!()
+                };
                 format!(
                     r#"{} = "{}""#,
                     name,
@@ -872,6 +971,17 @@ impl Req {
                     .join(", ")
             ),
         }
+    }
+
+    pub fn py_ver_or_default(&self) -> Version {
+        let default = vec![Constraint::from_str("==*").ok().unwrap()];
+        self.python_version
+            .as_ref()
+            .unwrap_or(&default)
+            .first()
+            .unwrap()
+            .version
+            .clone()
     }
 
     /// Format for setup.py
@@ -1424,7 +1534,7 @@ pub mod tests {
             constraints: vec![],
             extra: Some("test".into()),
             sys_platform: None,
-            python_version: Some(Constraint::new(Exact, Version::new(2, 7, 0))),
+            python_version: Some(vec![Constraint::new(Exact, Version::new(2, 7, 0))]),
             install_with_extras: None,
             path: None,
             git: None,
@@ -1441,7 +1551,7 @@ pub mod tests {
             constraints: vec![Constraint::new(Gte, Version::new(0, 5, 0))],
             extra: None,
             sys_platform: Some((Exact, crate::Os::Windows32)),
-            python_version: Some(Constraint::new(Lt, Version::new(3, 6, 0))),
+            python_version: Some(vec![Constraint::new(Lt, Version::new(3, 6, 0))]),
             install_with_extras: None,
             path: None,
             git: None,
@@ -1681,7 +1791,7 @@ pub mod tests {
     #[test]
     fn req_to_cfg_string_empty_constraints() {
         let ctx = res::get_version_info_context();
-        ctx.expect().returning(|name| {
+        ctx.expect().returning(|name, py_ver| {
             Ok((
                 name.to_string(),
                 Version::new(1, 2, 3),

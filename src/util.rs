@@ -2,7 +2,9 @@
 use crate::dep_resolution::res;
 
 use crate::dep_resolution::WarehouseRelease;
+use crate::dep_types::Extras;
 use crate::{
+    commands,
     dep_types::{Constraint, DependencyError, Req, ReqType, Version},
     files,
     install::{self, PackageType},
@@ -333,7 +335,17 @@ pub fn merge_reqs(
     // version.
     for added_req in &mut added_reqs_unique {
         if added_req.constraints.is_empty() {
-            let (_, vers, _) = if let Ok(r) = res::get_version_info(&added_req.name) {
+            let (_, vers, _) = if let Ok(r) = res::get_version_info(
+                &added_req.name,
+                Some(Req::new_with_extras(
+                    added_req.name.clone(),
+                    vec![Constraint::new_any()],
+                    Extras::new_py(Constraint::new(
+                        ReqType::Exact,
+                        cfg.py_version.clone().unwrap_or_else(Version::new_any),
+                    )),
+                )),
+            ) {
                 r
             } else {
                 abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?");
@@ -853,27 +865,9 @@ pub fn find_folders(path: &Path) -> Vec<String> {
 }
 
 fn default_python() -> Version {
-    #[cfg(target_os = "windows")]
-    let py_cmd = "python.exe";
-    #[cfg(target_os = "linux")]
-    let py_cmd = "python";
-    #[cfg(target_os = "macos")]
-    let py_cmd = "python";
-    match std::process::Command::new(py_cmd).arg("--version").output() {
-        Ok(output) => {
-            let py_str = String::from_utf8_lossy(&output.stdout);
-            let py_str = py_str.replace("Python", "");
-            let py_str = py_str.trim_matches(|c| c == '\r' || c == '\n' || c == ' ');
-
-            match Version::from_str(&py_str) {
-                Ok(f) => f,
-                Err(_e) => Version::new_short(3, 9),
-            }
-        }
-        Err(e) => {
-            println!("{}", e);
-            Version::new_short(3, 9)
-        }
+    match commands::find_py_version("python") {
+        Some(x) => x,
+        None => Version::new_short(3, 9),
     }
 }
 

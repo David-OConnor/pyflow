@@ -80,6 +80,9 @@ pub fn parse_wh_py_vers(input: &str) -> IResult<&str, Vec<Constraint>> {
         map(tag("any"), |_| {
             vec![Constraint::new(ReqType::Gte, Version::new(2, 0, 0))]
         }),
+        map(tag("source"), |_| {
+            vec![Constraint::new(ReqType::Gte, Version::new(2, 0, 0))]
+        }),
         map(parse_version, |v| vec![Constraint::new(ReqType::Caret, v)]),
         separated_list(tag("."), parse_wh_py_ver),
     ))(input)

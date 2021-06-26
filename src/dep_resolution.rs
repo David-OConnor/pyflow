@@ -142,7 +142,7 @@ fn guess_graph(
             None => true,
         })
         .filter(|r| match &r.python_version {
-            Some(v) => v.is_compatible(py_vers),
+            Some(v) => res::is_compat(v, py_vers),
             None => true,
         })
         .collect();
@@ -173,7 +173,7 @@ fn guess_graph(
     }
 
     // Single http call here to pydeps for all this package's reqs, plus version calls for each req.
-    let mut query_data = if let Ok(d) = res::fetch_req_data(&non_locked_reqs, vers_cache) {
+    let mut query_data = if let Ok(d) = res::fetch_req_data(&non_locked_reqs, vers_cache, py_vers) {
         d
     } else {
         util::abort(&format!(
@@ -230,7 +230,21 @@ fn guess_graph(
             .into_iter()
             // Our query data should already be compat, but QC here.
             .filter_map(|r| {
-                if res::is_compat(&req.constraints, &Version::from_str(&r.version).unwrap()) {
+                let py_constraint = Constraint::from_str_multiple(
+                    r.requires_python
+                        .clone()
+                        .unwrap_or_else(|| ">=2.7".to_string())
+                        .as_str(),
+                )
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Problem parsing requires_python {:?}, {:?}",
+                        r.requires_python, r
+                    )
+                });
+                if res::is_compat(&req.constraints, &Version::from_str(&r.version).unwrap())
+                    && res::is_compat(&py_constraint, py_vers)
+                {
                     Some(Dependency {
                         id: result.iter().map(|d| d.id).max().unwrap_or(0) + 1,
                         name: req.name.to_owned(),
@@ -299,27 +313,90 @@ pub(super) mod res {
     /// Return name to, so we get correct capitalization.
     pub fn get_version_info(
         name: &str,
+        req: Option<Req>,
     ) -> Result<(String, Version, Vec<Version>), DependencyError> {
         let data = get_warehouse_data(name)?;
 
         let all_versions = data
             .releases
             .keys()
-            .filter_map(|v| Version::from_str(v).ok())
+            .filter_map(|v| {
+                data.releases.get(v).map(|releases| {
+                    releases.iter().map(move |release| {
+                        Req::from_warehouse_release(
+                            name.to_string(),
+                            v.to_string(),
+                            release.clone(),
+                        )
+                    })
+                })
+            })
+            .flatten();
+        let py_vers = if let Some(ref r) = req {
+            r.py_ver_or_default()
+        } else {
+            Version::new_star(None, None, None, true)
+        };
+        let select_version = if let Some(ref r) = req {
+            let av: Vec<Req> = all_versions.clone().collect();
+            let compat_av: Vec<Version> = av
+                .iter()
+                .filter_map(|x: &Req| {
+                    if is_compat(&r.constraints, &x.constraints[0].version) {
+                        if let Some(ref pv) = x.python_version {
+                            if is_compat(&pv, &py_vers) {
+                                Some(x.constraints[0].version.clone())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let v = compat_av.iter().max();
+            v.cloned()
+        } else {
+            None
+        };
+
+        #[cfg(not(debug_assertions))]
+        let all_compat: Vec<Version>;
+        #[cfg(debug_assertions)]
+        let mut all_compat: Vec<Version>;
+
+        all_compat = all_versions
+            .filter_map(|x| {
+                if let Some(y) = x.python_version {
+                    if is_compat(&y, &py_vers) {
+                        Some(x.constraints.first().unwrap().version.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
             .collect();
 
-        match Version::from_str(&data.info.version) {
-            Ok(v) => Ok((data.info.name, v, all_versions)),
-            // Unable to parse the version listed in info; iterate through releases.
-            Err(_) => Ok((
+        #[cfg(debug_assertions)]
+        all_compat.sort();
+
+        if let Some(v) = select_version {
+            Ok((data.info.name, v, all_compat))
+        } else {
+            Ok((
                 data.info.name,
-                all_versions
+                all_compat
                     .iter()
                     .max()
                     .unwrap_or_else(|| panic!("Can't find a valid version for {}", name))
                     .clone(),
-                all_versions,
-            )),
+                all_compat,
+            ))
         }
     }
 
@@ -390,6 +467,7 @@ pub(super) mod res {
     pub(super) fn fetch_req_data(
         reqs: &[Req],
         vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
+        py_vers: &Version,
     ) -> Result<Vec<ReqCache>, DependencyError> {
         // Narrow-down our list of versions to query.
 
@@ -399,7 +477,9 @@ pub(super) mod res {
             let (_, latest_version, all_versions) = match vers_cache.get(&req.name) {
                 Some(c) => c.clone(),
                 None => {
-                    if let Ok(data) = get_version_info(&req.name) {
+                    if let Ok(data) =
+                        get_version_info(&req.name, Some(req.clone_or_default_py(py_vers)))
+                    {
                         vers_cache.insert(req.name.clone(), data.clone());
                         data
                     } else {
@@ -767,7 +847,7 @@ pub mod tests {
         // Makes API call
         // Assume no new releases since writing this test.
         assert_eq!(
-            get_version_info("scinot").unwrap().2.sort(),
+            get_version_info("scinot", None).unwrap().2.sort(),
             vec![
                 Version::new(0, 0, 1),
                 Version::new(0, 0, 2),
