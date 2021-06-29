@@ -78,7 +78,7 @@ struct MultipleBody {
 // guess_graph removed from mod res because of lifetime issue with automock
 // Build a graph: Start by assuming we can pick the newest compatible dependency at each step.
 // If unable to resolve this way, subsequently run this with additional deconfliction reqs.
-#[allow(clippy::clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn guess_graph(
     parent_id: u32,
     reqs: &[Req],

@@ -1114,7 +1114,7 @@ fn run_script(
 
 /// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
 /// the config and lock files.
-#[allow(clippy::clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn sync(
     paths: &util::Paths,
     lockpacks: &[LockPackage],
