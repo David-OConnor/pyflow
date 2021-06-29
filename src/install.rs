@@ -160,7 +160,7 @@ pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_pa
 
 /// Download and install a package. For wheels, we can just extract the contents into
 /// the lib folder.  For source dists, make a wheel first.
-#[allow(clippy::clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub fn download_and_install_package(
     name: &str,
     version: &Version,
