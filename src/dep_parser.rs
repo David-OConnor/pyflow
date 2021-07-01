@@ -94,13 +94,15 @@ fn parse_wh_py_ver(input: &str) -> IResult<&str, Constraint> {
             alt((tag("cp"), tag("py"), tag("pp"))),
             alt((tag("2"), tag("3"), tag("4"))),
             opt(map_parser(take(1u8), digit1)),
+            opt(digit1),
         )),
-        |(_, major, minor): (_, &str, Option<&str>)| {
+        |(_, major, minor, patch): (_, &str, Option<&str>, Option<&str>)| {
             let major: u32 = major.parse().unwrap();
+            let patch = patch.map(|p| p.parse().unwrap());
             match minor {
                 Some(mi) => Constraint::new(
                     ReqType::Exact,
-                    Version::new_short(major, mi.parse().unwrap()),
+                    Version::new_opt(Some(major), Some(mi.parse().unwrap()), patch),
                 ),
                 None => {
                     if major == 2 {
