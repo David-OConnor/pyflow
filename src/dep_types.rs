@@ -1877,38 +1877,28 @@ pub mod tests {
         );
     }
 
-    #[test]
-    fn python_version_from_warehouse() {
-        let a1 = Constraint::from_wh_py_vers("py3").unwrap();
-        let a2 = Constraint::from_wh_py_vers("cp35.cp36.cp37.cp38").unwrap();
-        let a3 = Constraint::from_wh_py_vers("cp26").unwrap();
-        let a4 = Constraint::from_wh_py_vers("py2.py3").unwrap();
-        let a5 = Constraint::from_wh_py_vers("pp36").unwrap();
-        let a6 = Constraint::from_wh_py_vers("any").unwrap();
-        let a7 = Constraint::from_wh_py_vers("2.7").unwrap();
-
-        assert_eq!(a1, vec![Constraint::new(Gte, Version::new(3, 0, 0))]);
-        assert_eq!(
-            a2,
-            vec![
-                Constraint::new(Exact, Version::new(3, 5, 0)),
-                Constraint::new(Exact, Version::new(3, 6, 0)),
-                Constraint::new(Exact, Version::new(3, 7, 0)),
-                Constraint::new(Exact, Version::new(3, 8, 0)),
-            ]
-        );
-        assert_eq!(a3, vec![Constraint::new(Exact, Version::new(2, 6, 0))]);
-
-        assert_eq!(
-            a4,
-            vec![
-                Constraint::new(Lte, Version::new(2, 10, 0)),
-                Constraint::new(Gte, Version::new(3, 0, 0)),
-            ]
-        );
-
-        assert_eq!(a5, vec![Constraint::new(Exact, Version::new(3, 6, 0))]);
-        assert_eq!(a6, vec![Constraint::new(Gte, Version::new(2, 0, 0))]);
-        assert_eq!(a7, vec![Constraint::new(Caret, Version::new(2, 7, 0))]);
+    #[rstest(input, expected,
+             case::py3("py3", vec![Constraint::new(Gte, Version::new(3, 0, 0))]),
+             case::cp_chain("cp35.cp36.cp37.cp38",
+                            vec![
+                                Constraint::new(Exact, Version::new(3, 5, 0)),
+                                Constraint::new(Exact, Version::new(3, 6, 0)),
+                                Constraint::new(Exact, Version::new(3, 7, 0)),
+                                Constraint::new(Exact, Version::new(3, 8, 0)),
+                            ]),
+             case::cp26("cp26", vec![Constraint::new(Exact, Version::new(2, 6, 0))]),
+             case::py_chain("py2.py3",
+                            vec![
+                                Constraint::new(Lte, Version::new(2, 10, 0)),
+                                Constraint::new(Gte, Version::new(3, 0, 0)),
+                            ]),
+             case::pp36("pp36", vec![Constraint::new(Exact, Version::new(3, 6, 0))]),
+             case::any("any", vec![Constraint::new(Gte, Version::new(2, 0, 0))]),
+             case::semver("2.7", vec![Constraint::new(Caret, Version::new(2, 7, 0))]),
+             case::pp257("pp257", vec![Constraint::new(Exact, Version::new(2, 5, 7))])
+    )]
+    fn python_version_from_warehouse(input: &str, expected: Vec<Constraint>) {
+        let a1 = Constraint::from_wh_py_vers(input).unwrap();
+        assert_eq!(a1, expected)
     }
 }
