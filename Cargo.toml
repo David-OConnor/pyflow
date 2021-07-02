@@ -1,6 +1,6 @@
 [package]
 name = "pyflow"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["David O'Connor <david.alan.oconnor@gmail.com>"]
 description = "A modern Python installation and dependency manager"
 license = "MIT"

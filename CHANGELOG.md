@@ -1,12 +1,18 @@
 # Changelog
 
+## V0.3.1
+- Allow dependency versions with more than 3 digits
+- Add checing of python compatibility to `get_version_info`
+- Add Brew support
+- Fixed various issues that let to some packages not installing
+
 ## V0.3.0
 - Misc internal cleanup
 - Numerous bug fixes and usability enhancements
 - Fixed several bugs related to dependency parsing
 
 ## v0.2.9
-- Pyflow no longer requires updates to use future versions of python.
+- Pyflow no longer requires updates to use future versions of python
 
 ## v0.2.8
 - Fixed some warnings, and check status codes of every subprocess
