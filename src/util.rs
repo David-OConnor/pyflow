@@ -5,7 +5,7 @@ use crate::dep_resolution::WarehouseRelease;
 use crate::dep_types::Extras;
 use crate::{
     commands,
-    dep_types::{Constraint, DependencyError, Req, ReqType, Version},
+    dep_types::{Constraint, DependencyError, Lock, Req, ReqType, Version},
     files,
     install::{self, PackageType},
     py_versions, util, CliConfig,
@@ -17,7 +17,9 @@ use std::io::{self, BufRead, BufReader, Read, Write};
 use std::str::FromStr;
 use std::{
     collections::HashMap,
-    env, fs,
+    env,
+    error::Error,
+    fs,
     path::{Path, PathBuf},
     process, thread, time,
 };
@@ -984,6 +986,19 @@ pub fn process_reqs(reqs: Vec<Req>, git_path: &Path, paths: &util::Paths) -> Vec
         updated_reqs.push(r);
     }
     updated_reqs
+}
+
+/// Read dependency data from a lock file.
+pub fn read_lock(path: &Path) -> Result<Lock, Box<dyn Error>> {
+    let data = fs::read_to_string(path)?;
+    Ok(toml::from_str(&data)?)
+}
+
+/// Write dependency data to a lock file.
+pub fn write_lock(path: &Path, data: &Lock) -> Result<(), Box<dyn Error>> {
+    let data = toml::to_string(data)?;
+    fs::write(path, data)?;
+    Ok(())
 }
 
 #[cfg(test)]

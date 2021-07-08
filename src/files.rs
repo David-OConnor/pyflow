@@ -187,7 +187,6 @@ fn extend_or_insert(mut cfg_lines: Vec<String>, section_header: &str, reqs: &[Re
     match collected {
         // The section already exists, so we can just add the new reqs
         Some(section) => {
-
             // To enforce proper spacing we first remove any empty lines,
             // and later we append a trailing empty line
             let mut all_deps: Vec<String> = section
