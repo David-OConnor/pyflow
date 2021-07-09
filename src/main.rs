@@ -5,7 +5,7 @@ use crate::dep_resolution::res;
 use crate::dep_types::{
     Constraint, Extras, Lock, LockPackage, Package, Rename, Req, ReqType, Version,
 };
-use crate::util::{abort, Os};
+use crate::util::{abort, process_reqs, Os};
 
 use regex::Regex;
 use serde::Deserialize;
@@ -1573,52 +1573,8 @@ fn main() {
 
             let dont_uninstall = util::find_dont_uninstall(&updated_reqs, &up_dev_reqs);
 
-            // git_reqs is used to store requirements from packages installed via git.
-            let mut git_reqs = vec![]; // For path reqs too.
-            let mut git_reqs_dev = vec![];
-            for req in updated_reqs.iter().filter(|r| r.git.is_some()) {
-                // todo: as_ref() would be better than clone, if we can get it working.
-                let mut metadata = install::download_and_install_git(
-                    &req.name,
-                    //                    util::GitPath::Git(req.git.clone().unwrap()),
-                    &req.git.clone().unwrap(),
-                    &git_path,
-                    &paths,
-                );
-
-                git_reqs.append(&mut metadata.requires_dist);
-            }
-
-            // todo: lots of DRY between reqs and dev reqs
-            for req in up_dev_reqs.iter().filter(|r| r.git.is_some()) {
-                let mut metadata = install::download_and_install_git(
-                    &req.name,
-                    //                    util::GitPath::Git(req.git.clone().unwrap()),
-                    &req.git.clone().unwrap(),
-                    &git_path,
-                    &paths,
-                );
-
-                git_reqs_dev.append(&mut metadata.requires_dist);
-            }
-
-            // We don't pass the git requirement itself, since we've directly installed it,
-            // but we do pass its requirements.
-            let mut updated_reqs: Vec<Req> = updated_reqs
-                .into_iter()
-                .filter(|r| r.git.is_none() && r.path.is_none())
-                .collect();
-            let mut up_dev_reqs: Vec<Req> = up_dev_reqs
-                .into_iter()
-                .filter(|r| r.git.is_none() && r.path.is_none())
-                .collect();
-
-            for r in git_reqs {
-                updated_reqs.push(r);
-            }
-            for r in git_reqs_dev {
-                up_dev_reqs.push(r);
-            }
+            let updated_reqs = process_reqs(updated_reqs, &git_path, &paths);
+            let up_dev_reqs = process_reqs(up_dev_reqs, &git_path, &paths);
 
             sync(
                 &paths,
