@@ -8,7 +8,7 @@ use crate::{
     dep_types::{Constraint, DependencyError, Req, ReqType, Version},
     files,
     install::{self, PackageType},
-    py_versions, CliConfig,
+    py_versions, util, CliConfig,
 };
 use ini::Ini;
 use regex::Regex;
@@ -954,6 +954,36 @@ pub fn canon_join(path: &Path, extend: &str) -> PathBuf {
         }
     }
     new_path
+}
+
+/// Install git requirements and collect their downstream dependencies.
+///
+/// The git requirements are removed from the `reqs` vector, and are replaced
+/// by all their downstream requirements.
+pub fn process_reqs(reqs: Vec<Req>, git_path: &Path, paths: &util::Paths) -> Vec<Req> {
+    // git_reqs is used to store requirements from packages installed via git.
+    let mut git_reqs = vec![]; // For path reqs too.
+    for req in reqs.iter().filter(|r| r.git.is_some()) {
+        // todo: as_ref() would be better than clone, if we can get it working.
+        let mut metadata = install::download_and_install_git(
+            &req.name,
+            //  util::GitPath::Git(req.git.clone().unwrap()),
+            &req.git.clone().unwrap(),
+            &git_path,
+            &paths,
+        );
+        git_reqs.append(&mut metadata.requires_dist);
+    }
+    // We don't pass the git requirement itself, since we've directly installed it,
+    // but we do pass its requirements.
+    let mut updated_reqs: Vec<Req> = reqs
+        .into_iter()
+        .filter(|r| r.git.is_none() && r.path.is_none())
+        .collect();
+    for r in git_reqs {
+        updated_reqs.push(r);
+    }
+    updated_reqs
 }
 
 #[cfg(test)]
