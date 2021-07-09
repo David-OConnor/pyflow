@@ -123,116 +123,135 @@ pub struct Poetry {
     //    pub extras: Option<HashMap<String, String>>,
 }
 
-/// Split from `add_reqs_to_cfg` to accomodate testing
+/// Encapsulate one section of the `pyproject.toml`.
+///
+/// # Attributes:
+/// * lines: A vector containing each line of the section
+/// * i_start: Zero-indexed indicating the line of the header.
+/// * i_end: Zero-indexed indicating the line number of the next section header,
+///     or the last line of the file.
+struct Section {
+    lines: Vec<String>,
+    i_start: usize,
+    i_end: usize,
+}
+
+/// Identify the start index, end index, and lines of a particular section.
+fn collect_section(cfg_lines: &[String], title: &str) -> Option<Section> {
+    // This will tell us when we've reached a new section
+    let section_re = Regex::new(r"^\[.*\]$").unwrap();
+
+    let mut existing_entries = Vec::new();
+    let mut in_section = false;
+    let mut i_start = 0usize;
+
+    for (i, line) in cfg_lines.iter().enumerate() {
+        if in_section && section_re.is_match(line) {
+            return Some(Section {
+                lines: existing_entries,
+                i_start,
+                i_end: i,
+            });
+        }
+
+        if in_section {
+            existing_entries.push(line.parse().unwrap())
+        }
+
+        // This must be the last step of the loop to work properly
+        if line.replace(" ", "") == title {
+            existing_entries.push(title.into());
+            i_start = i;
+            in_section = true;
+        }
+    }
+    // We've reached the end of the file without detecting a new section
+    if in_section {
+        Some(Section {
+            lines: existing_entries,
+            i_start,
+            i_end: cfg_lines.len(),
+        })
+    } else {
+        None
+    }
+}
+
+/// Main logic for adding dependencies to a particular section.
+///
+/// If the section is detected, then the dependencies are appended to that section. Otherwise,
+/// a new section is appended to the end of the file.
+fn extend_or_insert(mut cfg_lines: Vec<String>, section_header: &str, reqs: &[Req]) -> Vec<String> {
+    let collected = collect_section(&cfg_lines, section_header);
+
+    match collected {
+        // The section already exists, so we can just add the new reqs
+        Some(section) => {
+
+            // To enforce proper spacing we first remove any empty lines,
+            // and later we append a trailing empty line
+            let mut all_deps: Vec<String> = section
+                .lines
+                .to_owned()
+                .into_iter()
+                .filter(|x| !x.is_empty())
+                .collect();
+
+            for req in reqs {
+                all_deps.push(req.to_cfg_string())
+            }
+            all_deps.push("".into());
+
+            // Replace the original lines with our new updated lines
+            cfg_lines.splice(section.i_start..section.i_end, all_deps);
+            cfg_lines
+        }
+        // The section did not alredy exist, so we must create it
+        None => {
+            // A section is composed of its header, followed by all the requirements
+            // and then an empty line
+            let mut section = vec![section_header.to_string()];
+            section.extend(reqs.iter().map(|r| r.to_cfg_string()));
+            section.push("".into());
+
+            // We want an empty line before adding the new section
+            if let Some(last) = cfg_lines.last() {
+                if !last.is_empty() {
+                    cfg_lines.push("".into())
+                }
+            }
+            cfg_lines.extend(section);
+            cfg_lines
+        }
+    }
+}
+
+/// Add dependencies and dev-dependencies to `cfg-data`, creating the sections if necessary.
+///
+/// The added sections are appended to the end of the file. Split from `add_reqs_to_cfg`
+/// to accomodate testing.
 fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
-    let mut result = String::new();
-    let mut in_dep = false;
-    let mut in_dev_dep = false;
-    let sect_re = Regex::new(r"^\[.*\]$").unwrap();
+    let cfg_lines: Vec<String> = cfg_data.lines().map(str::to_string).collect();
 
-    // We collect lines here so we can start the index at a non-0 point.
-    let lines_vec: Vec<&str> = cfg_data.lines().collect();
+    // First we update the dependencies section
+    let cfg_lines_with_reqs = if !added.is_empty() {
+        extend_or_insert(cfg_lines, "[tool.pyflow.dependencies]", added)
+    } else {
+        cfg_lines
+    };
 
-    // todo: Lots of DRY between dep and dev dep
-    let mut dep_start = 0;
-    let mut dev_dep_start = 0;
-    let mut dep_end = 0;
-    let mut dev_dep_end = 0;
+    // Then we move onto the dev-dependencies
+    let cfg_lines_with_all_reqs = if !added_dev.is_empty() {
+        extend_or_insert(
+            cfg_lines_with_reqs,
+            "[tool.pyflow.dev-dependencies]",
+            added_dev,
+        )
+    } else {
+        cfg_lines_with_reqs
+    };
 
-    for (i, line) in cfg_data.lines().enumerate() {
-        if &line.replace(" ", "") == "[tool.pyflow.dependencies]" {
-            dep_start = i + 1;
-            if in_dev_dep {
-                dev_dep_end = i - 1;
-            }
-            in_dep = true;
-            in_dev_dep = false;
-            continue; // Continue so this line doesn't trigger the section's end.
-        }
-
-        if &line.replace(" ", "") == "[tool.pyflow.dev-dependencies]" {
-            dev_dep_start = i + 1;
-            if in_dep {
-                dep_end = i - 1;
-            }
-            in_dep = false;
-            in_dev_dep = true;
-            continue;
-        }
-
-        // We've found the end of the dependencies section.
-        if in_dep && (sect_re.is_match(line) || i == lines_vec.len() - 1) {
-            in_dep = false;
-            dep_end = i - 1;
-        }
-
-        if in_dev_dep && (sect_re.is_match(line) || i == lines_vec.len() - 1) {
-            in_dev_dep = false;
-            dev_dep_end = i - 1;
-        }
-    }
-
-    let mut insertion_pt = dep_start;
-    if dep_start != 0 {
-        #[allow(clippy::needless_range_loop)]
-        for i in dep_start..=dep_end {
-            let line = lines_vec[i];
-            if !line.is_empty() {
-                insertion_pt = i + 1
-            }
-        }
-    }
-
-    let mut dev_insertion_pt = dev_dep_start;
-    if dev_dep_start != 0 {
-        #[allow(clippy::needless_range_loop)]
-        for i in dev_dep_start..=dev_dep_end {
-            let line = lines_vec[i];
-            if !line.is_empty() {
-                dev_insertion_pt = i + 1
-            }
-        }
-    }
-
-    for (i, line) in cfg_data.lines().enumerate() {
-        if i == insertion_pt && dep_start != 0 {
-            for req in added {
-                result.push_str(&req.to_cfg_string());
-                result.push('\n');
-            }
-        }
-        if i == dev_insertion_pt && dev_dep_start != 0 {
-            for req in added_dev {
-                result.push_str(&req.to_cfg_string());
-                result.push('\n');
-            }
-        }
-        result.push_str(line);
-        result.push('\n');
-    }
-
-    // If the sections don't exist, create them.
-    // todo: Adjust start pad as needed so there's exactly two blank lines before adding the section.
-    if dep_start == 0 {
-        // todo: Should add dependencies section before dev deps section.
-        result.push_str("[tool.pyflow.dependencies]\n");
-        for req in added {
-            result.push_str(&req.to_cfg_string());
-            result.push('\n');
-        }
-        result.push('\n');
-    }
-
-    if dev_dep_start == 0 {
-        result.push_str("[tool.pyflow.dev-dependencies]\n");
-        for req in added_dev {
-            result.push_str(&req.to_cfg_string());
-            result.push('\n');
-        }
-        result.push('\n');
-    }
-
-    result
+    cfg_lines_with_all_reqs.join("\n")
 }
 
 /// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
@@ -373,7 +392,6 @@ a = "^0.3.5"
 
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
-
 "#;
 
     const _BASELINE_NO_DEPS: &str = r#"
@@ -382,7 +400,6 @@ name = ""
 
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
-
 "#;
 
     const BASELINE_NO_DEV_DEPS: &str = r#"
@@ -391,13 +408,11 @@ name = ""
 
 [tool.pyflow.dependencies]
 a = "^0.3.5"
-
 "#;
 
     const BASELINE_NO_DEPS_NO_DEV_DEPS: &str = r#"
 [tool.pyflow]
 name = ""
-
 "#;
 
     const BASELINE_EMPTY_DEPS: &str = r#"
@@ -408,7 +423,6 @@ name = ""
 
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
-
 "#;
 
     #[test]
@@ -434,7 +448,6 @@ c = "^0.0.1"
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
 dev_b = "^0.0.1"
-
 "#;
 
         assert_eq!(expected, &actual);
@@ -462,7 +475,6 @@ c = "^0.0.1"
 
 [tool.pyflow.dev-dependencies]
 dev_b = "^0.0.1"
-
 "#;
 
         assert_eq!(expected, &actual);
@@ -490,7 +502,6 @@ c = "^0.0.1"
 [tool.pyflow.dev-dependencies]
 dev_a = "^1.17.2"
 dev_b = "^0.0.1"
-
 "#;
 
         assert_eq!(expected, &actual);
@@ -517,7 +528,6 @@ c = "^0.0.1"
 
 [tool.pyflow.dev-dependencies]
 dev_b = "^0.0.1"
-
 "#;
         assert_eq!(expected, &actual);
     }
