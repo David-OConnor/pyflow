@@ -67,7 +67,9 @@ creates a folder with the basics.
 ## Quick-and-dirty start for quick-and-dirty scripts
 - Add the line `__requires__ = ['numpy', 'requests']` somewhere in your script, where `numpy` and
 `requests` are dependencies.
-Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
+- Optionally add the line `__python__ = X.Y.Z`, where `X.Y.Z` is a Python version specification.
+Without this line, you will be prompted to choose a version when running the script.
+- Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
 This will set up an isolated environment for this script, and install
 dependencies as required. This is a safe way
 to run one-off Python files that aren't attached to a project, but have dependencies.
