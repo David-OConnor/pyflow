@@ -1,8 +1,9 @@
 # A script to update the version in config files.
-import sys
 import re
+import sys
 
 vers = sys.argv[1]
+
 
 def helper(filename: str, startswith: str, quotes: bool):
     data = ""
@@ -15,6 +16,7 @@ def helper(filename: str, startswith: str, quotes: bool):
                 data += line
     with open(filename, 'w') as f:
         f.write(data)
+
 
 def main():
     helper('Cargo.toml', "version = ", True)
@@ -30,5 +32,6 @@ def main():
         f.write(data)
 
     print(f"Updated version to {vers}")
+
 
 main()
