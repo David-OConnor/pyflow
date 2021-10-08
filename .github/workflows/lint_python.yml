@@ -1,0 +1,25 @@
+name: lint_python
+on: [pull_request, push]
+jobs:
+  lint_python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+      - run: pip install --upgrade pip wheel
+      - run: pip install bandit black codespell flake8 flake8-bugbear
+                         flake8-comprehensions isort mypy pytest pyupgrade safety
+      - run: bandit --recursive --skip B101 .
+      - run: black --check . || true
+      - run: codespell || true  # --ignore-words-list="" --skip="*.css,*.js,*.lock"
+      - run: flake8 . --max-complexity=10 --max-line-length=88 --show-source --statistics
+      - run: isort --check-only --profile black .
+      - run: pip install -r requirements.txt || pip install --editable . || true
+      - run: mkdir --parents --verbose .mypy_cache
+      - run: mypy --ignore-missing-imports --install-types --non-interactive .
+      - run: pytest . || true
+      - run: pytest --doctest-modules . || true
+      - run: shopt -s globstar && pyupgrade --py36-plus **/*.py
+      - run: safety check
