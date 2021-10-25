@@ -787,7 +787,7 @@ pub fn get_git_author() -> Vec<String> {
 }
 
 pub fn find_first_file(path: &Path) -> PathBuf {
-    // todo: Propogate errors rather than abort here?
+    // todo: Propagate errors rather than abort here?
     {
         // There should only be one file in this dist folder: The wheel we're looking for.
         for entry in path

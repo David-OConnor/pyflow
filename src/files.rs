@@ -205,7 +205,7 @@ fn extend_or_insert(mut cfg_lines: Vec<String>, section_header: &str, reqs: &[Re
             cfg_lines.splice(section.i_start..section.i_end, all_deps);
             cfg_lines
         }
-        // The section did not alredy exist, so we must create it
+        // The section did not already exist, so we must create it
         None => {
             // A section is composed of its header, followed by all the requirements
             // and then an empty line
@@ -228,7 +228,7 @@ fn extend_or_insert(mut cfg_lines: Vec<String>, section_header: &str, reqs: &[Re
 /// Add dependencies and dev-dependencies to `cfg-data`, creating the sections if necessary.
 ///
 /// The added sections are appended to the end of the file. Split from `add_reqs_to_cfg`
-/// to accomodate testing.
+/// to accommodate testing.
 fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
     let cfg_lines: Vec<String> = cfg_data.lines().map(str::to_string).collect();
 

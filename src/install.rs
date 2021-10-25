@@ -280,7 +280,7 @@ pub fn download_and_install_package(
                                             f_path.file_name().expect("Problem getting file name");
 
                                         // In the `pandocfilters` Python package, the readme file specified in
-                                        // `setup.py` is a symlink, which we can't unwrap, and is requried to exist,
+                                        // `setup.py` is a symlink, which we can't unwrap, and is required to exist,
                                         // or the wheel build fails. Workaround here; may apply to other packages as well.
                                         if filename
                                             .to_str()
@@ -603,7 +603,7 @@ pub fn rename_package_files(top_path: &Path, old: &str, new: &str) {
         );
         data = data.replace(&format!("from {}.", old), &format!("from {}.", new));
         data = data.replace(&format!("import {}", old), &format!("import {}", new));
-        // Todo: Is this one too general? Supercedes the first. Needed for things like `add_newdoc('numpy.core.multiarray...`
+        // Todo: Is this one too general? Supersedes the first. Needed for things like `add_newdoc('numpy.core.multiarray...`
         data = data.replace(&format!("{}.", old), &format!("{}.", new));
 
         fs::write(path, data).expect("Problem writing file while renaming");

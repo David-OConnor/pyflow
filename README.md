@@ -282,7 +282,7 @@ be added to `pyproject.toml` and installed. You can use the `--dev` flag to inst
 - `pyflow` - Run a Python REPL
 - `pyflow main.py` - Run a python file
 - `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`, or a project function
- For the former, this must have been installed by a dependency; for the latter, it's specfied
+ For the former, this must have been installed by a dependency; for the latter, it's specified
 under `[tool.pyflow]`, `scripts`
 - `pyflow script myscript.py` - Run a one-off script, outside a project directory, with per-file
 package management
@@ -437,7 +437,7 @@ deb, run the new version's installer or deb. If manually calling a binary, repla
 - If installed via `Pip`, run `pip uninstall pyflow`.
 - If installed via Windows installer, run the Installer again and select `Remove` when asked,
 or use `Apps & features`.
-- If installed via a `deb`, useg the `Software Center`.
+- If installed via a `deb`, use the `Software Center`.
 - If manually calling a binary, remove it.
 
 ## Contributing
