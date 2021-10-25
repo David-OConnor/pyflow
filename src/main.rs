@@ -56,7 +56,7 @@ enum SubCommand {
         name: String, // holds the project name.
     },
 
-    /** Install packages from `pyproject.toml`, `pyflow.lock`, or speficied ones. Example:
+    /** Install packages from `pyproject.toml`, `pyflow.lock`, or specified ones. Example:
 
     `pyflow install`: sync your installation with `pyproject.toml`, or `pyflow.lock` if it exists.
     `pyflow install numpy scipy`: install `numpy` and `scipy`.*/
@@ -1010,7 +1010,7 @@ fn sync(
     //    #[cfg(target_os = "macos")]
     //    println!("🔍 Resolving dependencies...");
 
-    // Dev reqs and normal reqs are both installed here; we only ommit dev reqs
+    // Dev reqs and normal reqs are both installed here; we only commit dev reqs
     // when packaging.
     let mut combined_reqs = reqs.to_vec();
     for dev_req in dev_reqs.to_vec() {
@@ -1079,7 +1079,7 @@ fn sync(
     }
 
     // Now that we've confirmed or modified the lock file, we're ready to sync installed
-    // depenencies with it.
+    // dependencies with it.
     sync_deps(
         paths,
         &updated_lock_packs,
@@ -1392,7 +1392,7 @@ fn main() {
 
     // Now handle subcommands that require info about the environment
     match subcmd {
-        // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
+        // Add package names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyproject.lock` with the `pyproject.toml`.
         // We use data from three sources: `pyproject.toml`, `pyflow.lock`, and
         // the currently-installed packages, found by crawling metadata in the `lib` path.

@@ -50,7 +50,7 @@ struct WarehouseData {
 
 #[derive(Clone, Debug, Deserialize)]
 struct ReqCache {
-    // Name is present from pydeps if gestruct packagetting deps for multiple package names. Otherwise, we ommit
+    // Name is present from pydeps if gestruct packagetting deps for multiple package names. Otherwise, we commit
     // it since we already know the name when making the request.
     name: Option<String>,
     version: String,
@@ -189,7 +189,7 @@ fn guess_graph(
     };
 
     // Now add info from lock packs for data we didn't query. The purpose of passing locks
-    // into the dep resolution process is to avoid unecessary HTTP calls and resolution iterations.
+    // into the dep resolution process is to avoid unnecessary HTTP calls and resolution iterations.
     for req in locked_reqs {
         // Find the corresponding lock package. There should be exactly one.
         let package = locked
@@ -622,7 +622,7 @@ pub(super) mod res {
             let mut children: Vec<(u32, String, Version)> = packs2
                 .iter()
                 .filter_map(|p| {
-                    // If there wee multiple instances of this dep, the parent id may have been updated.
+                    // If there were multiple instances of this dep, the parent id may have been updated.
                     let parent_id = match updated_ids.get(&p.parent) {
                         Some(updated_parent) => *updated_parent,
                         None => p.parent,
@@ -723,7 +723,7 @@ pub(super) mod res {
                     }
 
                     // If a version we've examined meets all constraints for packages that use it, use it -
-                    // we've already built the graph to accomodate its sub-deps.
+                    // we've already built the graph to accommodate its sub-deps.
 
                     // If unable, find the highest version that meets the constraints, and determine
                     // what its dependencies are.

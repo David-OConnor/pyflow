@@ -25,7 +25,7 @@ rust-ini = "0.13"
 xz2 = "^0.1.6"
 regex = "^1.1.9"
 ring = "^0.16.9"
-# We disable, by ommission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
+# We disable, by omission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
 # of `pyflow python`.
 structopt = { version = "^0.3.3", default_features = false, features = ["color", "wrap_help", "doc"] }
 serde = {version = "^1.0.101", features = ["derive"]}
@@ -58,7 +58,7 @@ PEP 582 -- Python local packages directory.
 It manages dependencies, keeping them isolated in the project directory, and runs
 python in an environment which uses this directory. Per PEP 582, dependencies
 are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
-A virtual environment is created in the same diretory as `lib`, and is used
+A virtual environment is created in the same directory as `lib`, and is used
 transparently."""
 
 

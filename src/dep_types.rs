@@ -536,7 +536,7 @@ impl Constraint {
 
     /// Called `to_string2` to avoid shadowing `Display`
     pub fn to_string2(&self, ommit_equals: bool, pip_style: bool) -> String {
-        // ommit_equals indicates we dont' want to add any type if it's exact. Eg in config files.
+        // ommit_equals indicates we don't want to add any type if it's exact. Eg in config files.
         // pip_style means that ^ is transformed to ^=, and ~ to ~=
         let mut type_str = if ommit_equals && self.type_ == ReqType::Exact {
             "".to_string()
@@ -792,7 +792,7 @@ pub fn intersection(
     ranges2: &[(Version, Version)],
 ) -> Vec<(Version, Version)> {
     let mut result = vec![];
-    // Each range imposes an additonal constraint.
+    // Each range imposes an additional constraint.
     for rng1 in ranges1 {
         for rng2 in ranges2 {
             // 0 is min, 1 is max.
