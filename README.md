@@ -1,4 +1,4 @@
-[![crates.io version](https://meritbadge.herokuapp.com/pyflow)](https://crates.io/crates/pyflow)
+[![crates.io version](https://img.shields.io/crates/v/pyflow.svg)](https://crates.io/crates/pyflow)
 [![Build Status](https://travis-ci.org/David-OConnor/pyflow.svg?branch=master)](https://travis-ci.org/David-OConnor/pyflow)
 
 
