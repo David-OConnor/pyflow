@@ -430,6 +430,10 @@ pub fn extract_zip(
         // (which would be overwritten by this one.)
         let mut file_str = PathBuf::new();
         let file_str2 = file.enclosed_name().unwrap();
+        // The `hexdump` Python package intentionally strips its own root folder from its zip source
+        // distribution, which breaks wheel building. As a workaround, add the package name and version
+        // as a prefix to the path when extracting if the package name isn't in the first folder's
+        // name already.
         if let Some((name, filename)) = package_names {
             let stem = Path::new(filename).file_stem().unwrap();
             let components: Vec<Component> = file_str2.components().collect();
