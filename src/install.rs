@@ -233,7 +233,7 @@ pub fn download_and_install_package(
 
     match package_type {
         PackageType::Wheel => {
-            util::extract_zip(&archive_file, &paths.lib, &rename);
+            util::extract_zip(&archive_file, &paths.lib, &rename, &None);
         }
         PackageType::Source => {
             // todo: Support .tar.bz2
@@ -308,7 +308,7 @@ pub fn download_and_install_package(
                                 // We'll then continue with this leg, and build/move/cleanup.
 
                                 // Check if we have a zip file instead.
-                                util::extract_zip(&archive_file, &paths.lib, &None);
+                                util::extract_zip(&archive_file, &paths.lib, &None, &Some((name, filename)));
                             }
                         }
                     }
@@ -322,7 +322,7 @@ pub fn download_and_install_package(
                     // We'll then continue with this leg, and build/move/cleanup.
 
                     // Check if we have a zip file instead.
-                    util::extract_zip(&archive_file, &paths.lib, &None);
+                    util::extract_zip(&archive_file, &paths.lib, &None, &Some((name, filename)));
                 }
             }
 
@@ -465,7 +465,7 @@ pub fn download_and_install_package(
                 .expect("Problem copying wheel built from source");
 
             let file_created = fs::File::open(&moved_path).expect("Can't find created wheel.");
-            util::extract_zip(&file_created, &paths.lib, &rename);
+            util::extract_zip(&file_created, &paths.lib, &rename, &None);
 
             // Remove the created and moved wheel
             if fs::remove_file(moved_path).is_err() {
@@ -681,7 +681,7 @@ pub fn download_and_install_git(
     let archive_path = &paths.lib.join(&filename);
     let archive_file = util::open_archive(archive_path);
 
-    util::extract_zip(&archive_file, &paths.lib, &None);
+    util::extract_zip(&archive_file, &paths.lib, &None, &None);
 
     // Use the wheel's name to find the dist-info path, to avoid the chicken-egg scenario
     // of need the dist-info path to find the version.

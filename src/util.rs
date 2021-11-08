@@ -14,6 +14,7 @@ use ini::Ini;
 use regex::Regex;
 use serde::Deserialize;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::path::Component;
 use std::str::FromStr;
 use std::{
     collections::HashMap,
@@ -406,7 +407,7 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
 
 /// Extract the wheel or zip.
 /// From [this example](https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32)
-pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, String)>) {
+pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, String)>, package_names: &Option<(&str, &str)>) {
     // Separate function, since we use it twice.
     let mut archive = if let Ok(a) = zip::ZipArchive::new(file) {
         a
@@ -422,8 +423,17 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
         let mut file = archive.by_index(i).unwrap();
         // Change name here instead of after in case we've already installed a non-renamed version.
         // (which would be overwritten by this one.)
+        let mut file_str = PathBuf::new();
         let file_str2 = file.enclosed_name().unwrap();
-        let file_str = file_str2.to_str().expect("Problem converting path to str");
+        if let Some((name, filename)) = package_names {
+            let stem = Path::new(filename).file_stem().unwrap();
+            let components: Vec<Component> = file_str2.components().collect();
+            if components.len() == 1 || !components[0].as_os_str().to_string_lossy().starts_with(name) {
+                file_str.push(stem);
+            }
+        }
+        file_str.push(file_str2);
+        let file_str = file_str.to_str().expect("Problem converting path to str");
 
         let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
             match rename {
