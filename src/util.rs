@@ -428,18 +428,14 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
         let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
             match rename {
                 Some((old, new)) => PathBuf::from_str(
-                    file.enclosed_name()
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_owned()
+                    file_str.to_owned()
                         .replace(old, new)
                         .as_str(),
                 ),
-                None => PathBuf::from_str(file.enclosed_name().unwrap().to_str().unwrap()),
+                None => PathBuf::from_str(file_str),
             }
         } else {
-            PathBuf::from_str(file.enclosed_name().unwrap().to_str().unwrap())
+            PathBuf::from_str(file_str)
         };
 
         let outpath = out_path.join(extracted_file.unwrap());
