@@ -407,7 +407,12 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
 
 /// Extract the wheel or zip.
 /// From [this example](https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32)
-pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, String)>, package_names: &Option<(&str, &str)>) {
+pub fn extract_zip(
+    file: &fs::File,
+    out_path: &Path,
+    rename: &Option<(String, String)>,
+    package_names: &Option<(&str, &str)>,
+) {
     // Separate function, since we use it twice.
     let mut archive = if let Ok(a) = zip::ZipArchive::new(file) {
         a
@@ -428,7 +433,12 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
         if let Some((name, filename)) = package_names {
             let stem = Path::new(filename).file_stem().unwrap();
             let components: Vec<Component> = file_str2.components().collect();
-            if components.len() == 1 || !components[0].as_os_str().to_string_lossy().starts_with(name) {
+            if components.len() == 1
+                || !components[0]
+                    .as_os_str()
+                    .to_string_lossy()
+                    .starts_with(name)
+            {
                 file_str.push(stem);
             }
         }
@@ -437,11 +447,9 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
 
         let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
             match rename {
-                Some((old, new)) => PathBuf::from_str(
-                    file_str.to_owned()
-                        .replace(old, new)
-                        .as_str(),
-                ),
+                Some((old, new)) => {
+                    PathBuf::from_str(file_str.to_owned().replace(old, new).as_str())
+                }
                 None => PathBuf::from_str(file_str),
             }
         } else {
