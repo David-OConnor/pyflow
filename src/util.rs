@@ -428,8 +428,8 @@ pub fn extract_zip(
         let mut file = archive.by_index(i).unwrap();
         // Change name here instead of after in case we've already installed a non-renamed version.
         // (which would be overwritten by this one.)
-        let mut file_str = PathBuf::new();
         let file_str2 = file.enclosed_name().unwrap();
+        let mut file_str = PathBuf::with_capacity(file_str2.as_os_str().len());
         // The `hexdump` Python package intentionally strips its own root folder from its zip source
         // distribution, which breaks wheel building. As a workaround, add the package name and version
         // as a prefix to the path when extracting if the package name isn't in the first folder's
