@@ -428,37 +428,40 @@ pub fn extract_zip(
         let mut file = archive.by_index(i).unwrap();
         // Change name here instead of after in case we've already installed a non-renamed version.
         // (which would be overwritten by this one.)
-        let file_str2 = file.enclosed_name().unwrap();
-        let mut file_str = PathBuf::with_capacity(file_str2.as_os_str().len());
+        let entry_path = file.enclosed_name().unwrap();
+        let mut final_entry_path = PathBuf::with_capacity(entry_path.as_os_str().len());
         // The `hexdump` Python package intentionally strips its own root folder from its zip source
         // distribution, which breaks wheel building. As a workaround, add the package name and version
         // as a prefix to the path when extracting if the package name isn't in the first folder's
         // name already.
         if let Some((name, filename)) = package_names {
             let stem = Path::new(filename).file_stem().unwrap();
-            let components: Vec<Component> = file_str2.components().collect();
+            let components: Vec<Component> = entry_path.components().collect();
             if components.len() == 1
                 || !components[0]
                     .as_os_str()
                     .to_string_lossy()
                     .starts_with(name)
             {
-                file_str.push(stem);
+                final_entry_path.push(stem);
             }
         }
-        file_str.push(file_str2);
-        let file_str = file_str.to_str().expect("Problem converting path to str");
+        final_entry_path.push(entry_path);
+        let entry_path_str = final_entry_path
+            .to_str()
+            .expect("Problem converting path to str");
 
-        let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
-            match rename {
-                Some((old, new)) => {
-                    PathBuf::from_str(file_str.to_owned().replace(old, new).as_str())
+        let extracted_file =
+            if !entry_path_str.contains("dist-info") && !entry_path_str.contains("egg-info") {
+                match rename {
+                    Some((old, new)) => {
+                        PathBuf::from_str(entry_path_str.to_owned().replace(old, new).as_str())
+                    }
+                    None => Ok(final_entry_path),
                 }
-                None => PathBuf::from_str(file_str),
-            }
-        } else {
-            PathBuf::from_str(file_str)
-        };
+            } else {
+                Ok(final_entry_path)
+            };
 
         let outpath = out_path.join(extracted_file.unwrap());
 
