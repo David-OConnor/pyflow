@@ -36,8 +36,8 @@ fn replace_distutils(setup_path: &Path) {
         t
     } else {
         util::abort(&format!(
-            "Can't find setup.py in this source distribution\
-             path: {:?}. This could mean there are no suitable wheels for this package,\
+            "Can't find setup.py in this source distribution \
+             path: {:?}. This could mean there are no suitable wheels for this package, \
              and there's a problem with its setup.py.",
             setup_path
         ));
@@ -210,7 +210,7 @@ pub fn download_and_install_package(
         let mut input = String::new();
         io::stdin()
             .read_line(&mut input)
-            .expect("Unable to read user input Hash fail decision");
+            .expect("Unable to read user input hash fail decision");
 
         let input = input
             .chars()
@@ -301,7 +301,7 @@ pub fn download_and_install_package(
                             Err(e) => {
                                 // todo: dRY while troubleshooting
                                 println!(
-                                    "Problem opening the tar.gz archive: {:?}: {:?},  checking if it's a zip...",
+                                    "Problem opening the tar.gz archive: {:?}: {:?}, checking if it's a zip...",
                                     &archive_file, e
                                 );
                                 // The extract_wheel function just extracts a zip file, so it's appropriate here.
@@ -315,7 +315,7 @@ pub fn download_and_install_package(
                 }
                 Err(e) => {
                     println!(
-                        "Problem opening the tar.gz archive: {:?}: {:?},  checking if it's a zip...",
+                        "Problem opening the tar.gz archive: {:?}: {:?}, checking if it's a zip...",
                         &archive_file, e
                     );
                     // The extract_wheel function just extracts a zip file, so it's appropriate here.
@@ -327,7 +327,7 @@ pub fn download_and_install_package(
             }
 
             // The archive is now unpacked into a parent folder from the `tar.gz`. Place
-            // its sub-folders directly in the lib folder, and deleten the parent.
+            // its sub-folders directly in the lib folder, and delete the parent.
             let re = Regex::new(r"^(.*?)(?:\.tar\.gz|\.zip)$").unwrap();
             let folder_name = re
                 .captures(filename)
