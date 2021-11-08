@@ -257,6 +257,7 @@ pub fn download_and_install_package(
             // symlinks in the archive may cause the unpack to break. If this happens, we want
             // to continue unpacking the other files.
             // Overall, this is a pretty verbose workaround!
+            let mut archive_error = Ok(());
             match archive.entries() {
                 Ok(entries) => {
                     for file in entries {
@@ -299,31 +300,24 @@ pub fn download_and_install_package(
                                 };
                             }
                             Err(e) => {
-                                // todo: dRY while troubleshooting
-                                println!(
-                                    "Problem opening the tar.gz archive: {:?}: {:?}, checking if it's a zip...",
-                                    &archive_file, e
-                                );
-                                // The extract_wheel function just extracts a zip file, so it's appropriate here.
-                                // We'll then continue with this leg, and build/move/cleanup.
-
-                                // Check if we have a zip file instead.
-                                util::extract_zip(&archive_file, &paths.lib, &None, &Some((name, filename)));
+                                // We'll continue with this leg, then check if we have a zip file instead.
+                                archive_error = Err(e);
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    println!(
-                        "Problem opening the tar.gz archive: {:?}: {:?}, checking if it's a zip...",
-                        &archive_file, e
-                    );
-                    // The extract_wheel function just extracts a zip file, so it's appropriate here.
-                    // We'll then continue with this leg, and build/move/cleanup.
-
-                    // Check if we have a zip file instead.
-                    util::extract_zip(&archive_file, &paths.lib, &None, &Some((name, filename)));
+                    // We'll continue with this leg, then check if we have a zip file instead.
+                    archive_error = Err(e);
                 }
+            }
+            // Check if we have a zip file instead.
+            if let Err(e) = archive_error {
+                println!(
+                    "Problem opening the tar.gz archive: {:?}: {:?}, checking if it's a zip...",
+                    &archive_file, e
+                );
+                util::extract_zip(&archive_file, &paths.lib, &None, &Some((name, filename)));
             }
 
             // The archive is now unpacked into a parent folder from the `tar.gz`. Place
