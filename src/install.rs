@@ -3,6 +3,7 @@ use crate::{commands, dep_types::Version, util};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
+use std::path::PathBuf;
 use std::{fs, io, io::BufRead, path::Path, process::Command};
 use tar::Archive;
 use termcolor::Color;
@@ -90,15 +91,10 @@ if __name__ == '__main__':
         .unwrap_or_else(|_| util::abort(&format!("Problem creating script file for {}", name)));
 }
 
-/// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
-/// Alternatively, we could just parse all `dist-info` folders every run; this should
-/// be faster.
-pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_path: &Path) {
-    let mut scripts = vec![];
-    // todo: Sep fn for dist_info path, to avoid repetition between here and uninstall?
+/// Find `dist-info` folder for package.
+fn find_dist_info_path(name: &str, version: &Version, lib_path: &Path) -> PathBuf {
     let mut dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
     // If we can't find the dist_info path, it may be due to it not using a full 3-digit semver format.
-    // todo: Dry from dep_resolution, release check.
     if !dist_info_path.exists() && (version.patch == Some(0) || version.patch == None) {
         dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string_med()));
         if !dist_info_path.exists() && (version.minor == Some(0) || version.minor == None) {
@@ -106,6 +102,15 @@ pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_pa
                 lib_path.join(format!("{}-{}.dist-info", name, version.to_string_short()));
         }
     }
+    dist_info_path
+}
+
+/// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
+/// Alternatively, we could just parse all `dist-info` folders every run; this should
+/// be faster.
+pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_path: &Path) {
+    let mut scripts = vec![];
+    let dist_info_path = find_dist_info_path(name, version, lib_path);
 
     if let Ok(ep_file) = fs::File::open(&dist_info_path.join("entry_points.txt")) {
         let mut in_scripts_section = false;
@@ -497,24 +502,7 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
     // Uninstall the package
     // package folders appear to be lowercase, while metadata keeps the package title's casing.
 
-    let mut dist_info_path =
-        lib_path.join(format!("{}-{}.dist-info", name_ins, vers_ins.to_string()));
-    // todo: DRY
-    if !dist_info_path.exists() && (vers_ins.patch == Some(0) || vers_ins.patch == None) {
-        dist_info_path = lib_path.join(format!(
-            "{}-{}.dist-info",
-            name_ins,
-            vers_ins.to_string_med()
-        ));
-        if !dist_info_path.exists() && (vers_ins.minor == Some(0) || vers_ins.minor == None) {
-            dist_info_path = lib_path.join(format!(
-                "{}-{}.dist-info",
-                name_ins,
-                vers_ins.to_string_short()
-            ));
-        }
-    }
-
+    let dist_info_path = find_dist_info_path(name_ins, vers_ins, lib_path);
     let egg_info_path = lib_path.join(format!("{}-{}.egg-info", name_ins, vers_ins.to_string()));
 
     // todo: could top_level.txt be in egg-info too?
