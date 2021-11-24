@@ -9,13 +9,12 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
         toolchain: [stable, beta]  # , nightly]
-    runs-on: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.toolchain }}
       - uses: actions-rs/cargo@v1
         with:
           command: build
