@@ -1,0 +1,26 @@
+on: [pull_request, push]
+name: build_and_test
+jobs:
+  build_and_test:
+    env:
+      RUST_BACKTRACE: 1
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        toolchain: [stable, beta]  # , nightly]
+    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args:  --verbose --all
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args:  --verbose --all
