@@ -1,19 +1,24 @@
 #![allow(clippy::non_ascii_literal)]
 
-#[mockall_double::double]
-use crate::dep_resolution::res;
-use crate::dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version};
-use crate::util::{abort, process_reqs, Os};
+use crate::actions::new;
+use crate::dep_types::{Constraint, Lock, Package, Req, Version};
+use crate::util::abort;
+use crate::util::deps::sync;
 
 use regex::Regex;
 use serde::Deserialize;
-use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap,
+    env, fs,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::{Arc, RwLock},
+};
 
-use std::path::Path;
-use std::sync::{Arc, RwLock};
 use structopt::StructOpt;
 use termcolor::{Color, ColorChoice};
 
+mod actions;
 mod build;
 mod commands;
 mod dep_parser;
@@ -663,53 +668,6 @@ thread_local! {
     static CLI_CONFIG: RwLock<Arc<CliConfig>> = RwLock::new(Default::default());
 }
 
-/// Create a template directory for a python project.
-pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
-    if !PathBuf::from(name).exists() {
-        fs::create_dir_all(&format!("{}/{}", name, name.replace("-", "_")))?;
-        fs::File::create(&format!("{}/{}/__init__.py", name, name.replace("-", "_")))?;
-        fs::File::create(&format!("{}/README.md", name))?;
-        fs::File::create(&format!("{}/.gitignore", name))?;
-    }
-
-    let gitignore_init = r##"# General Python ignores
-build/
-dist/
-__pycache__/
-__pypackages__/
-.ipynb_checkpoints/
-*.pyc
-*~
-*/.mypy_cache/
-
-
-# Project ignores
-"##;
-
-    let readme_init = &format!("# {}\n\n{}", name, "(A description)");
-
-    fs::write(&format!("{}/.gitignore", name), gitignore_init)?;
-    fs::write(&format!("{}/README.md", name), readme_init)?;
-
-    let cfg = Config {
-        name: Some(name.to_string()),
-        authors: util::get_git_author(),
-        py_version: Some(util::prompt_py_vers()),
-        ..Default::default()
-    };
-
-    cfg.write_file(&PathBuf::from(format!("{}/pyproject.toml", name)));
-
-    if commands::git_init(Path::new(name)).is_err() {
-        util::print_color(
-            "Unable to initialize a git repo for your project",
-            Color::Yellow, // Dark
-        );
-    };
-
-    Ok(())
-}
-
 fn parse_lockpack_rename(rename: &str) -> (u32, String) {
     let re = Regex::new(r"^(\d+)\s(.*)$").unwrap();
     let caps = re
@@ -720,152 +678,6 @@ fn parse_lockpack_rename(rename: &str) -> (u32, String) {
     let name = caps.get(2).unwrap().as_str().to_owned();
 
     (id, name)
-}
-
-/// Install/uninstall deps as required from the passed list, and re-write the lock file.
-fn sync_deps(
-    paths: &util::Paths,
-    lock_packs: &[LockPackage],
-    dont_uninstall: &[String],
-    installed: &[(String, Version, Vec<String>)],
-    os: util::Os,
-    python_vers: &Version,
-) {
-    let packages: Vec<PackToInstall> = lock_packs
-        .iter()
-        .map(|lp| {
-            (
-                (
-                    util::standardize_name(&lp.name),
-                    Version::from_str(&lp.version).expect("Problem parsing lock version"),
-                ),
-                lp.rename.as_ref().map(|rn| parse_lockpack_rename(rn)),
-            )
-        })
-        .collect();
-
-    // todo shim. Use top-level A/R. We discard it temporarily while working other issues.
-    let installed: Vec<(String, Version)> = installed
-        .iter()
-        // Don't standardize name here; see note below in to_uninstall.
-        .map(|t| (t.0.clone(), t.1.clone()))
-        .collect();
-
-    // Filter by not-already-installed.
-    let to_install: Vec<&PackToInstall> = packages
-        .iter()
-        .filter(|(pack, _)| {
-            let mut contains = false;
-            for inst in &installed {
-                if util::compare_names(&pack.0, &inst.0) && pack.1 == inst.1 {
-                    contains = true;
-                    break;
-                }
-            }
-
-            // The typing module is sometimes downloaded, causing a conflict/improper
-            // behavior compared to the built in module.
-            !contains && pack.0 != "typing"
-        })
-        .collect();
-
-    // todo: Once you include rename info in installed, you won't need to use the map logic here.
-    let packages_only: Vec<&(String, Version)> = packages.iter().map(|(p, _)| p).collect();
-    let to_uninstall: Vec<&(String, Version)> = installed
-        .iter()
-        .filter(|inst| {
-            // Don't standardize the name here; we need original capitalization to uninstall
-            // metadata etc.
-            let inst = (inst.0.clone(), inst.1.clone());
-            let mut contains = false;
-            // We can't just use the contains method, due to needing compare_names().
-            for pack in &packages_only {
-                if util::compare_names(&pack.0, &inst.0) && pack.1 == inst.1 {
-                    contains = true;
-                    break;
-                }
-            }
-
-            for name in dont_uninstall {
-                if util::compare_names(name, &inst.0) {
-                    contains = true;
-                    break;
-                }
-            }
-
-            !contains
-        })
-        .collect();
-
-    for (name, version) in &to_uninstall {
-        // todo: Deal with renamed. Currently won't work correctly with them.
-        install::uninstall(name, version, &paths.lib)
-    }
-
-    for ((name, version), rename) in &to_install {
-        let data =
-            res::get_warehouse_release(name, version).expect("Problem getting warehouse data");
-
-        let (best_release, package_type) =
-            util::find_best_release(&data, name, version, os, python_vers);
-
-        // Powershell  doesn't like emojis
-        // todo format literal issues, so repeating this whole statement.
-        #[cfg(target_os = "windows")]
-        util::print_color_(&format!("Installing {}", &name), Color::Cyan);
-        #[cfg(target_os = "linux")]
-        util::print_color_(&format!("⬇ Installing {}", &name), Color::Cyan);
-        #[cfg(target_os = "macos")]
-        util::print_color_(&format!("⬇ Installing {}", &name), Color::Cyan);
-        println!(" {} ...", &version.to_string_color());
-
-        if install::download_and_install_package(
-            name,
-            version,
-            &best_release.url,
-            &best_release.filename,
-            &best_release.digests.sha256,
-            paths,
-            package_type,
-            rename,
-        )
-        .is_err()
-        {
-            abort("Problem downloading packages");
-        }
-    }
-    // Perform renames after all packages are installed, or we may attempt to rename a package
-    // we haven't yet installed.
-    for ((name, version), rename) in &to_install {
-        if let Some((id, new)) = rename {
-            // Rename in the renamed package
-
-            let renamed_path = &paths.lib.join(util::standardize_name(new));
-
-            util::wait_for_dirs(&[renamed_path.clone()]).expect("Problem creating renamed path");
-            install::rename_package_files(renamed_path, name, new);
-
-            // Rename in the parent calling the renamed package. // todo: Multiple parents?
-            let parent = lock_packs
-                .iter()
-                .find(|lp| lp.id == *id)
-                .expect("Can't find parent calling renamed package");
-            install::rename_package_files(
-                &paths.lib.join(util::standardize_name(&parent.name)),
-                name,
-                new,
-            );
-
-            // todo: Handle this more generally, in case we don't have proper semver dist-info paths.
-            install::rename_metadata(
-                &paths
-                    .lib
-                    .join(&format!("{}-{}.dist-info", name, version.to_string())),
-                name,
-                new,
-            );
-        }
-    }
 }
 
 fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) -> bool {
@@ -957,139 +769,6 @@ fn run_cli_tool(
     }
 }
 
-/// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
-/// the config and lock files.
-#[allow(clippy::too_many_arguments)]
-fn sync(
-    paths: &util::Paths,
-    lockpacks: &[LockPackage],
-    reqs: &[Req],
-    dev_reqs: &[Req],
-    dont_uninstall: &[String],
-    os: util::Os,
-    py_vers: &Version,
-    lock_path: &Path,
-) {
-    let installed = util::find_installed(&paths.lib);
-    // We control the lock format, so this regex will always match
-    let dep_re = Regex::new(r"^(.*?)\s(.*)\s.*$").unwrap();
-
-    // We don't need to resolve reqs that are already locked.
-    let locked: Vec<Package> = lockpacks
-        .iter()
-        .map(|lp| {
-            let mut deps = vec![];
-            for dep in lp.dependencies.as_ref().unwrap_or(&vec![]) {
-                let caps = dep_re
-                    .captures(dep)
-                    .expect("Problem reading lock file dependencies");
-                let name = caps.get(1).unwrap().as_str().to_owned();
-                let vers = Version::from_str(caps.get(2).unwrap().as_str())
-                    .expect("Problem parsing version from lock");
-                deps.push((999, name, vers)); // dummy id
-            }
-
-            Package {
-                id: lp.id, // todo
-                parent: 0, // todo
-                name: lp.name.clone(),
-                version: Version::from_str(&lp.version).expect("Problem parsing lock version"),
-                deps,
-                rename: Rename::No, // todo
-            }
-        })
-        .collect();
-
-    // todo: Only show this when needed.
-    // todo: Temporarily? Removed.
-    // Powershell  doesn't like emojis
-    //    #[cfg(target_os = "windows")]
-    //    println!("Resolving dependencies...");
-    //    #[cfg(target_os = "linux")]
-    //    println!("🔍 Resolving dependencies...");
-    //    #[cfg(target_os = "macos")]
-    //    println!("🔍 Resolving dependencies...");
-
-    // Dev reqs and normal reqs are both installed here; we only commit dev reqs
-    // when packaging.
-    let mut combined_reqs = reqs.to_vec();
-    for dev_req in dev_reqs.to_vec() {
-        combined_reqs.push(dev_req);
-    }
-
-    let resolved = if let Ok(r) = res::resolve(&combined_reqs, &locked, os, py_vers) {
-        r
-    } else {
-        abort("Problem resolving dependencies");
-        unreachable!()
-    };
-
-    // Now merge the existing lock packages with new ones from resolved packages.
-    // We have a collection of requirements; attempt to merge them with the already-locked ones.
-    let mut updated_lock_packs = vec![];
-
-    for package in &resolved {
-        let dummy_constraints = vec![Constraint::new(ReqType::Exact, package.version.clone())];
-        if already_locked(&locked, &package.name, &dummy_constraints) {
-            let existing: Vec<&LockPackage> = lockpacks
-                .iter()
-                .filter(|lp| util::compare_names(&lp.name, &package.name))
-                .collect();
-            let existing2 = existing[0];
-
-            updated_lock_packs.push(existing2.clone());
-            continue;
-        }
-
-        let deps = package
-            .deps
-            .iter()
-            .map(|(_, name, version)| {
-                format!(
-                    "{} {} pypi+https://pypi.org/pypi/{}/{}/json",
-                    name, version, name, version,
-                )
-            })
-            .collect();
-
-        updated_lock_packs.push(LockPackage {
-            id: package.id,
-            name: package.name.clone(),
-            version: package.version.to_string(),
-            source: Some(format!(
-                "pypi+https://pypi.org/pypi/{}/{}/json",
-                package.name,
-                package.version.to_string()
-            )),
-            dependencies: Some(deps),
-            rename: match &package.rename {
-                Rename::Yes(parent_id, _, name) => Some(format!("{} {}", parent_id, name)),
-                Rename::No => None,
-            },
-        });
-    }
-
-    let updated_lock = Lock {
-        //        metadata: Some(lock_metadata),
-        metadata: HashMap::new(), // todo: Problem with toml conversion.
-        package: Some(updated_lock_packs.clone()),
-    };
-    if util::write_lock(lock_path, &updated_lock).is_err() {
-        abort("Problem writing lock file");
-    }
-
-    // Now that we've confirmed or modified the lock file, we're ready to sync installed
-    // dependencies with it.
-    sync_deps(
-        paths,
-        &updated_lock_packs,
-        dont_uninstall,
-        &installed,
-        os,
-        py_vers,
-    );
-}
-
 #[derive(Clone)]
 enum ClearChoice {
     Dependencies,
@@ -1107,7 +786,7 @@ impl ToString for ClearChoice {
 
 /// Clear `Pyflow`'s cache. Allow the user to select which parts to clear based on a prompt.
 fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
-    let result = util::prompt_list(
+    let result = util::prompts::list(
         "Which cached items would you like to clear?",
         "choice",
         &[
@@ -1152,49 +831,23 @@ fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
     }
 }
 
+const CFG_FILENAME: &str = "pyproject.toml";
+const LOCK_FILENAME: &str = "pyflow.lock";
+
 /// We process input commands in a deliberate order, to ensure the required, and only the required
 /// setup steps are accomplished before each.
 fn main() {
-    let cfg_filename = "pyproject.toml";
-    let lock_filename = "pyflow.lock";
-
-    let base_dir = directories::BaseDirs::new();
-    let pyflow_path = base_dir
-        .expect("Problem finding base directory")
-        .data_dir()
-        .to_owned()
-        .join("pyflow");
-
-    let dep_cache_path = pyflow_path.join("dependency-cache");
-    let script_env_path = pyflow_path.join("script-envs");
-    let git_path = pyflow_path.join("git");
-
-    #[cfg(target_os = "windows")]
-    let os = Os::Windows;
-    #[cfg(target_os = "linux")]
-    let os = Os::Linux;
-    #[cfg(target_os = "macos")]
-    let os = Os::Mac;
+    let (pyflow_path, dep_cache_path, script_env_path, git_path) = util::fs::get_paths();
+    let os = util::get_os();
 
     let opt = Opt::from_args();
     #[cfg(debug_assertions)]
     eprintln!("opts {:?}", opt);
-    // Handle color option
-    let choice = match opt.color.unwrap_or_else(|| String::from("auto")).as_str() {
-        "always" => ColorChoice::Always,
-        "ansi" => ColorChoice::AlwaysAnsi,
-        "auto" => {
-            if atty::is(atty::Stream::Stdout) {
-                ColorChoice::Auto
-            } else {
-                ColorChoice::Never
-            }
-        }
-        _ => ColorChoice::Never,
-    };
 
     CliConfig {
-        color_choice: choice,
+        color_choice: util::handle_color_option(
+            opt.color.unwrap_or_else(|| String::from("auto")).as_str(),
+        ),
     }
     .make_current();
 
@@ -1218,10 +871,7 @@ fn main() {
 
     if let SubCommand::New { name } = subcmd {
         if new(&name).is_err() {
-            abort(
-                "Problem creating the project. This may be due to a permissions problem. \
-                 If on linux, please try again with `sudo`.",
-            );
+            abort(actions::NEW_ERROR_MESSAGE);
         }
         util::print_color(
             &format!("Created a new Python project named {}", name),
@@ -1231,7 +881,7 @@ fn main() {
     }
 
     if let SubCommand::Init {} = subcmd {
-        let cfg_path = PathBuf::from(cfg_filename);
+        let cfg_path = PathBuf::from(CFG_FILENAME);
         if cfg_path.exists() {
             abort("pyproject.toml already exists - not overwriting.")
         }
@@ -1241,7 +891,7 @@ fn main() {
             false => Config::default(),
         };
 
-        cfg.py_version = Some(util::prompt_py_vers());
+        cfg.py_version = Some(util::prompts::py_vers());
 
         files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
 
@@ -1251,7 +901,7 @@ fn main() {
     }
 
     // We need access to the config from here on; throw an error if we can't find it.
-    let mut cfg_path = PathBuf::from(cfg_filename);
+    let mut cfg_path = PathBuf::from(CFG_FILENAME);
     if !&cfg_path.exists() {
         //        if let SubCommand::Python { args: _ } = subcmd {
         // Try looking recursively in parent directories for a config file.
@@ -1259,7 +909,7 @@ fn main() {
         let mut current_level = env::current_dir().expect("Can't access current directory");
         for _ in 0..recursion_limit {
             if let Some(parent) = current_level.parent() {
-                let parent_cfg_path = parent.join(cfg_filename);
+                let parent_cfg_path = parent.join(CFG_FILENAME);
                 if parent_cfg_path.exists() {
                     cfg_path = parent_cfg_path;
                     break;
@@ -1284,7 +934,7 @@ fn main() {
     // Base pypackages_path and lock_path on the `pyproject.toml` folder.
     let proj_path = cfg_path.parent().expect("Can't find proj pathw via parent");
     let pypackages_path = proj_path.join("__pypackages__");
-    let lock_path = &proj_path.join(lock_filename);
+    let lock_path = &proj_path.join(LOCK_FILENAME);
 
     let mut cfg = Config::from_file(&cfg_path).unwrap_or_default();
     cfg.populate_path_subreqs();
@@ -1337,7 +987,7 @@ fn main() {
     let cfg_vers = if let Some(v) = cfg.py_version.clone() {
         v
     } else {
-        let specified = util::prompt_py_vers();
+        let specified = util::prompts::py_vers();
 
         if !cfg_path.exists() {
             cfg.write_file(&cfg_path);
@@ -1392,40 +1042,15 @@ fn main() {
 
     // Now handle subcommands that require info about the environment
     match subcmd {
-        // Add package names to `pyproject.toml` if needed. Then sync installed packages
-        // and `pyproject.lock` with the `pyproject.toml`.
+        // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
+        // and `pyflow.lock` with the `pyproject.toml`.
         // We use data from three sources: `pyproject.toml`, `pyflow.lock`, and
         // the currently-installed packages, found by crawling metadata in the `lib` path.
         // See the readme section `How installation and locking work` for details.
-        SubCommand::Install { packages, dev } => {
-            if !cfg_path.exists() {
-                cfg.write_file(&cfg_path);
-            }
-
-            if found_lock {
-                util::print_color("Found lockfile", Color::Green);
-            }
-
-            // Merge reqs added via cli with those in `pyproject.toml`.
-            let (updated_reqs, up_dev_reqs) = util::merge_reqs(&packages, dev, &cfg, &cfg_path);
-
-            let dont_uninstall = util::find_dont_uninstall(&updated_reqs, &up_dev_reqs);
-
-            let updated_reqs = process_reqs(updated_reqs, &git_path, &paths);
-            let up_dev_reqs = process_reqs(up_dev_reqs, &git_path, &paths);
-
-            sync(
-                &paths,
-                &lockpacks,
-                &updated_reqs,
-                &up_dev_reqs,
-                &dont_uninstall,
-                os,
-                &py_vers,
-                &lock_path,
-            );
-            util::print_color("Installation complete", Color::Green);
-        }
+        SubCommand::Install { packages, dev } => actions::install(
+            &cfg_path, &cfg, &git_path, &paths, found_lock, &packages, dev, &lockpacks, &os,
+            &py_vers, lock_path,
+        ),
 
         SubCommand::Uninstall { packages } => {
             // todo: uninstall dev?

@@ -1550,7 +1550,7 @@ pub mod tests {
             name: "win-unicode-console".into(),
             constraints: vec![Constraint::new(Gte, Version::new(0, 5, 0))],
             extra: None,
-            sys_platform: Some((Exact, crate::Os::Windows32)),
+            sys_platform: Some((Exact, util::Os::Windows32)),
             python_version: Some(vec![Constraint::new(Lt, Version::new(3, 6, 0))]),
             install_with_extras: None,
             path: None,
@@ -1791,7 +1791,7 @@ pub mod tests {
     #[test]
     fn req_to_cfg_string_empty_constraints() {
         let ctx = res::get_version_info_context();
-        ctx.expect().returning(|name, py_ver| {
+        ctx.expect().returning(|name, _py_ver| {
             Ok((
                 name.to_string(),
                 Version::new(1, 2, 3),

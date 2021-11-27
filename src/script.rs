@@ -58,7 +58,7 @@ pub fn run_script(
         )
         .expect("Problem parsing version from file");
     } else {
-        cfg_vers = util::prompt_py_vers();
+        cfg_vers = util::prompts::py_vers();
         create_or_update_version_file(&py_vers_path, &cfg_vers);
     }
 
@@ -116,7 +116,7 @@ pub fn run_script(
         })
         .collect();
 
-    crate::sync(
+    util::deps::sync(
         &paths,
         &lockpacks,
         &reqs,

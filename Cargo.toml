@@ -45,6 +45,7 @@ reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-t
 #reqwest = "^0.9.21"
 
 mockall_double = "^0.2.0"
+indoc = "1.0.3"
 
 [dev-dependencies]
 rstest = "0.10.0"
