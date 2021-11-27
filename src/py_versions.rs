@@ -195,7 +195,7 @@ fn download(py_install_path: &Path, version: &Version) {
     }
     #[cfg(target_os = "linux")]
     {
-        let result = util::prompt_list(
+        let result = util::prompts::list(
             "Please enter the number corresponding to your Linux distro:",
             "Linux distro",
             &[
