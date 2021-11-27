@@ -1,3 +1,10 @@
+pub mod deps;
+pub mod fs;
+pub mod prompts;
+
+mod os;
+pub use os::{get_os, Os};
+
 #[mockall_double::double]
 use crate::dep_resolution::res;
 
@@ -12,20 +19,18 @@ use crate::{
 };
 use ini::Ini;
 use regex::Regex;
-use serde::Deserialize;
+
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::Component;
 use std::str::FromStr;
 use std::{
-    collections::HashMap,
     env,
     error::Error,
-    fs,
     path::{Path, PathBuf},
     process, thread, time,
 };
 use tar::Archive;
-use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use xz2::read::XzDecoder;
 
 #[derive(Debug)]
@@ -48,41 +53,6 @@ pub struct Metadata {
     pub keywords: Vec<String>,
     pub platform: Option<String>,
     pub requires_dist: Vec<Req>,
-}
-
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
-/// Used to determine which version of a binary package to download. Assume 64-bit.
-pub enum Os {
-    Linux32,
-    Linux,
-    Windows32,
-    Windows,
-    //    Mac32,
-    Mac,
-    Any,
-}
-
-impl FromStr for Os {
-    type Err = DependencyError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re_linux32 = Regex::new(r"(many)?linux.*i686").unwrap();
-        let re_linux = Regex::new(r"((many)?linux.*|cygwin|(open)?bsd6*)").unwrap();
-        let re_win = Regex::new(r"^win(dows|_amd64)?").unwrap();
-        let re_mac = Regex::new(r"(macosx.*|darwin|.*mac.*)").unwrap();
-
-        Ok(match s {
-            x if re_linux32.is_match(x) => Self::Linux32,
-            x if re_linux.is_match(x) => Self::Linux,
-            "win32" => Self::Windows32,
-            x if re_win.is_match(x) => Self::Windows,
-            x if re_mac.is_match(x) => Self::Mac,
-            "any" => Self::Any,
-            _ => {
-                return Err(DependencyError::new(&format!("Problem parsing Os: {}", s)));
-            }
-        })
-    }
 }
 
 /// Print line in a color, then reset formatting.
@@ -258,7 +228,7 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
             let top_level = lib_path.join(folder_name).join("top_level.txt");
 
             let mut tops = vec![];
-            match fs::File::open(top_level) {
+            match std::fs::File::open(top_level) {
                 Ok(f) => {
                     for line in BufReader::new(f).lines().flatten() {
                         tops.push(line);
@@ -408,7 +378,7 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
 /// Extract the wheel or zip.
 /// From [this example](https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32)
 pub fn extract_zip(
-    file: &fs::File,
+    file: &std::fs::File,
     out_path: &Path,
     rename: &Option<(String, String)>,
     package_names: &Option<(&str, &str)>,
@@ -466,14 +436,14 @@ pub fn extract_zip(
         let outpath = out_path.join(extracted_file.unwrap());
 
         if (&*file.name()).ends_with('/') {
-            fs::create_dir_all(&outpath).unwrap();
+            std::fs::create_dir_all(&outpath).unwrap();
         } else {
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
-                    fs::create_dir_all(&p).unwrap();
+                    std::fs::create_dir_all(&p).unwrap();
                 }
             }
-            let mut outfile = fs::File::create(&outpath).unwrap();
+            let mut outfile = std::fs::File::create(&outpath).unwrap();
             io::copy(&mut file, &mut outfile).unwrap();
         }
 
@@ -483,14 +453,14 @@ pub fn extract_zip(
             use std::os::unix::fs::PermissionsExt;
 
             if let Some(mode) = file.unix_mode() {
-                fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
+                std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode)).unwrap();
             }
         }
     }
 }
 
 pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
-    let archive_bytes = fs::read(archive_path).expect("Problem reading archive as bytes");
+    let archive_bytes = std::fs::read(archive_path).expect("Problem reading archive as bytes");
 
     let mut tar: Vec<u8> = Vec::new();
     let mut decompressor = XzDecoder::new(&archive_bytes[..]);
@@ -576,7 +546,7 @@ pub fn find_or_create_venv(
 
     #[cfg(target_os = "macos")]
     {
-        let vers_path = fs::canonicalize(vers_path);
+        let vers_path = std::fs::canonicalize(vers_path);
         let vers_path = match vers_path {
             Ok(path) => path,
             Err(error) => {
@@ -616,59 +586,6 @@ pub fn fallible_v_parse(vers: &str) -> Version {
         abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
         unreachable!()
     }
-}
-
-/// A generic prompt function, where the user selects from a list
-pub fn prompt_list<T: Clone + ToString>(
-    init_msg: &str,
-    type_: &str,
-    items: &[(String, T)],
-    show_item: bool,
-) -> (String, T) {
-    print_color(init_msg, Color::Magenta);
-    for (i, (name, content)) in items.iter().enumerate() {
-        if show_item {
-            println!("{}: {}: {}", i + 1, name, content.to_string())
-        } else {
-            println!("{}: {}", i + 1, name)
-        }
-    }
-
-    let mut mapping = HashMap::new();
-    for (i, item) in items.iter().enumerate() {
-        mapping.insert(i + 1, item);
-    }
-
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Problem reading input");
-
-    let input = input
-        .chars()
-        .next()
-        .expect("Problem parsing input")
-        .to_string()
-        .parse::<usize>();
-
-    let input = if let Ok(ip) = input {
-        ip
-    } else {
-        abort("Please try again; enter a number like 1 or 2 .");
-        unreachable!()
-    };
-
-    let (name, content) = if let Some(r) = mapping.get(&input) {
-        r
-    } else {
-        abort(&format!(
-            "Can't find the {} associated with that number. Is it in the list above?",
-            type_
-        ));
-        unreachable!()
-    };
-
-    (name.to_string(), content.clone())
 }
 
 /// Find the operating system from a wheel filename. This doesn't appear to be available
@@ -829,9 +746,9 @@ pub fn find_first_file(path: &Path) -> PathBuf {
 }
 
 /// Mainly to avoid repeating error-handling code.
-pub fn open_archive(path: &Path) -> fs::File {
+pub fn open_archive(path: &Path) -> std::fs::File {
     // We must re-open the file after computing the hash.
-    if let Ok(f) = fs::File::open(&path) {
+    if let Ok(f) = std::fs::File::open(&path) {
         f
     } else {
         abort(&format!(
@@ -849,7 +766,7 @@ pub fn parse_metadata(path: &Path) -> Metadata {
 
     let mut result = Metadata::default();
 
-    let data = fs::read_to_string(path).expect("Problem reading METADATA");
+    let data = std::fs::read_to_string(path).expect("Problem reading METADATA");
     for line in data.lines() {
         if let Some(caps) = re("Version").captures(line) {
             let val = caps.get(1).unwrap().as_str();
@@ -891,29 +808,6 @@ fn default_python() -> Version {
     match commands::find_py_version("python") {
         Some(x) => x,
         None => Version::new_short(3, 9),
-    }
-}
-
-/// Ask the user what Python version to use.
-pub fn prompt_py_vers() -> Version {
-    print_color(
-        "Please enter the Python version for this project: (eg: 3.8)",
-        Color::Magenta,
-    );
-    let default_ver = default_python();
-    print!("Default [{}]:", default_ver);
-    std::io::stdout().flush().unwrap();
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Unable to read user input for version");
-
-    input.pop(); // Remove trailing newline.
-    let input = input.replace("\n", "").replace("\r", "");
-    if !input.is_empty() {
-        fallible_v_parse(&input)
-    } else {
-        default_ver
     }
 }
 
@@ -1011,15 +905,30 @@ pub fn process_reqs(reqs: Vec<Req>, git_path: &Path, paths: &util::Paths) -> Vec
 
 /// Read dependency data from a lock file.
 pub fn read_lock(path: &Path) -> Result<Lock, Box<dyn Error>> {
-    let data = fs::read_to_string(path)?;
+    let data = std::fs::read_to_string(path)?;
     Ok(toml::from_str(&data)?)
 }
 
 /// Write dependency data to a lock file.
 pub fn write_lock(path: &Path, data: &Lock) -> Result<(), Box<dyn Error>> {
     let data = toml::to_string(data)?;
-    fs::write(path, data)?;
+    std::fs::write(path, data)?;
     Ok(())
+}
+
+pub fn handle_color_option(s: &str) -> ColorChoice {
+    match s {
+        "always" => ColorChoice::Always,
+        "ansi" => ColorChoice::AlwaysAnsi,
+        "auto" => {
+            if atty::is(atty::Stream::Stdout) {
+                ColorChoice::Auto
+            } else {
+                ColorChoice::Never
+            }
+        }
+        _ => ColorChoice::Never,
+    }
 }
 
 #[cfg(test)]

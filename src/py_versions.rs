@@ -430,7 +430,7 @@ pub fn create_venv(
             }
             _ => {
                 //                let r = prompt_alias(&aliases);
-                let r = util::prompt_list(
+                let r = util::prompts::list(
                     "Found multiple compatible Python versions. Please enter the number associated with the one you'd like to use:",
                     "Python alias",
                     &aliases,
