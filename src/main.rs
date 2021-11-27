@@ -1042,7 +1042,7 @@ fn main() {
 
     // Now handle subcommands that require info about the environment
     match subcmd {
-        // Add pacakge names to `pyproject.toml` if needed. Then sync installed packages
+        // Add package names to `pyproject.toml` if needed. Then sync installed packages
         // and `pyflow.lock` with the `pyproject.toml`.
         // We use data from three sources: `pyproject.toml`, `pyflow.lock`, and
         // the currently-installed packages, found by crawling metadata in the `lib` path.

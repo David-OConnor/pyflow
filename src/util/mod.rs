@@ -530,7 +530,7 @@ pub fn find_or_create_venv(
 
     #[cfg(target_os = "linux")]
     {
-        let vers_path = fs::canonicalize(vers_path);
+        let vers_path = std::fs::canonicalize(vers_path);
         let vers_path = match vers_path {
             Ok(path) => path,
             Err(error) => {
