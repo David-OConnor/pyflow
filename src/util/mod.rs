@@ -1,5 +1,5 @@
 pub mod deps;
-pub mod fs;
+pub mod pathes;
 pub mod prompts;
 
 mod os;
@@ -88,7 +88,7 @@ fn print_color_res_(message: &str, color: Color) -> io::Result<()> {
 /// Used when the program should exit from a condition that may arise normally from program use,
 /// like incorrect info in config files, problems with dependencies, or internet connection problems.
 /// We use `expect`, `panic!` etc for problems that indicate a bug in this program.
-pub fn abort(message: &str) {
+pub fn abort(message: &str) -> ! {
     print_color(message, Color::Red);
     process::exit(1)
 }
@@ -321,8 +321,7 @@ pub fn merge_reqs(
             ) {
                 r
             } else {
-                abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?");
-                unreachable!()
+                abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?")
             };
 
             added_req.constraints.push(Constraint::new(
@@ -390,8 +389,7 @@ pub fn extract_zip(
         abort(&format!(
             "Problem reading the wheel archive: {:?}. Is it corrupted?",
             &file
-        ));
-        unreachable!()
+        ))
     };
 
     for i in 0..archive.len() {
@@ -518,8 +516,7 @@ pub fn find_or_create_venv(
                 // todo: Handle this, eg by letting the user pick the one to use?
                 "Multiple compatible Python environments found
                 for this project.",
-            );
-            unreachable!()
+            )
         }
     }
 
@@ -553,8 +550,7 @@ pub fn find_or_create_venv(
                 abort(&format!(
                     "Problem converting path to absolute path: {:?}",
                     error
-                ));
-                unreachable!()
+                ))
             }
         };
         (vers_path, py_vers)
@@ -583,8 +579,7 @@ pub fn fallible_v_parse(vers: &str) -> Version {
     if let Ok(v) = Version::from_str(&vers) {
         v
     } else {
-        abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
-        unreachable!()
+        abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1")
     }
 }
 
@@ -687,8 +682,7 @@ pub fn find_best_release(
                 "Unable to find a compatible release for {}: {}",
                 name,
                 version.to_string_color()
-            ));
-            unreachable!()
+            ))
         } else {
             best_release = source_releases[0].clone();
             package_type = install::PackageType::Source;
@@ -740,8 +734,7 @@ pub fn find_first_file(path: &Path) -> PathBuf {
         abort(&format!(
             "Problem the first file in the directory: {:?}",
             path
-        ));
-        unreachable!()
+        ))
     };
 }
 
@@ -755,8 +748,7 @@ pub fn open_archive(path: &Path) -> std::fs::File {
             "Problem opening the archive file: {:?}. Was there a problem while
         downloading it?",
             &path
-        ));
-        unreachable!()
+        ))
     }
 }
 
@@ -858,8 +850,7 @@ pub fn canon_join(path: &Path, extend: &str) -> PathBuf {
     let canon = match ex_path.canonicalize() {
         Ok(c) => c,
         Err(e) => {
-            abort(&format!("{}\n\"{}\"", e, extend));
-            unreachable!()
+            abort(&format!("{}\n\"{}\"", e, extend))
         }
     };
     let mut new_path = path.to_path_buf();

@@ -136,7 +136,6 @@ fn guess_graph(
                 ReqType::Ne => os_ != os,
                 _ => {
                     util::abort("Reqtypes for Os must be == or !=");
-                    unreachable!()
                 }
             },
             None => true,
@@ -185,7 +184,6 @@ fn guess_graph(
              still occurs, consider opening an issue on github.",
             &reqs
         ));
-        unreachable!()
     };
 
     // Now add info from lock packs for data we didn't query. The purpose of passing locks
@@ -487,8 +485,7 @@ pub(super) mod res {
                             "Can't get version info for the dependency `{}`. \
                          Is it spelled correctly? Is the internet connection ok?",
                             &req.name
-                        ));
-                        ("".to_string(), Version::new(0, 0, 0), vec![]) // match-compatibility placeholder
+                        ))
                     }
                 }
             };

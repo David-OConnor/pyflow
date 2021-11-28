@@ -42,7 +42,6 @@ fn replace_distutils(setup_path: &Path) {
              and there's a problem with its setup.py.",
             setup_path
         ));
-        unreachable!()
     };
 
     let re = Regex::new(r"distutils.core").unwrap();
@@ -205,7 +204,6 @@ pub fn download_and_install_package(
     let reader = io::BufReader::new(&file);
     let file_digest = sha256_digest(reader).unwrap_or_else(|_| {
         util::abort(&format!("Problem reading hash for {}", filename));
-        unreachable!()
     });
 
     let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
@@ -336,8 +334,7 @@ pub fn download_and_install_package(
                     util::abort(&format!(
                         "Unable to find extracted folder name: {}",
                         filename
-                    ));
-                    unreachable!()
+                    ))
                 })
                 .as_str();
 
@@ -675,8 +672,7 @@ pub fn download_and_install_git(
             caps.get(2).unwrap().as_str()
         )
     } else {
-        util::abort("Unable to find the dist info path from wheel filename");
-        unreachable!();
+        util::abort("Unable to find the dist info path from wheel filename")
     };
 
     let metadata = util::parse_metadata(&paths.lib.join(dist_info).join("METADATA")); // todo temp!

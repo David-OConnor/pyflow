@@ -69,8 +69,7 @@ pub fn list<T: Clone + ToString>(
     let input = if let Ok(ip) = input {
         ip
     } else {
-        abort("Please try again; enter a number like 1 or 2 .");
-        unreachable!()
+        abort("Please try again; enter a number like 1 or 2 .")
     };
 
     let (name, content) = if let Some(r) = mapping.get(&input) {
@@ -79,8 +78,7 @@ pub fn list<T: Clone + ToString>(
         abort(&format!(
             "Can't find the {} associated with that number. Is it in the list above?",
             type_
-        ));
-        unreachable!()
+        ))
     };
 
     (name.to_string(), content.clone())
