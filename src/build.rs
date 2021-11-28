@@ -81,7 +81,6 @@ fn cfg_to_setup(cfg: &crate::Config) -> String {
                 "Problem parsing the `authors` field in `pyproject.toml`: {:?}",
                 &cfg.authors
             ));
-            unreachable!()
         };
         author = caps.get(1).unwrap().as_str().to_owned();
         author_email = caps.get(2).unwrap().as_str().to_owned();

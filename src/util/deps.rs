@@ -75,8 +75,7 @@ pub fn sync(
     let resolved = if let Ok(r) = res::resolve(&combined_reqs, &locked, os, py_vers) {
         r
     } else {
-        abort("Problem resolving dependencies");
-        unreachable!()
+        abort("Problem resolving dependencies")
     };
 
     // Now merge the existing lock packages with new ones from resolved packages.

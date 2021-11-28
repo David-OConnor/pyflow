@@ -953,7 +953,6 @@ impl Req {
                     (fmtd_name, version)
                 } else {
                     util::abort(&format!("Unable to find version info for {:?}", &self.name));
-                    unreachable!()
                 };
                 format!(
                     r#"{} = "{}""#,

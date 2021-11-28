@@ -29,7 +29,6 @@ pub fn run_script(
         util::abort(
             "`script` must be followed by the script to run, eg `pyflow script myscript.py`",
         );
-        unreachable!()
     };
 
     // todo: Consider a metadata file, but for now, we'll use folders
