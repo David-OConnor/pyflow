@@ -110,9 +110,7 @@ impl From<(Version, Os)> for PyVers {
                     unreachable!()
                 }
             },
-            _ => {
-                util::abort(unsupported)
-            }
+            _ => util::abort(unsupported),
         }
     }
 }
