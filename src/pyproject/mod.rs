@@ -2,7 +2,11 @@ use std::{collections::HashMap, fs, path::Path, str::FromStr};
 
 use serde::Deserialize;
 
-use crate::{dep_types::{Constraint, Req, Version}, files, pop_reqs_helper, util::{self, abort}};
+use crate::{
+    dep_types::{Constraint, Req, Version},
+    files, pop_reqs_helper,
+    util::{self, abort},
+};
 
 /// A config, parsed from pyproject.toml
 #[derive(Clone, Debug, Default, Deserialize)]

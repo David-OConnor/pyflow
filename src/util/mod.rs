@@ -20,6 +20,7 @@ use crate::{
 use ini::Ini;
 use regex::Regex;
 
+use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::Component;
 use std::str::FromStr;
@@ -228,7 +229,7 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
             let top_level = lib_path.join(folder_name).join("top_level.txt");
 
             let mut tops = vec![];
-            match std::fs::File::open(top_level) {
+            match fs::File::open(top_level) {
                 Ok(f) => {
                     for line in BufReader::new(f).lines().flatten() {
                         tops.push(line);
@@ -377,7 +378,7 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
 /// Extract the wheel or zip.
 /// From [this example](https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32)
 pub fn extract_zip(
-    file: &std::fs::File,
+    file: &fs::File,
     out_path: &Path,
     rename: &Option<(String, String)>,
     package_names: &Option<(&str, &str)>,
@@ -434,14 +435,14 @@ pub fn extract_zip(
         let outpath = out_path.join(extracted_file.unwrap());
 
         if (&*file.name()).ends_with('/') {
-            std::fs::create_dir_all(&outpath).unwrap();
+            fs::create_dir_all(&outpath).unwrap();
         } else {
             if let Some(p) = outpath.parent() {
                 if !p.exists() {
-                    std::fs::create_dir_all(&p).unwrap();
+                    fs::create_dir_all(&p).unwrap();
                 }
             }
-            let mut outfile = std::fs::File::create(&outpath).unwrap();
+            let mut outfile = fs::File::create(&outpath).unwrap();
             io::copy(&mut file, &mut outfile).unwrap();
         }
 
@@ -451,14 +452,14 @@ pub fn extract_zip(
             use std::os::unix::fs::PermissionsExt;
 
             if let Some(mode) = file.unix_mode() {
-                std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode)).unwrap();
+                fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
             }
         }
     }
 }
 
 pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
-    let archive_bytes = std::fs::read(archive_path).expect("Problem reading archive as bytes");
+    let archive_bytes = fs::read(archive_path).expect("Problem reading archive as bytes");
 
     let mut tar: Vec<u8> = Vec::new();
     let mut decompressor = XzDecoder::new(&archive_bytes[..]);
@@ -527,7 +528,7 @@ pub fn find_or_create_venv(
 
     #[cfg(target_os = "linux")]
     {
-        let vers_path = std::fs::canonicalize(vers_path);
+        let vers_path = fs::canonicalize(vers_path);
         let vers_path = match vers_path {
             Ok(path) => path,
             Err(error) => {
@@ -543,15 +544,13 @@ pub fn find_or_create_venv(
 
     #[cfg(target_os = "macos")]
     {
-        let vers_path = std::fs::canonicalize(vers_path);
+        let vers_path = fs::canonicalize(vers_path);
         let vers_path = match vers_path {
             Ok(path) => path,
-            Err(error) => {
-                abort(&format!(
-                    "Problem converting path to absolute path: {:?}",
-                    error
-                ))
-            }
+            Err(error) => abort(&format!(
+                "Problem converting path to absolute path: {:?}",
+                error
+            )),
         };
         (vers_path, py_vers)
     }
@@ -739,9 +738,9 @@ pub fn find_first_file(path: &Path) -> PathBuf {
 }
 
 /// Mainly to avoid repeating error-handling code.
-pub fn open_archive(path: &Path) -> std::fs::File {
+pub fn open_archive(path: &Path) -> fs::File {
     // We must re-open the file after computing the hash.
-    if let Ok(f) = std::fs::File::open(&path) {
+    if let Ok(f) = fs::File::open(&path) {
         f
     } else {
         abort(&format!(
@@ -758,7 +757,7 @@ pub fn parse_metadata(path: &Path) -> Metadata {
 
     let mut result = Metadata::default();
 
-    let data = std::fs::read_to_string(path).expect("Problem reading METADATA");
+    let data = fs::read_to_string(path).expect("Problem reading METADATA");
     for line in data.lines() {
         if let Some(caps) = re("Version").captures(line) {
             let val = caps.get(1).unwrap().as_str();
@@ -849,9 +848,7 @@ pub fn canon_join(path: &Path, extend: &str) -> PathBuf {
     let ex_path = Path::new(extend);
     let canon = match ex_path.canonicalize() {
         Ok(c) => c,
-        Err(e) => {
-            abort(&format!("{}\n\"{}\"", e, extend))
-        }
+        Err(e) => abort(&format!("{}\n\"{}\"", e, extend)),
     };
     let mut new_path = path.to_path_buf();
 
@@ -896,14 +893,14 @@ pub fn process_reqs(reqs: Vec<Req>, git_path: &Path, paths: &util::Paths) -> Vec
 
 /// Read dependency data from a lock file.
 pub fn read_lock(path: &Path) -> Result<Lock, Box<dyn Error>> {
-    let data = std::fs::read_to_string(path)?;
+    let data = fs::read_to_string(path)?;
     Ok(toml::from_str(&data)?)
 }
 
 /// Write dependency data to a lock file.
 pub fn write_lock(path: &Path, data: &Lock) -> Result<(), Box<dyn Error>> {
     let data = toml::to_string(data)?;
-    std::fs::write(path, data)?;
+    fs::write(path, data)?;
     Ok(())
 }
 
