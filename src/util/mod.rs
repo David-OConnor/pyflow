@@ -1,5 +1,5 @@
 pub mod deps;
-pub mod pathes;
+pub mod paths;
 pub mod prompts;
 
 mod os;
