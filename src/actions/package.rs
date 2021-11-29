@@ -16,8 +16,8 @@ pub fn package(
     extras: &[String],
 ) {
     sync(
-        &paths,
-        &lockpacks,
+        paths,
+        lockpacks,
         &cfg.reqs,
         &cfg.dev_reqs,
         &util::find_dont_uninstall(&cfg.reqs, &cfg.dev_reqs),
@@ -26,5 +26,5 @@ pub fn package(
         lock_path,
     );
 
-    build::build(&lockpacks, &paths, &cfg, &extras)
+    build::build(lockpacks, paths, cfg, extras)
 }

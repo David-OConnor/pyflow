@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use termcolor::Color;
 
@@ -16,12 +16,12 @@ pub fn install(
     git_path: &Path,
     paths: &Paths,
     found_lock: bool,
-    packages: &Vec<String>,
+    packages: &[String],
     dev: bool,
-    lockpacks: &Vec<LockPackage>,
+    lockpacks: &[LockPackage],
     os: &Os,
     py_vers: &Version,
-    lock_path: &PathBuf,
+    lock_path: &Path,
 ) {
     if !cfg_path.exists() {
         cfg.write_file(cfg_path);
@@ -36,8 +36,8 @@ pub fn install(
 
     let dont_uninstall = util::find_dont_uninstall(&updated_reqs, &up_dev_reqs);
 
-    let updated_reqs = process_reqs(updated_reqs, &git_path, paths);
-    let up_dev_reqs = process_reqs(up_dev_reqs, &git_path, paths);
+    let updated_reqs = process_reqs(updated_reqs, git_path, paths);
+    let up_dev_reqs = process_reqs(up_dev_reqs, git_path, paths);
 
     sync(
         paths,

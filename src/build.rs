@@ -333,7 +333,7 @@ setuptools.setup(
 ]"#;
 
         let actual = serialize_py_list(
-            &vec![
+            &[
                 "Programming Language :: Python :: 3".into(),
                 "License :: OSI Approved :: MIT License".into(),
                 "Operating System :: OS Independent".into(),
