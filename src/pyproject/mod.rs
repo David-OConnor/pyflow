@@ -1,10 +1,11 @@
-use std::{collections::HashMap, fs, path::Path, str::FromStr};
+use std::{collections::HashMap, fs, path::{Path, PathBuf}, str::FromStr};
 
+use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
     dep_types::{Constraint, Req, Version},
-    files, pop_reqs_helper,
+    files,
     util::{self, abort},
 };
 
@@ -398,4 +399,52 @@ impl Config {
             abort("Problem writing `pyproject.toml`")
         }
     }
+}
+
+/// Reduce repetition between reqs and dev reqs when populating reqs of path reqs.
+fn pop_reqs_helper(reqs: &[Req], dev: bool) -> Vec<Req> {
+    let mut result = vec![];
+    for req in reqs.iter().filter(|r| r.path.is_some()) {
+        let req_path = PathBuf::from(req.path.clone().unwrap());
+        let pyproj = req_path.join("pyproject.toml");
+        let req_txt = req_path.join("requirements.txt");
+        //        let pipfile = req_path.join("Pipfile");
+
+        let mut dummy_cfg = Config::default();
+
+        if req_txt.exists() {
+            files::parse_req_dot_text(&mut dummy_cfg, &req_txt);
+        }
+
+        //        if pipfile.exists() {
+        //            files::parse_pipfile(&mut dummy_cfg, &pipfile);
+        //        }
+
+        if dev {
+            result.append(&mut dummy_cfg.dev_reqs);
+        } else {
+            result.append(&mut dummy_cfg.reqs);
+        }
+
+        // We don't parse `setup.py`, since it involves running arbitrary Python code.
+
+        if pyproj.exists() {
+            let mut req_cfg = Config::from_file(&PathBuf::from(&pyproj))
+                .unwrap_or_else(|| panic!("Problem parsing`pyproject.toml`: {:?}", &pyproj));
+            result.append(&mut req_cfg.reqs)
+        }
+
+        // Check for metadata of a built wheel
+        for folder_name in util::find_folders(&req_path) {
+            // todo: Dry from `util` and `install`.
+            let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
+            if re_dist.captures(&folder_name).is_some() {
+                let metadata_path = req_path.join(folder_name).join("METADATA");
+                let mut metadata = util::parse_metadata(&metadata_path);
+
+                result.append(&mut metadata.requires_dist);
+            }
+        }
+    }
+    result
 }

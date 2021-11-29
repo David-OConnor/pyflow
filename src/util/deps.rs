@@ -4,10 +4,9 @@ use regex::Regex;
 use termcolor::Color;
 
 use crate::{
-    already_locked,
     dep_resolution::res,
     dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version},
-    install, parse_lockpack_rename,
+    install,
     util::{self, abort},
     PackToInstall,
 };
@@ -287,4 +286,30 @@ fn sync_deps(
             );
         }
     }
+}
+
+fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) -> bool {
+    let mut result = true;
+    for constr in constraints.iter() {
+        if !locked
+            .iter()
+            .any(|p| util::compare_names(&p.name, name) && constr.is_compatible(&p.version))
+        {
+            result = false;
+            break;
+        }
+    }
+    result
+}
+
+fn parse_lockpack_rename(rename: &str) -> (u32, String) {
+    let re = Regex::new(r"^(\d+)\s(.*)$").unwrap();
+    let caps = re
+        .captures(rename)
+        .expect("Problem reading lock file rename");
+
+    let id = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
+    let name = caps.get(2).unwrap().as_str().to_owned();
+
+    (id, name)
 }

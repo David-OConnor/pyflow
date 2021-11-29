@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use termcolor::Color;
 
@@ -11,9 +11,9 @@ use crate::{
 use util::deps::sync;
 
 pub fn install(
-    cfg_path: &PathBuf,
+    cfg_path: &Path,
     cfg: &Config,
-    git_path: &PathBuf,
+    git_path: &Path,
     paths: &Paths,
     found_lock: bool,
     packages: &Vec<String>,
@@ -24,7 +24,7 @@ pub fn install(
     lock_path: &PathBuf,
 ) {
     if !cfg_path.exists() {
-        cfg.write_file(&cfg_path);
+        cfg.write_file(cfg_path);
     }
 
     if found_lock {
@@ -32,7 +32,7 @@ pub fn install(
     }
 
     // Merge reqs added via cli with those in `pyproject.toml`.
-    let (updated_reqs, up_dev_reqs) = util::merge_reqs(packages, dev, &cfg, &cfg_path);
+    let (updated_reqs, up_dev_reqs) = util::merge_reqs(packages, dev, cfg, cfg_path);
 
     let dont_uninstall = util::find_dont_uninstall(&updated_reqs, &up_dev_reqs);
 

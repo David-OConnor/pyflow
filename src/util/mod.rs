@@ -172,39 +172,6 @@ pub fn set_pythonpath(paths: &[PathBuf]) {
     env::set_var("PYTHONPATH", formatted_paths);
 }
 
-/// List all installed dependencies and console scripts, by examining the `libs` and `bin` folders.
-/// Also include path requirements, which won't appear in the `lib` folder.
-pub fn show_installed(lib_path: &Path, path_reqs: &[Req]) {
-    let installed = find_installed(lib_path);
-    let scripts = find_console_scripts(&lib_path.join("../bin"));
-
-    if installed.is_empty() {
-        print_color("No packages are installed.", Color::Blue); // Dark
-    } else {
-        print_color("These packages are installed:", Color::Blue); // Dark
-        for (name, version, _tops) in installed {
-            print_color_(&name, Color::Cyan);
-            print_color(&format!("=={}", version.to_string_color()), Color::White);
-        }
-        for req in path_reqs {
-            print_color_(&req.name, Color::Cyan);
-            print_color(
-                &format!(", at path: {}", req.path.as_ref().unwrap()),
-                Color::White,
-            );
-        }
-    }
-
-    if scripts.is_empty() {
-        print_color("\nNo console scripts are installed.", Color::Blue); // Dark
-    } else {
-        print_color("\nThese console scripts are installed:", Color::Blue); // Dark
-        for script in scripts {
-            print_color(&script, Color::Cyan); // Dark
-        }
-    }
-}
-
 /// Find the packages installed, by browsing the lib folder for metadata.
 /// Returns package-name, version, folder names
 pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
@@ -214,7 +181,7 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
 
     let mut result = vec![];
 
-    for folder_name in &find_folders(&lib_path) {
+    for folder_name in &find_folders(lib_path) {
         let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
 
         if let Some(caps) = re_dist.captures(folder_name) {
@@ -243,26 +210,6 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
     }
     result
 }
-
-/// Find console scripts installed, by browsing the (custom) bin folder
-pub fn find_console_scripts(bin_path: &Path) -> Vec<String> {
-    let mut result = vec![];
-    if !bin_path.exists() {
-        return vec![];
-    }
-
-    for entry in bin_path
-        .read_dir()
-        .expect("Trouble opening bin path")
-        .flatten()
-    {
-        if entry.file_type().unwrap().is_file() {
-            result.push(entry.file_name().to_str().unwrap().to_owned())
-        }
-    }
-    result
-}
-
 /// Handle reqs added via the CLI. Result is (normal reqs, dev reqs)
 pub fn merge_reqs(
     added: &[String],
@@ -355,12 +302,12 @@ pub fn merge_reqs(
 
     if dev {
         if !added_reqs_unique.is_empty() {
-            files::add_reqs_to_cfg(&cfg_path, &[], &added_reqs_unique);
+            files::add_reqs_to_cfg(cfg_path, &[], &added_reqs_unique);
         }
         (cfg.reqs.clone(), result)
     } else {
         if !added_reqs_unique.is_empty() {
-            files::add_reqs_to_cfg(&cfg_path, &added_reqs_unique, &[]);
+            files::add_reqs_to_cfg(cfg_path, &added_reqs_unique, &[]);
         }
         (result, cfg.dev_reqs.clone())
     }
@@ -839,7 +786,7 @@ pub(crate) fn check_command_output_with(output: &process::Output, f: impl Fn(&st
     if !output.status.success() {
         let stderr =
             std::str::from_utf8(&output.stderr).expect("building string from command output");
-        f(&stderr)
+        f(stderr)
     }
 }
 
@@ -874,8 +821,8 @@ pub fn process_reqs(reqs: Vec<Req>, git_path: &Path, paths: &util::Paths) -> Vec
             &req.name,
             //  util::GitPath::Git(req.git.clone().unwrap()),
             &req.git.clone().unwrap(),
-            &git_path,
-            &paths,
+            git_path,
+            paths,
         );
         git_reqs.append(&mut metadata.requires_dist);
     }

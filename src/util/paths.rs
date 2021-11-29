@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub fn pyflow_path() -> PathBuf {
     directories::BaseDirs::new()
@@ -8,15 +8,15 @@ pub fn pyflow_path() -> PathBuf {
         .join("pyflow")
 }
 
-pub fn dep_cache_path(pyflow_path: &PathBuf) -> PathBuf {
+pub fn dep_cache_path(pyflow_path: &Path) -> PathBuf {
     pyflow_path.join("dependency_cache")
 }
 
-pub fn script_env_path(pyflow_path: &PathBuf) -> PathBuf {
+pub fn script_env_path(pyflow_path: &Path) -> PathBuf {
     pyflow_path.join("script_envs")
 }
 
-pub fn git_path(pyflow_path: &PathBuf) -> PathBuf {
+pub fn git_path(pyflow_path: &Path) -> PathBuf {
     pyflow_path.join("git")
 }
 

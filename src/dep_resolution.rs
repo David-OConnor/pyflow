@@ -219,13 +219,11 @@ fn guess_graph(
     for req in &reqs {
         // Find matching packages for this requirement.
 
-        let query_result: Vec<&ReqCache> = query_data
+        let query_result = query_data
             .iter()
-            .filter(|d| util::compare_names(d.name.as_ref().unwrap(), &req.name))
-            .collect();
+            .filter(|d| util::compare_names(d.name.as_ref().unwrap(), &req.name));
 
         let deps: Vec<Dependency> = query_result
-            .into_iter()
             // Our query data should already be compat, but QC here.
             .filter_map(|r| {
                 let py_constraint = Constraint::from_str_multiple(
@@ -342,7 +340,7 @@ pub(super) mod res {
                 .filter_map(|x: &Req| {
                     if is_compat(&r.constraints, &x.constraints[0].version) {
                         if let Some(ref pv) = x.python_version {
-                            if is_compat(&pv, &py_vers) {
+                            if is_compat(pv, &py_vers) {
                                 Some(x.constraints[0].version.clone())
                             } else {
                                 None
@@ -408,7 +406,7 @@ pub(super) mod res {
         // the parsed version to the key.
         let mut version_map = HashMap::new();
         for key in data.releases.keys() {
-            if let Ok(ver) = Version::from_str(&key) {
+            if let Ok(ver) = Version::from_str(key) {
                 version_map.insert(ver, key.as_str());
             } else if cfg!(debug_assertions) {
                 eprintln!("Unable to parse \"{}\" version \"{}\"; skipped.", name, key);
@@ -778,25 +776,21 @@ pub(super) mod res {
                         }
 
                         // Generate dependencies here for all avail versions.
-                        let unresolved_deps: Vec<Dependency> = versions
-                            .iter()
-                            .filter_map(|vers| {
-                                if inter.iter().any(|i| i.0 <= *vers && *vers <= i.1) {
-                                    Some(Dependency {
-                                        id: 0, // placeholder; we'll assign an id to the one we pick.
-                                        name: fmtd_name.clone(),
-                                        version: vers.clone(),
-                                        reqs: vec![], // todo
-                                        parent: 0,    // todo
-                                    })
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
+                        let unresolved_deps = versions.iter().filter_map(|vers| {
+                            if inter.iter().any(|i| i.0 <= *vers && *vers <= i.1) {
+                                Some(Dependency {
+                                    id: 0, // placeholder; we'll assign an id to the one we pick.
+                                    name: fmtd_name.clone(),
+                                    version: vers.clone(),
+                                    reqs: vec![], // todo
+                                    parent: 0,    // todo
+                                })
+                            } else {
+                                None
+                            }
+                        });
 
                         let mut newest_unresolved = unresolved_deps
-                            .into_iter()
                             .max_by(|a, b| a.version.cmp(&b.version))
                             .unwrap();
 

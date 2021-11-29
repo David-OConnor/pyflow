@@ -1,8 +1,5 @@
-#![allow(clippy::non_ascii_literal)]
-
-use crate::actions::new;
 use crate::cli_options::{ExternalCommand, ExternalSubcommands, Opt, SubCommand};
-use crate::dep_types::{Constraint, Lock, Package, Req, Version};
+use crate::dep_types::{Lock, Package, Req, Version};
 use crate::pyproject::Config;
 use crate::util::abort;
 use crate::util::deps::sync;
@@ -30,66 +27,15 @@ mod pyproject;
 mod script;
 mod util;
 
-// todo:
-// Custom build system
-// Fix pydeps caching timeout
-// Make binaries work on any linux distro
-// Mac binaries for pyflow and python
-// "fatal: destination path exists" when using git deps
-// add hash and git/path info to locks
-// clear download git source as an option. In general, git install is a mess
-
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
 
-/// Reduce repetition between reqs and dev reqs when populating reqs of path reqs.
-fn pop_reqs_helper(reqs: &[Req], dev: bool) -> Vec<Req> {
-    let mut result = vec![];
-    for req in reqs.iter().filter(|r| r.path.is_some()) {
-        let req_path = PathBuf::from(req.path.clone().unwrap());
-        let pyproj = req_path.join("pyproject.toml");
-        let req_txt = req_path.join("requirements.txt");
-        //        let pipfile = req_path.join("Pipfile");
+const CFG_FILENAME: &str = "pyproject.toml";
+const LOCK_FILENAME: &str = "pyflow.lock";
 
-        let mut dummy_cfg = Config::default();
+///////////////////////////////////////////////////////////////////////////////
+/// Global multithreaded variables part
+///////////////////////////////////////////////////////////////////////////////
 
-        if req_txt.exists() {
-            files::parse_req_dot_text(&mut dummy_cfg, &req_txt);
-        }
-
-        //        if pipfile.exists() {
-        //            files::parse_pipfile(&mut dummy_cfg, &pipfile);
-        //        }
-
-        if dev {
-            result.append(&mut dummy_cfg.dev_reqs);
-        } else {
-            result.append(&mut dummy_cfg.reqs);
-        }
-
-        // We don't parse `setup.py`, since it involves running arbitrary Python code.
-
-        if pyproj.exists() {
-            let mut req_cfg = Config::from_file(&PathBuf::from(&pyproj))
-                .unwrap_or_else(|| panic!("Problem parsing`pyproject.toml`: {:?}", &pyproj));
-            result.append(&mut req_cfg.reqs)
-        }
-
-        // Check for metadata of a built wheel
-        for folder_name in util::find_folders(&req_path) {
-            // todo: Dry from `util` and `install`.
-            let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
-            if re_dist.captures(&folder_name).is_some() {
-                let metadata_path = req_path.join(folder_name).join("METADATA");
-                let mut metadata = util::parse_metadata(&metadata_path);
-
-                result.append(&mut metadata.requires_dist);
-            }
-        }
-    }
-    result
-}
-
-/// Cli Config to hold command line options
 struct CliConfig {
     pub color_choice: ColorChoice,
 }
@@ -115,31 +61,9 @@ thread_local! {
     static CLI_CONFIG: RwLock<Arc<CliConfig>> = RwLock::new(Default::default());
 }
 
-fn parse_lockpack_rename(rename: &str) -> (u32, String) {
-    let re = Regex::new(r"^(\d+)\s(.*)$").unwrap();
-    let caps = re
-        .captures(rename)
-        .expect("Problem reading lock file rename");
-
-    let id = caps.get(1).unwrap().as_str().parse::<u32>().unwrap();
-    let name = caps.get(2).unwrap().as_str().to_owned();
-
-    (id, name)
-}
-
-fn already_locked(locked: &[Package], name: &str, constraints: &[Constraint]) -> bool {
-    let mut result = true;
-    for constr in constraints.iter() {
-        if !locked
-            .iter()
-            .any(|p| util::compare_names(&p.name, name) && constr.is_compatible(&p.version))
-        {
-            result = false;
-            break;
-        }
-    }
-    result
-}
+///////////////////////////////////////////////////////////////////////////////
+/// \ Global multithreaded variables part
+///////////////////////////////////////////////////////////////////////////////
 
 /// Execute a python CLI tool, either specified in `pyproject.toml`, or in a dependency.
 fn run_cli_tool(
@@ -214,71 +138,6 @@ fn run_cli_tool(
     }
 }
 
-#[derive(Clone)]
-enum ClearChoice {
-    Dependencies,
-    ScriptEnvs,
-    PyInstalls,
-    //    Global,
-    All,
-}
-
-impl ToString for ClearChoice {
-    fn to_string(&self) -> String {
-        "".into()
-    }
-}
-
-/// Clear `Pyflow`'s cache. Allow the user to select which parts to clear based on a prompt.
-fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
-    let result = util::prompts::list(
-        "Which cached items would you like to clear?",
-        "choice",
-        &[
-            ("Downloaded dependencies".into(), ClearChoice::Dependencies),
-            (
-                "Standalone-script environments".into(),
-                ClearChoice::ScriptEnvs,
-            ),
-            ("Python installations".into(), ClearChoice::PyInstalls),
-            ("All of the above".into(), ClearChoice::All),
-        ],
-        false,
-    );
-
-    // todo: DRY
-    match result.1 {
-        ClearChoice::Dependencies => {
-            if fs::remove_dir_all(&cache_path).is_err() {
-                abort(&format!(
-                    "Problem removing the dependency-cache path: {:?}",
-                    cache_path
-                ));
-            }
-        }
-        ClearChoice::ScriptEnvs => {
-            if fs::remove_dir_all(&script_env_path).is_err() {
-                abort(&format!(
-                    "Problem removing the script env path: {:?}",
-                    script_env_path
-                ));
-            }
-        }
-        ClearChoice::PyInstalls => {}
-        ClearChoice::All => {
-            if fs::remove_dir_all(&pyflow_path).is_err() {
-                abort(&format!(
-                    "Problem removing the Pyflow path: {:?}",
-                    pyflow_path
-                ));
-            }
-        }
-    }
-}
-
-const CFG_FILENAME: &str = "pyproject.toml";
-const LOCK_FILENAME: &str = "pyflow.lock";
-
 /// We process input commands in a deliberate order, to ensure the required, and only the required
 /// setup steps are accomplished before each.
 fn main() {
@@ -317,7 +176,7 @@ fn main() {
             },
         },
         SubCommand::New { name } => {
-            if new(&name).is_err() {
+            if actions::new(name).is_err() {
                 abort(actions::NEW_ERROR_MESSAGE);
             }
 
@@ -327,25 +186,7 @@ fn main() {
             );
             return;
         }
-        SubCommand::Init => {
-            let cfg_path = PathBuf::from(CFG_FILENAME);
-            if cfg_path.exists() {
-                abort("pyproject.toml already exists - not overwriting.")
-            }
-
-            let mut cfg = match PathBuf::from("Pipfile").exists() {
-                true => Config::from_pipfile(&PathBuf::from("Pipfile")).unwrap_or_default(),
-                false => Config::default(),
-            };
-
-            cfg.py_version = Some(util::prompts::py_vers());
-
-            files::parse_req_dot_text(&mut cfg, &PathBuf::from("requirements.txt"));
-
-            cfg.write_file(&cfg_path);
-            util::print_color("Created `pyproject.toml`", Color::Green);
-            // Don't return here; let the normal logic create the venv now.
-        }
+        SubCommand::Init => actions::init(CFG_FILENAME), // Don't return here; let the normal logic create the venv now.
         // TODO: Move branches to omitted match
         _ => {}
     }
@@ -415,7 +256,7 @@ fn main() {
             // Don't return; now that we've changed the cfg version, let's run the normal flow.
         }
         SubCommand::Clear {} => {
-            clear(&pyflow_path, &dep_cache_path, &script_env_path);
+            actions::clear(&pyflow_path, &dep_cache_path, &script_env_path);
             return;
         }
         SubCommand::List => {
@@ -468,7 +309,7 @@ fn main() {
     }
 
     let mut found_lock = false;
-    let lock = match util::read_lock(&lock_path) {
+    let lock = match util::read_lock(lock_path) {
         Ok(l) => {
             found_lock = true;
             l
@@ -486,7 +327,7 @@ fn main() {
         &util::find_dont_uninstall(&cfg.reqs, &cfg.dev_reqs),
         os,
         &py_vers,
-        &lock_path,
+        lock_path,
     );
 
     // Now handle subcommands that require info about the environment
@@ -532,31 +373,16 @@ fn main() {
                 &[],
                 os,
                 &py_vers,
-                &lock_path,
+                lock_path,
             );
             util::print_color("Uninstall complete", Color::Green);
         }
 
         SubCommand::Package { extras } => {
-            sync(
-                &paths,
-                &lockpacks,
-                &cfg.reqs,
-                &cfg.dev_reqs,
-                &util::find_dont_uninstall(&cfg.reqs, &cfg.dev_reqs),
-                os,
-                &py_vers,
-                &lock_path,
-            );
-
-            build::build(&lockpacks, &paths, &cfg, &extras)
+            actions::package(&paths, &lockpacks, os, &py_vers, lock_path, &cfg, &extras)
         }
         SubCommand::Publish {} => build::publish(&paths.bin, &cfg),
-
-        //        SubCommand::M { args } => {
-        //            run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, args);
-        //        }
-        SubCommand::List {} => util::show_installed(
+        SubCommand::List {} => actions::list(
             &paths.lib,
             &[cfg.reqs.as_slice(), cfg.dev_reqs.as_slice()]
                 .concat()
