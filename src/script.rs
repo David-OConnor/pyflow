@@ -34,7 +34,7 @@ pub fn run_script(
     // todo: Consider a metadata file, but for now, we'll use folders
     //    let scripts_data_path = script_env_path.join("scripts.toml");
 
-    let env_path = util::canon_join(script_env_path, &filename);
+    let env_path = util::canon_join(script_env_path, filename);
     if !env_path.exists() {
         fs::create_dir_all(&env_path).expect("Problem creating environment for the script");
     }
@@ -149,7 +149,7 @@ fn check_for_specified_py_vers(script: &str) -> Option<Version> {
     let re = Regex::new(r#"^__python__\s*=\s*"(.*?)"$"#).unwrap();
 
     for line in script.lines() {
-        if let Some(capture) = re.captures(&line) {
+        if let Some(capture) = re.captures(line) {
             let specification = capture.get(1).unwrap().as_str();
             let (_, version) = parse_version(specification).unwrap();
             match version {
@@ -180,11 +180,10 @@ fn find_deps_from_script(script: &str) -> Vec<String> {
 
     let mut result = vec![];
     for line in script.lines() {
-        if let Some(c) = re.captures(&line) {
+        if let Some(c) = re.captures(line) {
             let deps_list = c.get(1).unwrap().as_str().to_owned();
-            let deps: Vec<&str> = deps_list.split(',').collect();
-            result = deps
-                .into_iter()
+            result = deps_list
+                .split(',')
                 .map(|d| {
                     d.to_owned()
                         .replace(" ", "")
