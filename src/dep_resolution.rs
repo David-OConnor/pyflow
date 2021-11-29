@@ -96,8 +96,11 @@ fn guess_graph(
 
     let mut cleaned_reqs: Vec<Req> = vec![];
     for req in reqs {
-        let names: Vec<String> = cleaned_reqs.iter().map(|cr| cr.name.clone()).collect();
-        if names.contains(&req.name) {
+        if cleaned_reqs
+            .iter()
+            .map(|cr| cr.name.clone())
+            .any(|x| x == req.name)
+        {
             for c in cleaned_reqs.iter_mut() {
                 if c.name == req.name {
                     for constr in req.constraints.iter() {

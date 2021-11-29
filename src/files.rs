@@ -427,7 +427,7 @@ dev_a = "^1.17.2"
     #[test]
     fn add_deps_baseline() {
         let actual = update_cfg(
-            BASELINE.into(),
+            BASELINE,
             &[
                 Req::new("b".into(), base_constrs()),
                 Req::new("c".into(), base_constrs()),
@@ -455,7 +455,7 @@ dev_b = "^0.0.1"
     #[test]
     fn add_deps_no_dev_deps_sect() {
         let actual = update_cfg(
-            BASELINE_NO_DEV_DEPS.into(),
+            BASELINE_NO_DEV_DEPS,
             &[
                 Req::new("b".into(), base_constrs()),
                 Req::new("c".into(), base_constrs()),
@@ -482,7 +482,7 @@ dev_b = "^0.0.1"
     #[test]
     fn add_deps_baseline_empty_deps() {
         let actual = update_cfg(
-            BASELINE_EMPTY_DEPS.into(),
+            BASELINE_EMPTY_DEPS,
             &[
                 Req::new("b".into(), base_constrs()),
                 Req::new("c".into(), base_constrs()),
@@ -509,7 +509,7 @@ dev_b = "^0.0.1"
     #[test]
     fn add_deps_dev_deps_baseline_no_deps_dev_deps() {
         let actual = update_cfg(
-            BASELINE_NO_DEPS_NO_DEV_DEPS.into(),
+            BASELINE_NO_DEPS_NO_DEV_DEPS,
             &[
                 Req::new("b".into(), base_constrs()),
                 Req::new("c".into(), base_constrs()),

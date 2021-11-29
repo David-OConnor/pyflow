@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fs, path::{Path, PathBuf}, str::FromStr};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use regex::Regex;
 use serde::Deserialize;
