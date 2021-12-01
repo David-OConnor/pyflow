@@ -1,13 +1,13 @@
+use crate::actions::run;
 use crate::cli_options::{ExternalCommand, ExternalSubcommands, Opt, SubCommand};
 use crate::dep_types::{Lock, Package, Req, Version};
-use crate::pyproject::Config;
+use crate::pyproject::{Config, CFG_FILENAME};
 use crate::util::abort;
 use crate::util::deps::sync;
 
-use regex::Regex;
+use std::process;
 use std::{
-    env, fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Arc, RwLock},
 };
 
@@ -28,9 +28,6 @@ mod script;
 mod util;
 
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
-
-const CFG_FILENAME: &str = "pyproject.toml";
-const LOCK_FILENAME: &str = "pyflow.lock";
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Global multithreaded variables part
@@ -65,81 +62,11 @@ thread_local! {
 /// \ Global multithreaded variables part
 ///////////////////////////////////////////////////////////////////////////////
 
-/// Execute a python CLI tool, either specified in `pyproject.toml`, or in a dependency.
-fn run_cli_tool(
-    lib_path: &Path,
-    bin_path: &Path,
-    vers_path: &Path,
-    cfg: &Config,
-    args: Vec<String>,
-) {
-    // Allow both `pyflow run ipython` (args), and `pyflow ipython` (opt.script)
-    if args.is_empty() {
-        return;
-    }
-
-    let name = if let Some(a) = args.get(0) {
-        a.clone()
-    } else {
-        abort("`run` must be followed by the script to run, eg `pyflow run black`");
-    };
-
-    // If the script we're calling is specified in `pyproject.toml`, ensure it exists.
-
-    // todo: Delete these scripts as required to sync with pyproject.toml.
-    let re = Regex::new(r"(.*?):(.*)").unwrap();
-
-    let mut specified_args: Vec<String> = args.into_iter().skip(1).collect();
-
-    // If a script name is specified by by this project and a dependency, favor
-    // this project.
-    if let Some(s) = cfg.scripts.get(&name) {
-        let abort_msg = format!(
-            "Problem running the function {}, specified in `pyproject.toml`",
-            name,
-        );
-
-        if let Some(caps) = re.captures(s) {
-            let module = caps.get(1).unwrap().as_str();
-            let function = caps.get(2).unwrap().as_str();
-            let mut args_to_pass = vec![
-                "-c".to_owned(),
-                format!(r#"import {}; {}.{}()"#, module, module, function),
-            ];
-
-            args_to_pass.append(&mut specified_args);
-            if commands::run_python(bin_path, &[lib_path.to_owned()], &args_to_pass).is_err() {
-                abort(&abort_msg);
-            }
-        } else {
-            abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", s));
-        }
-        return;
-    }
-    //            None => {
-    let abort_msg = format!(
-        "Problem running the CLI tool {}. Is it installed? \
-         Try running `pyflow install {}`",
-        name, name
-    );
-    let script_path = vers_path.join("bin").join(name);
-    if !script_path.exists() {
-        abort(&abort_msg);
-    }
-
-    let mut args_to_pass = vec![script_path
-        .to_str()
-        .expect("Can't find script path")
-        .to_owned()];
-
-    args_to_pass.append(&mut specified_args);
-    if commands::run_python(bin_path, &[lib_path.to_owned()], &args_to_pass).is_err() {
-        abort(&abort_msg);
-    }
-}
-
 /// We process input commands in a deliberate order, to ensure the required, and only the required
 /// setup steps are accomplished before each.
+#[allow(clippy::match_single_binding)]
+#[allow(clippy::single_match)]
+// TODO: Remove clippy::match_single_binding and clippy::single_match after full function refactoring
 fn main() {
     let (pyflow_path, dep_cache_path, script_env_path, git_path) = util::paths::get_paths();
     let os = util::get_os();
@@ -166,6 +93,12 @@ fn main() {
     };
 
     match &subcmd {
+        // Actions requires nothing to know about the project
+        SubCommand::New { name } => actions::new(name),
+        SubCommand::Init => actions::init(CFG_FILENAME),
+        SubCommand::Reset {} => actions::reset(),
+        SubCommand::Clear {} => actions::clear(&pyflow_path, &dep_cache_path, &script_env_path),
+        SubCommand::Switch { version } => actions::switch(version),
         SubCommand::External(ref x) => match ExternalCommand::from_opt(x.to_owned()) {
             ExternalCommand { cmd, args } => match cmd {
                 ExternalSubcommands::Script => {
@@ -175,121 +108,32 @@ fn main() {
                 _ => (),
             },
         },
-        SubCommand::New { name } => {
-            if actions::new(name).is_err() {
-                abort(actions::NEW_ERROR_MESSAGE);
-            }
 
-            util::print_color(
-                &format!("Created a new Python project named {}", name),
-                Color::Green,
-            );
-            return;
-        }
-        SubCommand::Init => actions::init(CFG_FILENAME), // Don't return here; let the normal logic create the venv now.
         // TODO: Move branches to omitted match
         _ => {}
     }
 
-    // We need access to the config from here on; throw an error if we can't find it.
-    let mut cfg_path = PathBuf::from(CFG_FILENAME);
-    if !&cfg_path.exists() {
-        // Try looking recursively in parent directories for a config file.
-        let recursion_limit = 8; // How my levels to look up
-        let mut current_level = env::current_dir().expect("Can't access current directory");
-        for _ in 0..recursion_limit {
-            if let Some(parent) = current_level.parent() {
-                let parent_cfg_path = parent.join(CFG_FILENAME);
-                if parent_cfg_path.exists() {
-                    cfg_path = parent_cfg_path;
-                    break;
-                }
-                current_level = parent.to_owned();
-            }
-        }
-
-        if !&cfg_path.exists() {
-            // ie still can't find it after searching parents.
-            util::print_color(
-                "To get started, run `pyflow new projname` to create a project folder, or \
-            `pyflow init` to start a project in this folder. For a list of what you can do, run \
-            `pyflow help`.",
-                Color::Cyan, // Dark
-            );
-            return;
-        }
-        //        }
-    }
-
-    // Base pypackages_path and lock_path on the `pyproject.toml` folder.
-    let proj_path = cfg_path.parent().expect("Can't find proj pathw via parent");
-    let pypackages_path = proj_path.join("__pypackages__");
-    let lock_path = &proj_path.join(LOCK_FILENAME);
-
-    let mut cfg = Config::from_file(&cfg_path).unwrap_or_default();
-    cfg.populate_path_subreqs();
-
-    // Run subcommands that don't require info about the environment.
-    match &subcmd {
-        SubCommand::Reset {} => {
-            if pypackages_path.exists() && fs::remove_dir_all(&pypackages_path).is_err() {
-                abort("Problem removing `__pypackages__` directory")
-            }
-            if lock_path.exists() && fs::remove_file(&lock_path).is_err() {
-                abort("Problem removing `pyflow.lock`")
-            }
-            util::print_color(
-                "`__pypackages__` folder and `pyflow.lock` removed",
-                Color::Green,
-            );
-            return;
-        }
-        SubCommand::Switch { version } => {
-            // Updates `pyproject.toml` with a new python version
-            let specified = util::fallible_v_parse(&version.clone());
-            cfg.py_version = Some(specified.clone());
-            files::change_py_vers(&PathBuf::from(&cfg_path), &specified);
-            util::print_color(
-                &format!("Switched to Python version {}", specified.to_string()),
-                Color::Green,
-            );
-            // Don't return; now that we've changed the cfg version, let's run the normal flow.
-        }
-        SubCommand::Clear {} => {
-            actions::clear(&pyflow_path, &dep_cache_path, &script_env_path);
-            return;
-        }
-        SubCommand::List => {
-            let num_venvs = util::find_venvs(&pypackages_path).len();
-            if !cfg_path.exists() && num_venvs == 0 {
-                abort("Can't find a project in this directory")
-            } else if num_venvs == 0 {
-                util::print_color(
-                    "There's no python environment set up for this project",
-                    Color::Green,
-                );
-                return;
-            }
-        }
-        _ => (),
-    }
-
-    let cfg_vers = if let Some(v) = cfg.py_version.clone() {
+    let pcfg = pyproject::current::get_config().unwrap_or_else(|| process::exit(1));
+    let cfg_vers = if let Some(v) = pcfg.config.py_version.clone() {
         v
     } else {
         let specified = util::prompts::py_vers();
 
-        if !cfg_path.exists() {
-            cfg.write_file(&cfg_path);
+        if !pcfg.config_path.exists() {
+            pcfg.config.write_file(&pcfg.config_path);
         }
-        files::change_py_vers(&cfg_path, &specified);
+        files::change_py_vers(&pcfg.config_path, &specified);
 
         specified
     };
 
     // Check for environments. Create one if none exist. Set `vers_path`.
-    let (vers_path, py_vers) =
-        util::find_or_create_venv(&cfg_vers, &pypackages_path, &pyflow_path, &dep_cache_path);
+    let (vers_path, py_vers) = util::find_or_create_venv(
+        &cfg_vers,
+        &pcfg.pypackages_path,
+        &pyflow_path,
+        &dep_cache_path,
+    );
 
     let paths = util::Paths {
         bin: util::find_bin_path(&vers_path),
@@ -301,15 +145,15 @@ fn main() {
     // Add all path reqs to the PYTHONPATH; this is the way we make these packages accessible when
     // running `pyflow`.
     let mut pythonpath = vec![paths.lib.clone()];
-    for r in cfg.reqs.iter().filter(|r| r.path.is_some()) {
+    for r in pcfg.config.reqs.iter().filter(|r| r.path.is_some()) {
         pythonpath.push(PathBuf::from(r.path.clone().unwrap()));
     }
-    for r in cfg.dev_reqs.iter().filter(|r| r.path.is_some()) {
+    for r in pcfg.config.dev_reqs.iter().filter(|r| r.path.is_some()) {
         pythonpath.push(PathBuf::from(r.path.clone().unwrap()));
     }
 
     let mut found_lock = false;
-    let lock = match util::read_lock(lock_path) {
+    let lock = match util::read_lock(&pcfg.lock_path) {
         Ok(l) => {
             found_lock = true;
             l
@@ -322,12 +166,12 @@ fn main() {
     sync(
         &paths,
         &lockpacks,
-        &cfg.reqs,
-        &cfg.dev_reqs,
-        &util::find_dont_uninstall(&cfg.reqs, &cfg.dev_reqs),
+        &pcfg.config.reqs,
+        &pcfg.config.dev_reqs,
+        &util::find_dont_uninstall(&pcfg.config.reqs, &pcfg.config.dev_reqs),
         os,
         &py_vers,
-        lock_path,
+        &pcfg.lock_path,
     );
 
     // Now handle subcommands that require info about the environment
@@ -338,8 +182,17 @@ fn main() {
         // the currently-installed packages, found by crawling metadata in the `lib` path.
         // See the readme section `How installation and locking work` for details.
         SubCommand::Install { packages, dev } => actions::install(
-            &cfg_path, &cfg, &git_path, &paths, found_lock, &packages, dev, &lockpacks, &os,
-            &py_vers, lock_path,
+            &pcfg.config_path,
+            &pcfg.config,
+            &git_path,
+            &paths,
+            found_lock,
+            &packages,
+            dev,
+            &lockpacks,
+            &os,
+            &py_vers,
+            &pcfg.lock_path,
         ),
 
         SubCommand::Uninstall { packages } => {
@@ -355,10 +208,11 @@ fn main() {
                 })
                 .collect();
 
-            files::remove_reqs_from_cfg(&cfg_path, &removed_reqs);
+            files::remove_reqs_from_cfg(&pcfg.config_path, &removed_reqs);
 
             // Filter reqs here instead of re-reading the config from file.
-            let updated_reqs: Vec<Req> = cfg
+            let updated_reqs: Vec<Req> = pcfg
+                .config
                 .clone()
                 .reqs
                 .into_iter()
@@ -369,22 +223,28 @@ fn main() {
                 &paths,
                 &lockpacks,
                 &updated_reqs,
-                &cfg.dev_reqs,
+                &pcfg.config.dev_reqs,
                 &[],
                 os,
                 &py_vers,
-                lock_path,
+                &pcfg.lock_path,
             );
             util::print_color("Uninstall complete", Color::Green);
         }
 
-        SubCommand::Package { extras } => {
-            actions::package(&paths, &lockpacks, os, &py_vers, lock_path, &cfg, &extras)
-        }
-        SubCommand::Publish {} => build::publish(&paths.bin, &cfg),
+        SubCommand::Package { extras } => actions::package(
+            &paths,
+            &lockpacks,
+            os,
+            &py_vers,
+            &pcfg.lock_path,
+            &pcfg.config,
+            &extras,
+        ),
+        SubCommand::Publish {} => build::publish(&paths.bin, &pcfg.config),
         SubCommand::List {} => actions::list(
             &paths.lib,
-            &[cfg.reqs.as_slice(), cfg.dev_reqs.as_slice()]
+            &[pcfg.config.reqs.as_slice(), pcfg.config.dev_reqs.as_slice()]
                 .concat()
                 .into_iter()
                 .filter(|r| r.path.is_some())
@@ -401,7 +261,7 @@ fn main() {
                 }
             }
             ExternalSubcommands::Run => {
-                run_cli_tool(&paths.lib, &paths.bin, &vers_path, &cfg, x.args);
+                run(&paths.lib, &paths.bin, &vers_path, &pcfg.config, x.args);
             }
             x => {
                 abort(&format!(

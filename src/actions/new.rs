@@ -6,7 +6,11 @@ use std::{
 
 use termcolor::Color;
 
-use crate::{commands, util, Config};
+use crate::{
+    commands,
+    util::{self, abort, success},
+    Config,
+};
 
 const GITIGNORE_INIT: &str = indoc::indoc! {r##"
 # General Python ignores
@@ -23,8 +27,21 @@ __pypackages__/
 # Project ignores
 "##};
 
+pub const NEW_ERROR_MESSAGE: &str = indoc::indoc! {r#"
+Problem creating the project. This may be due to a permissions problem.
+If on linux, please try again with `sudo`.
+"#};
+
+pub fn new(name: &str) {
+    if new_internal(name).is_err() {
+        abort(NEW_ERROR_MESSAGE);
+    }
+    success(&format!("Created a new Python project named {}", name))
+}
+
+// TODO: Join this function after refactoring
 /// Create a template directory for a python project.
-pub fn new(name: &str) -> Result<(), Box<dyn Error>> {
+fn new_internal(name: &str) -> Result<(), Box<dyn Error>> {
     if !PathBuf::from(name).exists() {
         fs::create_dir_all(&format!("{}/{}", name, name.replace("-", "_")))?;
         fs::File::create(&format!("{}/{}/__init__.py", name, name.replace("-", "_")))?;

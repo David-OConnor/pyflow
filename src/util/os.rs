@@ -40,7 +40,7 @@ impl FromStr for Os {
     }
 }
 
-pub fn get_os() -> Os {
+pub const fn get_os() -> Os {
     #[cfg(target_os = "windows")]
     return Os::Windows;
     #[cfg(target_os = "linux")]
