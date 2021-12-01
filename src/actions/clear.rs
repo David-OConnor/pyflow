@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use crate::util::{self, abort};
+use crate::util::{self, abort, success};
 
 #[derive(Clone)]
 enum ClearChoice {
@@ -62,4 +62,5 @@ pub fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
             }
         }
     }
+    success("Cache is cleared")
 }

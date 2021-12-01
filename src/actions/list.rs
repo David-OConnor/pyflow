@@ -1,15 +1,26 @@
-use std::path::Path;
+use std::{path::Path, process};
 
 use termcolor::Color;
 
 use crate::{
     dep_types::Req,
-    util::{self, print_color, print_color_},
+    pyproject,
+    util::{self, abort, print_color, print_color_},
 };
 
 /// List all installed dependencies and console scripts, by examining the `libs` and `bin` folders.
 /// Also include path requirements, which won't appear in the `lib` folder.
 pub fn list(lib_path: &Path, path_reqs: &[Req]) {
+    // This part check that project and venvs exists
+    let pcfg = pyproject::current::get_config().unwrap_or_else(|| process::exit(1));
+    let num_venvs = util::find_venvs(&pcfg.pypackages_path).len();
+
+    if !pcfg.config_path.exists() && num_venvs == 0 {
+        abort("Can't find a project in this directory")
+    } else if num_venvs == 0 {
+        abort("There's no python environment set up for this project")
+    }
+
     let installed = util::find_installed(lib_path);
     let scripts = find_console_scripts(&lib_path.join("../bin"));
 

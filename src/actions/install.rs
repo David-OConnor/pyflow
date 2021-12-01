@@ -10,6 +10,8 @@ use crate::{
 
 use util::deps::sync;
 
+// TODO: Refactor this function
+#[allow(clippy::too_many_arguments)]
 pub fn install(
     cfg_path: &Path,
     cfg: &Config,

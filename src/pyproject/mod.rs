@@ -1,3 +1,5 @@
+pub mod current;
+
 use std::{
     collections::HashMap,
     fs,
@@ -13,6 +15,18 @@ use crate::{
     files,
     util::{self, abort},
 };
+
+pub const CFG_FILENAME: &str = "pyproject.toml";
+pub const LOCK_FILENAME: &str = "pyflow.lock";
+
+#[derive(Clone, Debug, Default)]
+pub struct PresentConfig {
+    pub project_path: PathBuf,
+    pub config_path: PathBuf,
+    pub pypackages_path: PathBuf,
+    pub lock_path: PathBuf,
+    pub config: Config,
+}
 
 /// A config, parsed from pyproject.toml
 #[derive(Clone, Debug, Default, Deserialize)]

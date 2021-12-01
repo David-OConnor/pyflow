@@ -59,7 +59,7 @@ pub struct Metadata {
 /// Print line in a color, then reset formatting.
 pub fn print_color(message: &str, color: Color) {
     if let Err(_e) = print_color_res(message, color) {
-        panic!("Error printing in color")
+        panic!("Error printing in color");
     }
 }
 
@@ -92,6 +92,11 @@ fn print_color_res_(message: &str, color: Color) -> io::Result<()> {
 pub fn abort(message: &str) -> ! {
     print_color(message, Color::Red);
     process::exit(1)
+}
+
+pub fn success(message: &str) {
+    print_color(message, Color::Green);
+    process::exit(0)
 }
 
 /// Find which virtual environments exist.
