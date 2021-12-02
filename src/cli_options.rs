@@ -22,6 +22,16 @@ pub enum SubCommand {
         name: String, // holds the project name.
     },
 
+    /// Add packages to `pyproject.toml` and sync an environment
+    #[structopt(name = "add")]
+    Add {
+        #[structopt(name = "packages")]
+        packages: Vec<String>, // holds the packages names.
+        /// Save package to your dev-dependencies section
+        #[structopt(short, long)]
+        dev: bool
+    },
+
     /** Install packages from `pyproject.toml`, `pyflow.lock`, or specified ones. Example:
 
     `pyflow install`: sync your installation with `pyproject.toml`, or `pyflow.lock` if it exists.
