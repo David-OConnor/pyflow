@@ -181,19 +181,21 @@ fn main() {
         // We use data from three sources: `pyproject.toml`, `pyflow.lock`, and
         // the currently-installed packages, found by crawling metadata in the `lib` path.
         // See the readme section `How installation and locking work` for details.
-        SubCommand::Install { packages, dev } => actions::install(
-            &pcfg.config_path,
-            &pcfg.config,
-            &git_path,
-            &paths,
-            found_lock,
-            &packages,
-            dev,
-            &lockpacks,
-            &os,
-            &py_vers,
-            &pcfg.lock_path,
-        ),
+        SubCommand::Install { packages, dev } | SubCommand::Add { packages, dev } => {
+            actions::install(
+                &pcfg.config_path,
+                &pcfg.config,
+                &git_path,
+                &paths,
+                found_lock,
+                &packages,
+                dev,
+                &lockpacks,
+                &os,
+                &py_vers,
+                &pcfg.lock_path,
+            )
+        }
 
         SubCommand::Uninstall { packages } => {
             // todo: uninstall dev?
