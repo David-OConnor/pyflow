@@ -29,7 +29,7 @@ pub enum SubCommand {
         packages: Vec<String>, // holds the packages names.
         /// Save package to your dev-dependencies section
         #[structopt(short, long)]
-        dev: bool
+        dev: bool,
     },
 
     /** Install packages from `pyproject.toml`, `pyflow.lock`, or specified ones. Example:
