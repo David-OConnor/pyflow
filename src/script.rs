@@ -176,23 +176,23 @@ fn check_for_specified_py_vers(script: &str) -> Option<Version> {
 /// Find a script's dependencies from a variable: `__requires__ = [dep1, dep2]`
 fn find_deps_from_script(script: &str) -> Vec<String> {
     // todo: Helper for this type of logic? We use it several times in the program.
-    let re = Regex::new(r"^__requires__\s*=\s*\[(.*?)\]$").unwrap();
+    let re = Regex::new(r"(?ms)^__requires__\s*=\s*\[(.*?)\]$").unwrap();
 
     let mut result = vec![];
-    for line in script.lines() {
-        if let Some(c) = re.captures(line) {
-            let deps_list = c.get(1).unwrap().as_str().to_owned();
-            result = deps_list
-                .split(',')
-                .map(|d| {
-                    d.to_owned()
-                        .replace(" ", "")
-                        .replace("\"", "")
-                        .replace("'", "")
-                })
-                .filter(|d| !d.is_empty())
-                .collect();
-        }
+
+    if let Some(c) = re.captures(script) {
+        let deps_list = c.get(1).unwrap().as_str().to_owned();
+        result = deps_list
+            .split(',')
+            .map(|d| {
+                d.to_owned()
+                    .replace(" ", "")
+                    .replace("'", "")
+                    .replace("\"", "")
+                    .replace("\n", "")
+            })
+            .filter(|d| !d.is_empty())
+            .collect();
     }
     result
 }
