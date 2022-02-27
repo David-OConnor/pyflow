@@ -248,6 +248,9 @@ mod tests {
     fn parse_no_dependencies_with_single_line_requires() {
         let script = indoc! { r#"
             __requires__ = []
+
+            if __name__ == "__main__":
+                print("Hello, world")
         "# };
 
         let expected: Vec<&str> = vec![];
@@ -261,6 +264,9 @@ mod tests {
         let script = indoc! { r#"
             __requires__ = [
             ]
+
+            if __name__ == "__main__":
+                print("Hello, world")
         "# };
 
         let expected: Vec<&str> = vec![];
@@ -273,6 +279,9 @@ mod tests {
     fn parse_one_dependency_with_single_line_requires() {
         let script = indoc! { r#"
             __requires__ = ["requests"]
+
+            if __name__ == "__main__":
+                print("Hello, world")
         "# };
 
         let expected: Vec<&str> = vec!["requests"];
@@ -287,6 +296,9 @@ mod tests {
             __requires__ = [
                 "requests"
             ]
+
+            if __name__ == "__main__":
+                print("Hello, world")
         "# };
 
         let expected: Vec<&str> = vec!["requests"];
@@ -299,6 +311,9 @@ mod tests {
     fn parse_multiple_dependencies_with_single_line_requires() {
         let script = indoc! { r#"
             __requires__ = ["python-dateutil", "requests"]
+
+            if __name__ == "__main__":
+                print("Hello, world")
         "# };
 
         let expected: Vec<&str> = vec!["python-dateutil", "requests"];
@@ -314,6 +329,9 @@ mod tests {
                 "python-dateutil",
                 "requests"
             ]
+
+            if __name__ == "__main__":
+                print("Hello, world")
         "# };
 
         let expected: Vec<&str> = vec!["python-dateutil", "requests"];
