@@ -206,7 +206,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_python_version_no_dunder_specified() {
+    fn parse_python_version_with_no_dunder_specified() {
         let script = indoc! { r#"
             if __name__ == "__main__":
                 print("Hello, world")
@@ -221,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_python_version_valid_dunder_specified() {
+    fn parse_python_version_with_valid_dunder_specified() {
         let script = indoc! { r#"
             __python__ = "3.9.1"
 
@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_one_dependency_with_nulti_line_requires() {
+    fn parse_one_dependency_with_multi_line_requires() {
         let script = indoc! { r#"
             __requires__ = [
                 "requests"
