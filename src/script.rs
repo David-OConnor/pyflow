@@ -200,42 +200,48 @@ fn find_deps_from_script(script: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use indoc::indoc;
-    use rstest::rstest;
 
     use crate::dep_types::Version;
 
     use super::*;
 
-    const NO_DUNDER_PYTHON: &str = r#"
-if __name__ == "__main__":
-    print("Hello, world")
-"#;
+    #[test]
+    fn parse_python_version_no_dunder_specified() {
+        let script = indoc! { r#"
+            if __name__ == "__main__":
+                print("Hello, world")
+        "# };
 
-    const VALID_DUNDER_PYTHON: &str = r#"
-__python__ = "3.9.1"
+        let version: Option<Version> = None;
 
-if __name__ == "__main__":
-    print("Hello, world")
-"#;
+        let expected = version;
+        let actual = check_for_specified_py_vers(script);
 
-    fn py_version() -> Option<Version> {
-        let version = Version {
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn parse_python_version_valid_dunder_specified() {
+        let script = indoc! { r#"
+            __python__ = "3.9.1"
+
+            if __name__ == "__main__":
+                print("Hello, world")
+        "# };
+
+        let version: Option<Version> = Some(Version {
             major: Some(3),
             minor: Some(9),
             patch: Some(1),
             extra_num: None,
             modifier: None,
             star: false,
-        };
-        Some(version)
-    }
+        });
 
-    #[rstest]
-    #[case(NO_DUNDER_PYTHON, None)]
-    #[case(VALID_DUNDER_PYTHON, py_version())]
-    fn dunder_python_specified(#[case] src: &str, #[case] expected: Option<Version>) {
-        let result = check_for_specified_py_vers(src);
-        assert_eq!(result, expected)
+        let expected = version;
+        let actual = check_for_specified_py_vers(script);
+
+        assert_eq!(expected, actual);
     }
 
     #[test]
