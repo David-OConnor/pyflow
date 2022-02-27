@@ -199,9 +199,12 @@ fn find_deps_from_script(script: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::dep_types::Version;
-    use crate::script::check_for_specified_py_vers;
+    use indoc::indoc;
     use rstest::rstest;
+
+    use crate::dep_types::Version;
+
+    use super::*;
 
     const NO_DUNDER_PYTHON: &str = r#"
 if __name__ == "__main__":
@@ -233,5 +236,83 @@ if __name__ == "__main__":
     fn dunder_python_specified(#[case] src: &str, #[case] expected: Option<Version>) {
         let result = check_for_specified_py_vers(src);
         assert_eq!(result, expected)
+    }
+
+    #[test]
+    fn parse_no_dependencies_with_single_line_requires() {
+        let script = indoc! { r#"
+            __requires__ = []
+        "# };
+
+        let expected: Vec<&str> = vec![];
+        let actual = find_deps_from_script(script);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn parse_no_dependencies_with_multi_line_requires() {
+        let script = indoc! { r#"
+            __requires__ = [
+            ]
+        "# };
+
+        let expected: Vec<&str> = vec![];
+        let actual = find_deps_from_script(script);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn parse_one_dependency_with_single_line_requires() {
+        let script = indoc! { r#"
+            __requires__ = ["requests"]
+        "# };
+
+        let expected: Vec<&str> = vec!["requests"];
+        let actual = find_deps_from_script(script);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn parse_one_dependency_with_nulti_line_requires() {
+        let script = indoc! { r#"
+            __requires__ = [
+                "requests"
+            ]
+        "# };
+
+        let expected: Vec<&str> = vec!["requests"];
+        let actual = find_deps_from_script(script);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn parse_multiple_dependencies_with_single_line_requires() {
+        let script = indoc! { r#"
+            __requires__ = ["python-dateutil", "requests"]
+        "# };
+
+        let expected: Vec<&str> = vec!["python-dateutil", "requests"];
+        let actual = find_deps_from_script(script);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn parse_multiple_dependencies_with_multi_line_requires() {
+        let script = indoc! { r#"
+            __requires__ = [
+                "python-dateutil",
+                "requests"
+            ]
+        "# };
+
+        let expected: Vec<&str> = vec!["python-dateutil", "requests"];
+        let actual = find_deps_from_script(script);
+
+        assert_eq!(expected, actual);
     }
 }
