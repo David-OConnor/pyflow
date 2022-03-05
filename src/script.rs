@@ -245,6 +245,19 @@ mod tests {
     }
 
     #[test]
+    fn parse_no_dependencies_with_no_requires() {
+        let script = indoc! { r#"
+            if __name__ == "__main__":
+                print("Hello, world")
+        "# };
+
+        let expected: Vec<&str> = vec![];
+        let actual = find_deps_from_script(script);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
     fn parse_no_dependencies_with_single_line_requires() {
         let script = indoc! { r#"
             __requires__ = []
