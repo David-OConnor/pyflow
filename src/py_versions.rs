@@ -142,7 +142,7 @@ impl PyVers {
         match self {
             Self::V3_12_0 => Version::new(3, 12, 0),
             Self::V3_11_0 => Version::new(3, 11, 0),
-            Self::V3_10_1 => Version::new(3, 10, 2),
+            Self::V3_10_2 => Version::new(3, 10, 2),
             Self::V3_9_0 => Version::new(3, 9, 0),
             Self::V3_8_0 => Version::new(3, 8, 0),
             Self::V3_7_4 => Version::new(3, 7, 4),
