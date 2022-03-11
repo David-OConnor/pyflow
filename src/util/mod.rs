@@ -417,8 +417,8 @@ pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
     let mut decompressor = XzDecoder::new(&archive_bytes[..]);
     if decompressor.read_to_end(&mut tar).is_err() {
         abort(&format!(
-            "Problem decompressing the archive: {:?}. This may be due to a failed downoad. \
-        Try deleting it, then trying again. Note that Pyflow will only install officially-released \
+            "Problem decompressing the archive: {:?}. This may be due to a failed download. \
+        Try deleting it, then try again. Note that Pyflow will only install officially-released \
         Python versions. If you'd like to use a pre-release, you must install it manually.",
             archive_path
         ))
