@@ -221,11 +221,7 @@ fn download(py_install_path: &Path, version: &Version) {
                      It's worth trying the other options, to see if one works anyway.",
                 );
                 unreachable!()
-            } //            _ => panic!("If you're seeing this, the code is in what I thought was an unreachable\
-              //            state. I could give you advice for what to do. But honestly, why should you trust me?\
-              //            I clearly screwed this up. I'm writing a message that should never appear, yet\
-              //            I know it will probably appear someday. On a deep level, I know I'm not up to this tak.\
-              //            I'm so sorry.")
+            }
         };
     }
     #[cfg(target_os = "macos")]
