@@ -13,10 +13,10 @@ use termcolor::Color;
 enum PyVers {
     V3_12_0, // unreleased
     V3_11_0, // unreleased
-    V3_10_0, // unreleased
+    V3_10_2, // Win
     V3_9_0,  // either Os
     V3_8_0,  // either Os
-    V3_7_4,  // Either Os
+    V3_7_4,  // either Os
     V3_6_9,  // Linux
     V3_6_8,  // Win
     V3_5_7,  // Linux
@@ -90,7 +90,11 @@ impl From<(Version, Os)> for PyVers {
                 }
             },
             10 => match v_o.1 {
-                Os::Windows | Os::Ubuntu | Os::Centos => Self::V3_10_0,
+                Os::Windows => Self::V3_10_2,
+                Os::Ubuntu | Os::Centos => {
+                    abort_helper("3.10", "Linux");
+                    unreachable!()
+                }
                 _ => {
                     abort_helper("3.10", "Mac");
                     unreachable!()
@@ -120,7 +124,7 @@ impl ToString for PyVers {
         match self {
             Self::V3_12_0 => "3.12.0".into(),
             Self::V3_11_0 => "3.11.0".into(),
-            Self::V3_10_0 => "3.10.0".into(),
+            Self::V3_10_2 => "3.10.2".into(),
             Self::V3_9_0 => "3.9.0".into(),
             Self::V3_8_0 => "3.8.0".into(),
             Self::V3_7_4 => "3.7.4".into(),
@@ -138,7 +142,7 @@ impl PyVers {
         match self {
             Self::V3_12_0 => Version::new(3, 12, 0),
             Self::V3_11_0 => Version::new(3, 11, 0),
-            Self::V3_10_0 => Version::new(3, 10, 0),
+            Self::V3_10_1 => Version::new(3, 10, 2),
             Self::V3_9_0 => Version::new(3, 9, 0),
             Self::V3_8_0 => Version::new(3, 8, 0),
             Self::V3_7_4 => Version::new(3, 7, 4),
