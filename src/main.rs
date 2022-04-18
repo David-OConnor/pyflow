@@ -94,7 +94,13 @@ fn main() {
 
     match &subcmd {
         // Actions requires nothing to know about the project
-        SubCommand::New { name } => actions::new(name),
+        SubCommand::New { path, name } => {
+            // if name is not provided, use the directory name
+            match name {
+                Some(name) => actions::new(path, name),
+                None => actions::new(path, path)
+            }
+        },
         SubCommand::Init => actions::init(CFG_FILENAME),
         SubCommand::Reset {} => actions::reset(),
         SubCommand::Clear {} => actions::clear(&pyflow_path, &dep_cache_path, &script_env_path),
