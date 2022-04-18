@@ -32,8 +32,8 @@ Problem creating the project. This may be due to a permissions problem.
 If on linux, please try again with `sudo`.
 "#};
 
-pub fn new(name: &str) {
-    if new_internal(name).is_err() {
+pub fn new(path: &str, name: &str) {
+    if new_internal(path, name).is_err() {
         abort(NEW_ERROR_MESSAGE);
     }
     success(&format!("Created a new Python project named {}", name))
@@ -41,18 +41,19 @@ pub fn new(name: &str) {
 
 // TODO: Join this function after refactoring
 /// Create a template directory for a python project.
-fn new_internal(name: &str) -> Result<(), Box<dyn Error>> {
+fn new_internal(path: &str, name: &str) -> Result<(), Box<dyn Error>> {
+    let normalized_name = name.replace("-", "_");
     if !PathBuf::from(name).exists() {
-        fs::create_dir_all(&format!("{}/{}", name, name.replace("-", "_")))?;
-        fs::File::create(&format!("{}/{}/__init__.py", name, name.replace("-", "_")))?;
-        fs::File::create(&format!("{}/README.md", name))?;
-        fs::File::create(&format!("{}/.gitignore", name))?;
+        fs::create_dir_all(&format!("{}/{}", path, normalized_name))?;
+        fs::File::create(&format!("{}/{}/__init__.py", path, normalized_name))?;
+        fs::File::create(&format!("{}/README.md", path))?;
+        fs::File::create(&format!("{}/.gitignore", path))?;
     }
 
     let readme_init = &format!("# {}\n\n{}", name, "(A description)");
 
-    fs::write(&format!("{}/.gitignore", name), GITIGNORE_INIT)?;
-    fs::write(&format!("{}/README.md", name), readme_init)?;
+    fs::write(&format!("{}/.gitignore", path), GITIGNORE_INIT)?;
+    fs::write(&format!("{}/README.md", path), readme_init)?;
 
     let cfg = Config {
         name: Some(name.to_string()),
@@ -61,9 +62,9 @@ fn new_internal(name: &str) -> Result<(), Box<dyn Error>> {
         ..Default::default()
     };
 
-    cfg.write_file(&PathBuf::from(format!("{}/pyproject.toml", name)));
+    cfg.write_file(&PathBuf::from(format!("{}/pyproject.toml", path)));
 
-    if commands::git_init(Path::new(name)).is_err() {
+    if commands::git_init(Path::new(path)).is_err() {
         util::print_color(
             "Unable to initialize a git repo for your project",
             Color::Yellow, // Dark

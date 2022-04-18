@@ -5,13 +5,14 @@
     Usage: 
 
     ```
-    pyflow new <project_name>
+    pyflow new <path>
     ```
 
 
     Arguments:
 
-    * [] `--src` - Creates `src` folder instead of `<project_name>` folder
+    * [x] `--name` - Creates project with the given `<name>` inside `<path>` folder, so these identifiers can be different.
+    * [] `--src` - Creates `src` folder instead of `<path>` folder.
 
 * [] `init` - Create a `pyproject.toml` from [] requirements.txt, [] pipfile, [] setup.py, etc. 
     To be run inside project folder with these files.
