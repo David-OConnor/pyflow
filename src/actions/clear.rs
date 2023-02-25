@@ -1,6 +1,5 @@
-use std::{fs, path::Path};
-
 use crate::util::{self, abort, success};
+use std::{fs, path::Path};
 
 #[derive(Clone)]
 enum ClearChoice {

@@ -1,12 +1,10 @@
-use std::path::PathBuf;
-
-use termcolor::Color;
-
 use crate::{
     files,
     pyproject::Config,
     util::{self, abort},
 };
+use std::path::PathBuf;
+use termcolor::Color;
 
 pub fn init(cfg_filename: &str) {
     let cfg_path = PathBuf::from(cfg_filename);

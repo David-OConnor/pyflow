@@ -1,10 +1,8 @@
-use crate::util::print_color;
-use crate::{commands, dep_types::Version, util};
+use crate::{commands, dep_types::Version, util, util::print_color};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
-use std::path::PathBuf;
-use std::{fs, io, io::BufRead, path::Path, process::Command};
+use std::{fs, io, io::BufRead, path::Path, path::PathBuf, process::Command};
 use tar::Archive;
 use termcolor::Color;
 

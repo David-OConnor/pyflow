@@ -1,10 +1,7 @@
-use std::{env, path::PathBuf};
-
-use termcolor::Color;
-
-use crate::util;
-
 use super::{Config, PresentConfig, CFG_FILENAME, LOCK_FILENAME};
+use crate::util;
+use std::{env, path::PathBuf};
+use termcolor::Color;
 
 const NOT_FOUND_ERROR_MESSAGE: &str = indoc::indoc! {r#"
 To get started, run `pyflow new projname` to create a project folder, or

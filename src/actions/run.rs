@@ -1,8 +1,6 @@
-use std::path::Path;
-
-use regex::Regex;
-
 use crate::{commands, pyproject::Config, util::abort};
+use regex::Regex;
+use std::path::Path;
 
 /// Execute a python CLI tool, either specified in `pyproject.toml`, or in a dependency.
 pub fn run(lib_path: &Path, bin_path: &Path, vers_path: &Path, cfg: &Config, args: Vec<String>) {

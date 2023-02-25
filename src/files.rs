@@ -4,10 +4,12 @@ use crate::{
 };
 use regex::Regex;
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::fs;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::{
+    collections::HashMap,
+    fs,
+    io::{BufRead, BufReader},
+    path::Path,
+};
 use termcolor::Color;
 
 #[derive(Debug, Deserialize)]
@@ -374,8 +376,8 @@ pub fn change_py_vers(cfg_path: &Path, specified: &Version) {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::dep_types::{Constraint, ReqType::Caret};
+    use super::update_cfg;
+    use crate::dep_types::{Constraint, Req, ReqType::Caret, Version};
 
     // We're not concerned with testing formatting in this func.
     fn base_constrs() -> Vec<Constraint> {

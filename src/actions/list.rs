@@ -1,12 +1,10 @@
-use std::{path::Path, process};
-
-use termcolor::Color;
-
 use crate::{
     dep_types::Req,
     pyproject,
     util::{self, abort, print_color, print_color_},
 };
+use std::{path::Path, process};
+use termcolor::Color;
 
 /// List all installed dependencies and console scripts, by examining the `libs` and `bin` folders.
 /// Also include path requirements, which won't appear in the `lib` folder.

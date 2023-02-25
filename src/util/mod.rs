@@ -1,38 +1,38 @@
-pub mod deps;
-pub mod paths;
-pub mod prompts;
-
-mod os;
-pub use os::{get_os, Os};
-
-#[mockall_double::double]
-use crate::dep_resolution::res;
-
-use crate::dep_resolution::WarehouseRelease;
-use crate::dep_types::Extras;
 use crate::{
     commands,
-    dep_types::{Constraint, DependencyError, Lock, Req, ReqType, Version},
+    dep_resolution::WarehouseRelease,
+    dep_types::{Constraint, DependencyError, Extras, Lock, Req, ReqType, Version},
     files,
     install::{self, PackageType},
-    py_versions, util, CliConfig,
+    py_versions, CliConfig,
 };
 use ini::Ini;
 use regex::Regex;
-
-use std::fs;
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::path::Component;
-use std::str::FromStr;
 use std::{
     env,
     error::Error,
-    path::{Path, PathBuf},
-    process, thread, time,
+    fs,
+    io::{self, BufRead, BufReader, Read, Write},
+    path::{Component, Path, PathBuf},
+    process,
+    str::FromStr,
+    thread, time,
 };
 use tar::Archive;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use xz2::read::XzDecoder;
+
+pub mod deps;
+
+mod os;
+pub use os::{get_os, Os};
+
+pub mod paths;
+
+pub mod prompts;
+
+#[mockall_double::double]
+use crate::dep_resolution::res;
 
 #[derive(Debug)]
 pub struct Paths {
@@ -817,14 +817,14 @@ pub fn canon_join(path: &Path, extend: &str) -> PathBuf {
 ///
 /// The git requirements are removed from the `reqs` vector, and are replaced
 /// by all their downstream requirements.
-pub fn process_reqs(reqs: Vec<Req>, git_path: &Path, paths: &util::Paths) -> Vec<Req> {
+pub fn process_reqs(reqs: Vec<Req>, git_path: &Path, paths: &Paths) -> Vec<Req> {
     // git_reqs is used to store requirements from packages installed via git.
     let mut git_reqs = vec![]; // For path reqs too.
     for req in reqs.iter().filter(|r| r.git.is_some()) {
         // todo: as_ref() would be better than clone, if we can get it working.
         let mut metadata = install::download_and_install_git(
             &req.name,
-            //  util::GitPath::Git(req.git.clone().unwrap()),
+            //  GitPath::Git(req.git.clone().unwrap()),
             &req.git.clone().unwrap(),
             git_path,
             paths,
@@ -873,10 +873,8 @@ pub fn handle_color_option(s: &str) -> ColorChoice {
 
 #[cfg(test)]
 mod tests {
+    use super::{DependencyError, FromStr, Os};
     use rstest::rstest;
-
-    use super::*;
-    use crate::dep_types;
 
     #[test]
     fn dummy_test() {}
@@ -906,7 +904,7 @@ mod tests {
         case("some other bsd name", Ok(Os::Linux)),
         case("some other mac name", Ok(Os::Mac))
     )]
-    fn test_os_from_str(input: &str, expected: Result<Os, dep_types::DependencyError>) {
+    fn test_os_from_str(input: &str, expected: Result<Os, DependencyError>) {
         assert_eq!(Os::from_str(input), expected);
     }
 }

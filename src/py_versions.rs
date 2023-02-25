@@ -1,11 +1,11 @@
 //! Manages Python installations
 
-use crate::commands;
-use crate::dep_types::Version;
-use crate::{install, util};
-use std::error::Error;
-#[allow(unused_imports)]
-use std::{fmt, fs, io, path::Path, path::PathBuf};
+use crate::{commands, dep_types::Version, install, util};
+#[cfg(linux)]
+use std::path::PathBuf;
+#[cfg(macos)]
+use std::path::PathBuf;
+use std::{error::Error, fmt, fs, io, path::Path};
 use termcolor::Color;
 
 /// Only versions we've built and hosted

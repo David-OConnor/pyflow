@@ -1,9 +1,8 @@
-use std::{fs, process};
-
 use crate::{
     pyproject,
     util::{abort, success},
 };
+use std::{fs, process};
 
 pub fn reset() {
     let pcfg = pyproject::current::get_config().unwrap_or_else(|| process::exit(1));

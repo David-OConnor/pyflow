@@ -1,31 +1,40 @@
-use crate::actions::run;
-use crate::cli_options::{ExternalCommand, ExternalSubcommands, Opt, SubCommand};
-use crate::dep_types::{Lock, Package, Req, Version};
-use crate::pyproject::{Config, CFG_FILENAME};
-use crate::util::abort;
-use crate::util::deps::sync;
-
-use std::process;
 use std::{
     path::PathBuf,
+    process,
     sync::{Arc, RwLock},
 };
-
 use termcolor::{Color, ColorChoice};
 
 mod actions;
+use actions::run;
+
 mod build;
+
 mod cli_options;
+use cli_options::{ExternalCommand, ExternalSubcommands, Opt, SubCommand};
+
 mod commands;
+
 mod dep_parser;
+
 mod dep_resolution;
+
 mod dep_types;
+use dep_types::{Lock, Package, Req, Version};
+
 mod files;
+
 mod install;
+
 mod py_versions;
+
 mod pyproject;
+use pyproject::{Config, CFG_FILENAME};
+
 mod script;
+
 mod util;
+use util::{abort, deps::sync};
 
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
 

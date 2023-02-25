@@ -1,7 +1,8 @@
 use crate::util;
 use regex::Regex;
-use std::{error::Error, fmt};
 use std::{
+    error::Error,
+    fmt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };

@@ -1,10 +1,9 @@
-use std::path::Path;
-
 use crate::{
     build,
     dep_types::{LockPackage, Version},
     util::{self, deps::sync},
 };
+use std::path::Path;
 
 pub fn package(
     paths: &util::Paths,

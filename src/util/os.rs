@@ -1,9 +1,7 @@
-use std::str::FromStr;
-
+use crate::dep_types::DependencyError;
 use regex::Regex;
 use serde::Deserialize;
-
-use crate::dep_types::DependencyError;
+use std::str::FromStr;
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
 /// Used to determine which version of a binary package to download. Assume 64-bit.

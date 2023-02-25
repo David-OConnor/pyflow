@@ -1,14 +1,9 @@
 use crate::{
-    dep_types::{
-        self, Constraint, Dependency, DependencyError, Package, Rename, Req, ReqType, Version,
-    },
+    dep_types::{Constraint, Dependency, DependencyError, Req, ReqType, Version},
     util,
 };
 use serde::{Deserialize, Serialize};
-use std::cmp::min;
-use std::collections::HashMap;
-use std::str::FromStr;
-use termcolor::Color;
+use std::{collections::HashMap, str::FromStr};
 
 #[cfg(test)]
 use mockall::automock;
@@ -289,7 +284,15 @@ fn guess_graph(
 
 #[cfg_attr(test, automock())]
 pub(super) mod res {
-    use super::*;
+    use super::{
+        guess_graph, util, FromStr, HashMap, MultipleBody, ReqCache, WarehouseData,
+        WarehouseRelease,
+    };
+    use crate::dep_types::{
+        self, Constraint, Dependency, DependencyError, Package, Rename, Req, ReqType, Version,
+    };
+    use std::cmp::min;
+    use termcolor::Color;
 
     /// Format a name based on how it's listed on `PyPi`. Ie capitalize or convert - to _'
     /// a required.
@@ -833,8 +836,7 @@ pub(super) mod res {
 }
 #[cfg(test)]
 pub mod tests {
-    use super::res::*;
-    use super::*;
+    use super::{res::get_version_info, Version};
 
     #[test]
     fn warehouse_versions() {

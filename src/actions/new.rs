@@ -1,16 +1,14 @@
-use std::{
-    error::Error,
-    fs,
-    path::{Path, PathBuf},
-};
-
-use termcolor::Color;
-
 use crate::{
     commands,
     util::{self, abort, success},
     Config,
 };
+use std::{
+    error::Error,
+    fs,
+    path::{Path, PathBuf},
+};
+use termcolor::Color;
 
 const GITIGNORE_INIT: &str = indoc::indoc! {r##"
 # General Python ignores
