@@ -6,8 +6,8 @@ use termcolor::Color;
 const NOT_FOUND_ERROR_MESSAGE: &str = indoc::indoc! {r#"
 To get started, run `pyflow new projname` to create a project folder, or
 `pyflow init` to start a project in this folder. For a list of what you can do, run
-`pyflow help`.
-"#};
+`pyflow help`."#
+};
 
 pub fn get_config() -> Option<PresentConfig> {
     let mut config_path = PathBuf::from(CFG_FILENAME);

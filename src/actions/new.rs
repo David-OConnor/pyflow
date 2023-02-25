@@ -27,8 +27,8 @@ __pypackages__/
 
 pub const NEW_ERROR_MESSAGE: &str = indoc::indoc! {r#"
 Problem creating the project. This may be due to a permissions problem.
-If on linux, please try again with `sudo`.
-"#};
+If on linux, please try again with `sudo`."#
+};
 
 pub fn new(name: &str) {
     if new_internal(name).is_err() {
