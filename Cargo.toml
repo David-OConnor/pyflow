@@ -21,7 +21,7 @@ data-encoding = "2.1.2"
 directories = "4.0.1"
 flate2 = "1.0.12"
 fs_extra = "1.1.0"
-rust-ini = "0.13"
+rust-ini = { version = "0.18.0", features = ["inline-comment"] }
 xz2 = "0.1.6"
 regex = "1.1.9"
 ring = "0.16.9"
