@@ -306,7 +306,7 @@ pub(super) mod res {
     /// Fetch data about a package from the [Pypi Warehouse](https://warehouse.pypa.io/api-reference/json/).
     fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
         let url = format!("https://pypi.org/pypi/{}/json", name);
-        let resp = reqwest::get(&url)?.json()?;
+        let resp = reqwest::blocking::get(&url)?.json()?;
         Ok(resp)
     }
 
@@ -445,7 +445,7 @@ pub(super) mod res {
         let url = "https://pydeps.herokuapp.com/multiple/";
         //                let url = "http://localhost:8000/multiple/";
 
-        reqwest::Client::new()
+        reqwest::blocking::Client::new()
             .post(url)
             .json(&MultipleBody {
                 packages: packages2,

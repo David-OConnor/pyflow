@@ -253,7 +253,7 @@ fn download(py_installs_dir: &Path, version: &Version) {
             &format!("Downloading Python {}...", vers_to_dl),
             Color::Cyan,
         );
-        let mut resp = reqwest::get(&url).expect("Problem downloading Python"); // Download the file
+        let mut resp = reqwest::blocking::get(&url).expect("Problem downloading Python"); // Download the file
         let mut out =
             fs::File::create(&archive_path).expect("Failed to save downloaded Python archive");
         if let Err(e) = io::copy(&mut resp, &mut out) {

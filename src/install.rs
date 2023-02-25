@@ -185,7 +185,7 @@ pub fn download_and_install_package(
     // isn't the usual flow, but may have some uses.
     if !archive_path.exists() {
         // Save the file
-        let mut resp = reqwest::get(url)?; // Download the file
+        let mut resp = reqwest::blocking::get(url)?; // Download the file
         let mut out =
             fs::File::create(&archive_path).expect("Failed to save downloaded package file");
         // todo: DRY between here and py_versions.
