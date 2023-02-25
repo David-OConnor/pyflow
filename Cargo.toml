@@ -14,42 +14,42 @@ categories = ["development-tools::build-utils"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "^1"
-termcolor = "^1.1"
-atty = "^0.2.14"
-data-encoding = "^2.1.2"
-directories = "^2.0.2"
+anyhow = "1"
+termcolor = "1.1"
+atty = "0.2.14"
+data-encoding = "2.1.2"
+directories = "2.0.2"
 flate2 = "1.0.12"
-fs_extra = "^1.1.0"
+fs_extra = "1.1.0"
 rust-ini = "0.13"
-xz2 = "^0.1.6"
-regex = "^1.1.9"
-ring = "^0.16.9"
+xz2 = "0.1.6"
+regex = "1.1.9"
+ring = "0.16.9"
 # We disable, by omission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
 # of `pyflow python`.
-structopt = { version = "^0.3.3", default_features = false, features = ["color", "wrap_help", "doc"] }
-serde = {version = "^1.0.101", features = ["derive"]}
-tar = "^0.4.26"
-toml = "^0.5.1"
-zip = "^0.5.2"
-nom = "^5.1.2"
+structopt = { version = "0.3.3", default_features = false, features = ["color", "wrap_help", "doc"] }
+serde = {version = "1.0.101", features = ["derive"]}
+tar = "0.4.26"
+toml = "0.5.1"
+zip = "0.5.2"
+nom = "5.1.2"
 # We don't use native TLS, to avoid dependency issues on different linux distros.
-reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.9.21", default-features = false, features = ["rustls-tls"] }
 
 # Vendorize OpenSSl on Linux, to avoid compatibility problems.
 # todo: target-specific features aren't currently supported.
 #[target.'cfg(target_os = "linux")'.dependencies]
-#reqwest = { version = "^0.9.21", default-features = false, features = ["rustls-tls"] }
+#reqwest = { version = "0.9.21", default-features = false, features = ["rustls-tls"] }
 #
 #[target.'cfg(not(target_os = "linux"))'.dependencies]
-#reqwest = "^0.9.21"
+#reqwest = "0.9.21"
 
-mockall_double = "^0.2.0"
+mockall_double = "0.2.0"
 indoc = "1.0.3"
 
 [dev-dependencies]
 rstest = "0.10.0"
-mockall = "^0.9"
+mockall = "0.9"
 
 [package.metadata.deb]
 section = "Python"
