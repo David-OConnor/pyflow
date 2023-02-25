@@ -34,7 +34,7 @@ use pyproject::{Config, CFG_FILENAME};
 mod script;
 
 mod util;
-use util::{abort, deps::sync};
+use util::{abort, deps::sync, paths::PyflowDirs};
 
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
 
@@ -77,7 +77,7 @@ thread_local! {
 #[allow(clippy::single_match)]
 // TODO: Remove clippy::match_single_binding and clippy::single_match after full function refactoring
 fn main() {
-    let (pyflow_path, dep_cache_path, script_env_path, git_path) = util::paths::get_paths();
+    let pyflow_dirs = PyflowDirs::new().expect("Problem finding Pyflow directories");
     let os = util::get_os();
 
     let opt = <Opt as structopt::StructOpt>::from_args();
@@ -106,12 +106,12 @@ fn main() {
         SubCommand::New { name } => actions::new(name),
         SubCommand::Init => actions::init(CFG_FILENAME),
         SubCommand::Reset {} => actions::reset(),
-        SubCommand::Clear {} => actions::clear(&pyflow_path, &dep_cache_path, &script_env_path),
+        SubCommand::Clear {} => actions::clear(&pyflow_dirs),
         SubCommand::Switch { version } => actions::switch(version),
         SubCommand::External(ref x) => match ExternalCommand::from_opt(x.to_owned()) {
             ExternalCommand { cmd, args } => match cmd {
                 ExternalSubcommands::Script => {
-                    script::run_script(&script_env_path, &dep_cache_path, os, &args, &pyflow_path);
+                    script::run_script(&pyflow_dirs, os, &args);
                 }
                 // TODO: Move branches to omitted match
                 _ => (),
@@ -137,18 +137,14 @@ fn main() {
     };
 
     // Check for environments. Create one if none exist. Set `vers_path`.
-    let (vers_path, py_vers) = util::find_or_create_venv(
-        &cfg_vers,
-        &pcfg.pypackages_path,
-        &pyflow_path,
-        &dep_cache_path,
-    );
+    let (vers_path, py_vers) =
+        util::find_or_create_venv(&cfg_vers, &pcfg.pypackages_path, &pyflow_dirs);
 
     let paths = util::Paths {
         bin: util::find_bin_path(&vers_path),
         lib: vers_path.join("lib"),
         entry_pt: vers_path.join("bin"),
-        cache: dep_cache_path,
+        cache: pyflow_dirs.dep_cache_path().to_owned(),
     };
 
     // Add all path reqs to the PYTHONPATH; this is the way we make these packages accessible when
@@ -194,7 +190,7 @@ fn main() {
             actions::install(
                 &pcfg.config_path,
                 &pcfg.config,
-                &git_path,
+                pyflow_dirs.git_dir(),
                 &paths,
                 found_lock,
                 &packages,

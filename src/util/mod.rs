@@ -28,6 +28,7 @@ mod os;
 pub use os::{get_os, Os};
 
 pub mod paths;
+use paths::PyflowDirs;
 
 pub mod prompts;
 
@@ -438,8 +439,7 @@ pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
 pub fn find_or_create_venv(
     cfg_vers: &Version,
     pypackages_dir: &Path,
-    pyflow_dir: &Path,
-    dep_cache_path: &Path,
+    pyflow_dirs: &PyflowDirs,
 ) -> (PathBuf, Version) {
     let venvs = find_venvs(pypackages_dir);
     // The version's explicitly specified; check if an environment for that version
@@ -452,8 +452,7 @@ pub fn find_or_create_venv(
     let py_vers;
     match compatible_venvs.len() {
         0 => {
-            let vers =
-                py_versions::create_venv(cfg_vers, pypackages_dir, pyflow_dir, dep_cache_path);
+            let vers = py_versions::create_venv(cfg_vers, pypackages_dir, pyflow_dirs);
             vers_path = pypackages_dir.join(vers.to_string_med());
             py_vers = Version::new_opt(vers.major, vers.minor, None); // Don't include patch.
         }

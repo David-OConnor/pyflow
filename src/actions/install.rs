@@ -11,7 +11,7 @@ use termcolor::Color;
 pub fn install(
     cfg_path: &Path,
     cfg: &Config,
-    git_path: &Path,
+    git_dir: &Path,
     paths: &Paths,
     found_lock: bool,
     packages: &[String],
@@ -34,8 +34,8 @@ pub fn install(
 
     let dont_uninstall = util::find_dont_uninstall(&updated_reqs, &up_dev_reqs);
 
-    let updated_reqs = process_reqs(updated_reqs, git_path, paths);
-    let up_dev_reqs = process_reqs(up_dev_reqs, git_path, paths);
+    let updated_reqs = process_reqs(updated_reqs, git_dir, paths);
+    let up_dev_reqs = process_reqs(up_dev_reqs, git_dir, paths);
 
     sync(
         paths,

@@ -1,5 +1,5 @@
-use crate::util::{self, abort, success};
-use std::{fs, path::Path};
+use crate::util::{self, abort, paths::PyflowDirs, success};
+use std::fs;
 
 #[derive(Clone)]
 enum ClearChoice {
@@ -17,7 +17,7 @@ impl ToString for ClearChoice {
 }
 
 /// Clear `Pyflow`'s cache. Allow the user to select which parts to clear based on a prompt.
-pub fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
+pub fn clear(pyflow_dirs: &PyflowDirs) {
     let result = util::prompts::list(
         "Which cached items would you like to clear?",
         "choice",
@@ -36,28 +36,49 @@ pub fn clear(pyflow_path: &Path, cache_path: &Path, script_env_path: &Path) {
     // todo: DRY
     match result.1 {
         ClearChoice::Dependencies => {
-            if fs::remove_dir_all(&cache_path).is_err() {
+            let dep_cache_path = pyflow_dirs.dep_cache_path();
+            if fs::remove_dir_all(dep_cache_path).is_err() {
                 abort(&format!(
                     "Problem removing the dependency-cache path: {:?}",
-                    cache_path
+                    dep_cache_path
                 ));
             }
         }
         ClearChoice::ScriptEnvs => {
-            if fs::remove_dir_all(&script_env_path).is_err() {
+            let script_envs_dir = pyflow_dirs.script_envs_dir();
+            if fs::remove_dir_all(&script_envs_dir).is_err() {
                 abort(&format!(
                     "Problem removing the script env path: {:?}",
-                    script_env_path
+                    script_envs_dir
                 ));
             }
         }
         ClearChoice::PyInstalls => {}
         ClearChoice::All => {
-            if fs::remove_dir_all(&pyflow_path).is_err() {
+            let data_dir = pyflow_dirs.data_dir();
+            if fs::remove_dir_all(&data_dir).is_err() {
                 abort(&format!(
-                    "Problem removing the Pyflow path: {:?}",
-                    pyflow_path
+                    "Problem removing the Pyflow data directory: {:?}",
+                    data_dir
                 ));
+            }
+            let cache_dir = pyflow_dirs.cache_dir();
+            if data_dir != cache_dir {
+                if fs::remove_dir_all(&cache_dir).is_err() {
+                    abort(&format!(
+                        "Problem removing the Pyflow cache directory: {:?}",
+                        cache_dir
+                    ));
+                }
+            }
+            let state_dir = pyflow_dirs.state_dir();
+            if data_dir != state_dir && cache_dir != state_dir {
+                if fs::remove_dir_all(&state_dir).is_err() {
+                    abort(&format!(
+                        "Problem removing the Pyflow state directory: {:?}",
+                        state_dir
+                    ));
+                }
             }
         }
     }
