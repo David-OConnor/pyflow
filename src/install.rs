@@ -1,10 +1,8 @@
-use crate::util::print_color;
-use crate::{commands, dep_types::Version, util};
+use crate::{commands, dep_types::Version, util, util::print_color};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
-use std::path::PathBuf;
-use std::{fs, io, io::BufRead, path::Path, process::Command};
+use std::{fs, io, io::BufRead, path::Path, path::PathBuf, process::Command};
 use tar::Archive;
 use termcolor::Color;
 
@@ -187,7 +185,7 @@ pub fn download_and_install_package(
     // isn't the usual flow, but may have some uses.
     if !archive_path.exists() {
         // Save the file
-        let mut resp = reqwest::get(url)?; // Download the file
+        let mut resp = reqwest::blocking::get(url)?; // Download the file
         let mut out =
             fs::File::create(&archive_path).expect("Failed to save downloaded package file");
         // todo: DRY between here and py_versions.

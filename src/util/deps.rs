@@ -1,8 +1,3 @@
-use std::{collections::HashMap, path::Path, str::FromStr};
-
-use regex::Regex;
-use termcolor::Color;
-
 use crate::{
     dep_resolution::res,
     dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version},
@@ -10,6 +5,9 @@ use crate::{
     util::{self, abort},
     PackToInstall,
 };
+use regex::Regex;
+use std::{collections::HashMap, path::Path, str::FromStr};
+use termcolor::Color;
 
 /// Function used by `Install` and `Uninstall` subcommands to syn dependencies with
 /// the config and lock files.

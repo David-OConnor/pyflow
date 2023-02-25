@@ -1,8 +1,6 @@
-use std::{path::PathBuf, process};
-
-use termcolor::Color;
-
 use crate::{files, pyproject, util};
+use std::{path::PathBuf, process};
+use termcolor::Color;
 
 /// Updates `pyproject.toml` with a new python version
 pub fn switch(version: &str) {

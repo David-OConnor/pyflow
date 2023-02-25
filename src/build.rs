@@ -1,7 +1,6 @@
 use crate::{dep_types::Req, util};
 use regex::Regex;
-use std::{collections::HashMap, path::Path};
-use std::{env, fs, process::Command};
+use std::{collections::HashMap, env, fs, path::Path, process::Command};
 use termcolor::Color;
 
 // https://packaging.python.org/tutorials/packaging-projects/
@@ -238,7 +237,7 @@ pub(crate) fn publish(bin_path: &Path, cfg: &crate::Config) {
 
 #[cfg(test)]
 pub mod test {
-    use super::*;
+    use super::{cfg_to_setup, serialize_py_list, HashMap};
     use crate::dep_types::{
         Constraint, Req,
         ReqType::{Caret, Exact},

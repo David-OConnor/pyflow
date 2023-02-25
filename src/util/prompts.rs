@@ -1,14 +1,12 @@
-use std::{
-    collections::HashMap,
-    io::{self, Write},
-};
-
-use termcolor::Color;
-
 use crate::{
     dep_types::Version,
     util::{abort, default_python, fallible_v_parse, print_color},
 };
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+};
+use termcolor::Color;
 
 /// Ask the user what Python version to use.
 pub fn py_vers() -> Version {

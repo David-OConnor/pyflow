@@ -1,5 +1,10 @@
-pub mod current;
-
+use crate::{
+    dep_types::{Constraint, Req, Version},
+    files,
+    util::{self, abort},
+};
+use regex::Regex;
+use serde::Deserialize;
 use std::{
     collections::HashMap,
     fs,
@@ -7,14 +12,7 @@ use std::{
     str::FromStr,
 };
 
-use regex::Regex;
-use serde::Deserialize;
-
-use crate::{
-    dep_types::{Constraint, Req, Version},
-    files,
-    util::{self, abort},
-};
+pub mod current;
 
 pub const CFG_FILENAME: &str = "pyproject.toml";
 pub const LOCK_FILENAME: &str = "pyflow.lock";

@@ -1,11 +1,16 @@
 //! Manages Python installations
 
-use crate::commands;
-use crate::dep_types::Version;
-use crate::{install, util};
-use std::error::Error;
-#[allow(unused_imports)]
-use std::{fmt, fs, io, path::Path, path::PathBuf};
+use crate::{
+    commands,
+    dep_types::Version,
+    install,
+    util::{self, paths::PyflowDirs},
+};
+#[cfg(linux)]
+use std::path::PathBuf;
+#[cfg(macos)]
+use std::path::PathBuf;
+use std::{error::Error, fmt, fs, io, path::Path};
 use termcolor::Color;
 
 /// Only versions we've built and hosted
@@ -184,7 +189,7 @@ impl fmt::Display for Os {
     }
 }
 
-fn download(py_install_path: &Path, version: &Version) {
+fn download(py_installs_dir: &Path, version: &Version) {
     // We use the `.xz` format due to its small size compared to `.zip`. On order half the size.
     let os;
     let os_str;
@@ -241,14 +246,14 @@ fn download(py_install_path: &Path, version: &Version) {
     );
 
     // eg `python-3.7.4-ubuntu.tar.xz`
-    let archive_path = py_install_path.join(&format!("python-{}-{}.tar.xz", vers_to_dl, os_str));
+    let archive_path = py_installs_dir.join(&format!("python-{}-{}.tar.xz", vers_to_dl, os_str));
     if !archive_path.exists() {
         // Save the file
         util::print_color(
             &format!("Downloading Python {}...", vers_to_dl),
             Color::Cyan,
         );
-        let mut resp = reqwest::get(&url).expect("Problem downloading Python"); // Download the file
+        let mut resp = reqwest::blocking::get(&url).expect("Problem downloading Python"); // Download the file
         let mut out =
             fs::File::create(&archive_path).expect("Failed to save downloaded Python archive");
         if let Err(e) = io::copy(&mut resp, &mut out) {
@@ -259,13 +264,13 @@ fn download(py_install_path: &Path, version: &Version) {
     }
     util::print_color(&format!("Installing Python {}...", vers_to_dl), Color::Cyan);
 
-    util::unpack_tar_xz(&archive_path, py_install_path);
+    util::unpack_tar_xz(&archive_path, py_installs_dir);
 
     // Strip the OS tag from the extracted Python folder name
-    let extracted_path = py_install_path.join(&format!("python-{}", vers_to_dl));
+    let extracted_path = py_installs_dir.join(&format!("python-{}", vers_to_dl));
 
     fs::rename(
-        py_install_path.join(&format!("python-{}-{}", vers_to_dl, os_str)),
+        py_installs_dir.join(&format!("python-{}-{}", vers_to_dl, os_str)),
         &extracted_path,
     )
     .expect("Problem renaming extracted Python folder");
@@ -335,7 +340,7 @@ pub fn find_py_aliases(version: &Version) -> Vec<(String, Version)> {
 }
 
 // Find versions installed with this tool.
-fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
+fn find_installed_versions(py_installs_dir: &Path) -> Vec<Version> {
     #[cfg(target_os = "windows")]
     let py_name = "python";
     #[cfg(target_os = "linux")]
@@ -343,21 +348,23 @@ fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
     #[cfg(target_os = "macos")]
     let py_name = "bin/python3";
 
-    if !&pyflow_dir.exists() && fs::create_dir_all(&pyflow_dir).is_err() {
-        util::abort("Problem creating the Pyflow directory")
+    if !&py_installs_dir.exists() && fs::create_dir_all(&py_installs_dir).is_err() {
+        util::abort("Problem creating the Pyflow Python installs directory")
     }
 
     let mut result = vec![];
-    for entry in pyflow_dir
+    for py_install_entry in py_installs_dir
         .read_dir()
         .expect("Can't open python installs path")
         .flatten()
     {
-        if !entry.path().is_dir() {
+        if !py_install_entry.path().is_dir() {
             continue;
         }
 
-        if let Some(v) = commands::find_py_version(entry.path().join(py_name).to_str().unwrap()) {
+        if let Some(v) =
+            commands::find_py_version(py_install_entry.path().join(py_name).to_str().unwrap())
+        {
             result.push(v);
         }
     }
@@ -365,12 +372,7 @@ fn find_installed_versions(pyflow_dir: &Path) -> Vec<Version> {
 }
 
 /// Create a new virtual environment, and install `wheel`.
-pub fn create_venv(
-    cfg_v: &Version,
-    pypackages_dir: &Path,
-    pyflow_dir: &Path,
-    dep_cache_path: &Path,
-) -> Version {
+pub fn create_venv(cfg_v: &Version, pypackages_dir: &Path, pyflow_dirs: &PyflowDirs) -> Version {
     let os;
     let python_name;
     #[allow(unused_mut)]
@@ -400,11 +402,16 @@ pub fn create_venv(
 
     // If we find both a system alias, and internal version installed, go with the internal.
     // One's this tool installed
-    let installed_versions = find_installed_versions(pyflow_dir);
+    let installed_versions = find_installed_versions(pyflow_dirs.py_installs_dir());
     for iv in &installed_versions {
         if iv.major == cfg_v.major && iv.minor == cfg_v.minor {
             let folder_name = format!("python-{}", iv.to_string());
-            alias_path = Some(pyflow_dir.join(folder_name).join(&py_name));
+            alias_path = Some(
+                pyflow_dirs
+                    .py_installs_dir()
+                    .join(folder_name)
+                    .join(&py_name),
+            );
             py_ver = Some(iv.clone());
             break;
         }
@@ -441,7 +448,7 @@ pub fn create_venv(
     if py_ver.is_none() {
         // Download and install the appropriate Python binary, if we can't find either a
         // custom install, or on the Path.
-        download(pyflow_dir, cfg_v);
+        download(pyflow_dirs.py_installs_dir(), cfg_v);
         let py_ver2: PyVers = (cfg_v.clone(), os).into();
         py_ver = Some(py_ver2.to_vers());
 
@@ -466,7 +473,12 @@ pub fn create_venv(
             }
         }
 
-        alias_path = Some(pyflow_dir.join(folder_name).join(py_name));
+        alias_path = Some(
+            pyflow_dirs
+                .py_installs_dir()
+                .join(folder_name)
+                .join(py_name),
+        );
     }
 
     let py_ver = py_ver.expect("missing Python version");
@@ -525,7 +537,7 @@ pub fn create_venv(
             .join(venv_lib_path)
             .join("site-packages"),
         entry_pt: bin_path,
-        cache: dep_cache_path.to_owned(),
+        cache: pyflow_dirs.dep_cache_path().to_owned(),
     };
 
     // We need `wheel` installed to build wheels from source.

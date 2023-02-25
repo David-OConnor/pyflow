@@ -1,24 +1,17 @@
-use crate::dep_resolution::res;
-use crate::dep_types::{Constraint, Extras, Lock, Req, ReqType, Version};
-use crate::util;
+use crate::{
+    commands,
+    dep_parser::parse_version,
+    dep_resolution::res,
+    dep_types::{Constraint, Extras, Lock, Req, ReqType, Version},
+    util::{self, paths::PyflowDirs},
+};
 use regex::Regex;
-use std::fs;
-use std::path::Path;
-
-use crate::commands;
-use crate::dep_parser::parse_version;
-use std::str::FromStr;
+use std::{fs, path::Path, str::FromStr};
 
 /// Run a standalone script file, with package management
 /// todo: We're using script name as unique identifier; address this in the future,
 /// todo perhaps with an id in a comment at the top of a file
-pub fn run_script(
-    script_env_path: &Path,
-    dep_cache_path: &Path,
-    os: util::Os,
-    args: &[String],
-    pyflow_dir: &Path,
-) {
+pub fn run_script(pyflow_dirs: &PyflowDirs, os: util::Os, args: &[String]) {
     #[cfg(debug_assertions)]
     eprintln!("Run script args: {:?}", args);
 
@@ -34,7 +27,7 @@ pub fn run_script(
     // todo: Consider a metadata file, but for now, we'll use folders
     //    let scripts_data_path = script_env_path.join("scripts.toml");
 
-    let env_path = util::canon_join(script_env_path, filename);
+    let env_path = util::canon_join(pyflow_dirs.script_envs_dir(), filename);
     if !env_path.exists() {
         fs::create_dir_all(&env_path).expect("Problem creating environment for the script");
     }
@@ -63,8 +56,7 @@ pub fn run_script(
 
     // todo DRY
     let pypackages_dir = env_path.join("__pypackages__");
-    let (vers_path, py_vers) =
-        util::find_or_create_venv(&cfg_vers, &pypackages_dir, pyflow_dir, dep_cache_path);
+    let (vers_path, py_vers) = util::find_or_create_venv(&cfg_vers, &pypackages_dir, pyflow_dirs);
 
     let bin_path = util::find_bin_path(&vers_path);
     let lib_path = vers_path.join("lib");
@@ -75,7 +67,7 @@ pub fn run_script(
         bin: bin_path,
         lib: lib_path,
         entry_pt: script_path,
-        cache: dep_cache_path.to_owned(),
+        cache: pyflow_dirs.dep_cache_path().to_owned(),
     };
 
     let deps = find_deps_from_script(&script);
@@ -199,11 +191,9 @@ fn find_deps_from_script(script: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use indoc::indoc;
-
+    use super::{check_for_specified_py_vers, find_deps_from_script};
     use crate::dep_types::Version;
-
-    use super::*;
+    use indoc::indoc;
 
     #[test]
     fn parse_python_version_with_no_dunder_specified() {

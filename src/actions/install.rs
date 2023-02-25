@@ -1,21 +1,17 @@
-use std::path::Path;
-
-use termcolor::Color;
-
 use crate::{
     dep_types::{LockPackage, Version},
-    util::{self, process_reqs, Os, Paths},
+    util::{self, deps::sync, process_reqs, Os, Paths},
     Config,
 };
-
-use util::deps::sync;
+use std::path::Path;
+use termcolor::Color;
 
 // TODO: Refactor this function
 #[allow(clippy::too_many_arguments)]
 pub fn install(
     cfg_path: &Path,
     cfg: &Config,
-    git_path: &Path,
+    git_dir: &Path,
     paths: &Paths,
     found_lock: bool,
     packages: &[String],
@@ -38,8 +34,8 @@ pub fn install(
 
     let dont_uninstall = util::find_dont_uninstall(&updated_reqs, &up_dev_reqs);
 
-    let updated_reqs = process_reqs(updated_reqs, git_path, paths);
-    let up_dev_reqs = process_reqs(up_dev_reqs, git_path, paths);
+    let updated_reqs = process_reqs(updated_reqs, git_dir, paths);
+    let up_dev_reqs = process_reqs(up_dev_reqs, git_dir, paths);
 
     sync(
         paths,

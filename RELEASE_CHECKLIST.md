@@ -40,7 +40,7 @@ users, and binaries built on other OSes appear not to work on these due to OpenS
 1. Run `cargo package` and `cargo publish` (Any os).
 1. Run `snapcraft login`, then `snapcraft push --release=stable pyflow_x.x.x_amd64.snap` on Ubuntu.
 1. For the Windows and Ubuntu wheels, run `twine upload (wheelname)`.
-1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
+1. Add a release on [Github](https://github.com/David-OConnor/pyflow/releases), following the format of previous releases.
 1. Upload the following binaries to the release page: zipped Windows binary (This is all `Scoop` needs),
  Linux binary, Msi, Deb, Rpm.
 
