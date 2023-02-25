@@ -10,7 +10,7 @@ use nom::{
         is_alphabetic,
     },
     combinator::{flat_map, map, map_parser, map_res, opt, value},
-    multi::separated_list,
+    multi::separated_list0,
     sequence::{delimited, preceded, separated_pair, tuple},
     AsChar, IResult, InputTakeAtPosition,
 };
@@ -89,7 +89,7 @@ pub fn parse_wh_py_vers(input: &str) -> IResult<&str, Vec<Constraint>> {
             vec![Constraint::new(ReqType::Gte, Version::new(2, 0, 0))]
         }),
         map(parse_version, |v| vec![Constraint::new(ReqType::Caret, v)]),
-        separated_list(tag("."), parse_wh_py_ver),
+        separated_list0(tag("."), parse_wh_py_ver),
     ))(input)
 }
 
@@ -129,7 +129,7 @@ fn parse_install_with_extras(input: &str) -> IResult<&str, Vec<String>> {
     map(
         delimited(
             tag("["),
-            separated_list(tag(","), parse_package_name),
+            separated_list0(tag(","), parse_package_name),
             tag("]"),
         ),
         |extras| extras.iter().map(|x| x.to_string()).collect(),
@@ -138,7 +138,7 @@ fn parse_install_with_extras(input: &str) -> IResult<&str, Vec<String>> {
 
 pub fn parse_extras(input: &str) -> IResult<&str, Extras> {
     map(
-        separated_list(
+        separated_list0(
             delimited(space0, tag("and"), space0),
             delimited(
                 opt(preceded(tag("("), space0)),
@@ -172,7 +172,7 @@ fn parse_extra_part(input: &str) -> IResult<&str, ExtrasPart> {
     flat_map(
         alt((tag("extra"), tag("sys_platform"), tag("python_version"))),
         |type_| {
-            move |input: &str| match type_ {
+            move |input| match type_ {
                 "extra" => map(
                     preceded(
                         separated_pair(space0, tag("=="), space0),
@@ -201,7 +201,7 @@ fn parse_extra_part(input: &str) -> IResult<&str, ExtrasPart> {
 }
 
 pub fn parse_constraints(input: &str) -> IResult<&str, Vec<Constraint>> {
-    separated_list(tuple((space0, tag(","), space0)), parse_constraint)(input)
+    separated_list0(tuple((space0, tag(","), space0)), parse_constraint)(input)
 }
 
 pub fn parse_constraint(input: &str) -> IResult<&str, Constraint> {
