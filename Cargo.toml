@@ -27,7 +27,7 @@ regex = "1.1.9"
 ring = "0.16.9"
 # We disable, by omission, suggestions, so it doesn't think `pyflow ipython` is a misspelling
 # of `pyflow python`.
-structopt = { version = "0.3.3", default_features = false, features = ["color", "wrap_help", "doc"] }
+clap = { version = "4.1.6", default_features = false, features = ["color", "derive", "error-context", "help", "std", "usage", "wrap_help"] }
 serde = {version = "1.0.101", features = ["derive"]}
 tar = "0.4.26"
 toml = "0.7.2"

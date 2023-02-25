@@ -80,7 +80,7 @@ fn main() {
     let pyflow_dirs = PyflowDirs::new().expect("Problem finding Pyflow directories");
     let os = util::get_os();
 
-    let opt = <Opt as structopt::StructOpt>::from_args();
+    let opt = <Opt as clap::Parser>::parse();
     #[cfg(debug_assertions)]
     eprintln!("opts {:?}", opt);
 
