@@ -36,10 +36,13 @@ pub enum SubCommand {
         dev: bool,
     },
 
-    /** Install packages from `pyproject.toml`, `pyflow.lock`, or specified ones. Example:
+    /** Install packages from `pyproject.toml`, `pyflow.lock`, or specified ones.
 
-    `pyflow install`: sync your installation with `pyproject.toml`, or `pyflow.lock` if it exists.
-    `pyflow install numpy scipy`: install `numpy` and `scipy`.*/
+    Examples:
+
+    `pyflow install`: sync your installation with `pyproject.toml`, or `pyflow.lock` if it exists.  
+
+    `pyflow install numpy scipy`: install `numpy` and `scipy`.  */
     #[command(name = "install")]
     Install {
         #[arg(name = "packages")]
