@@ -31,7 +31,7 @@ structopt = { version = "0.3.3", default_features = false, features = ["color", 
 serde = {version = "1.0.101", features = ["derive"]}
 tar = "0.4.26"
 toml = "0.7.2"
-zip = "0.5.2"
+zip = "0.6.4"
 nom = "5.1.2"
 # We don't use native TLS, to avoid dependency issues on different linux distros.
 reqwest = { version = "0.9.21", default-features = false, features = ["rustls-tls"] }
