@@ -7,6 +7,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::collections::HashMap;
+use std::env;
 use std::str::FromStr;
 use termcolor::Color;
 
@@ -439,11 +440,13 @@ pub(super) mod res {
             packages2.insert(name.to_owned(), versions);
         }
 
-        let url = "https://pydeps.herokuapp.com/multiple/";
-        //                let url = "http://localhost:8000/multiple/";
+        let pydeps_endpoint = match env::var("PYFLOW_PYDEPS_ENDPOINT") {
+            Ok(url) => url,
+            Err(_) => String::from("http://localhost:8000/multiple/"),
+        };
 
         reqwest::Client::new()
-            .post(url)
+            .post(&pydeps_endpoint)
             .json(&MultipleBody {
                 packages: packages2,
             })
