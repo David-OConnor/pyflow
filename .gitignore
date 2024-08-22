@@ -4,6 +4,7 @@
 #PyCharm
 *.iws
 *.workspace.xml
+.idea
 
 # Prevent generated and test files from being committed
 requirements.txt

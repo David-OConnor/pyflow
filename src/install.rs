@@ -3,6 +3,11 @@ use std::{fs, fs::File, io, io::BufRead, path::Path, process::Command};
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
+<<<<<<< HEAD
+=======
+use std::path::PathBuf;
+use std::{fs, io, io::BufRead, path::Path, process::Command};
+>>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7
 use tar::Archive;
 use termcolor::Color;
 
@@ -37,12 +42,11 @@ fn replace_distutils(setup_path: &Path) {
         t
     } else {
         util::abort(&format!(
-            "Can't find setup.py in this source distribution\
-             path: {:?}. This could mean there are no suitable wheels for this package,\
+            "Can't find setup.py in this source distribution \
+             path: {:?}. This could mean there are no suitable wheels for this package, \
              and there's a problem with its setup.py.",
             setup_path
         ));
-        unreachable!()
     };
 
     let re = Regex::new(r"distutils.core").unwrap();
@@ -91,15 +95,10 @@ if __name__ == '__main__':
         .unwrap_or_else(|_| util::abort(&format!("Problem creating script file for {}", name)));
 }
 
-/// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
-/// Alternatively, we could just parse all `dist-info` folders every run; this should
-/// be faster.
-pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_path: &Path) {
-    let mut scripts = vec![];
-    // todo: Sep fn for dist_info path, to avoid repetition between here and uninstall?
+/// Find `dist-info` folder for package.
+fn find_dist_info_path(name: &str, version: &Version, lib_path: &Path) -> PathBuf {
     let mut dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string()));
     // If we can't find the dist_info path, it may be due to it not using a full 3-digit semver format.
-    // todo: Dry from dep_resolution, release check.
     if !dist_info_path.exists() && (version.patch == Some(0) || version.patch == None) {
         dist_info_path = lib_path.join(format!("{}-{}.dist-info", name, version.to_string_med()));
         if !dist_info_path.exists() && (version.minor == Some(0) || version.minor == None) {
@@ -107,6 +106,15 @@ pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_pa
                 lib_path.join(format!("{}-{}.dist-info", name, version.to_string_short()));
         }
     }
+    dist_info_path
+}
+
+/// Set up entry points (ie scripts like `ipython`, `black` etc) in a single file.
+/// Alternatively, we could just parse all `dist-info` folders every run; this should
+/// be faster.
+pub fn setup_scripts(name: &str, version: &Version, lib_path: &Path, entry_pt_path: &Path) {
+    let mut scripts = vec![];
+    let dist_info_path = find_dist_info_path(name, version, lib_path);
 
     if let Ok(ep_file) = fs::File::open(&dist_info_path.join("entry_points.txt")) {
         let mut in_scripts_section = false;
@@ -201,7 +209,6 @@ pub fn download_and_install_package(
     let reader = io::BufReader::new(&file);
     let file_digest = sha256_digest(reader).unwrap_or_else(|_| {
         util::abort(&format!("Problem reading hash for {}", filename));
-        unreachable!()
     });
 
     let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
@@ -211,7 +218,7 @@ pub fn download_and_install_package(
         let mut input = String::new();
         io::stdin()
             .read_line(&mut input)
-            .expect("Unable to read user input Hash fail decision");
+            .expect("Unable to read user input hash fail decision");
 
         let input = input
             .chars()
@@ -234,7 +241,7 @@ pub fn download_and_install_package(
 
     match package_type {
         PackageType::Wheel => {
-            util::extract_zip(&archive_file, &paths.lib, &rename);
+            util::extract_zip(&archive_file, &paths.lib, &rename, &None);
         }
         PackageType::Source => {
             // todo: Support .tar.bz2
@@ -258,6 +265,7 @@ pub fn download_and_install_package(
             // symlinks in the archive may cause the unpack to break. If this happens, we want
             // to continue unpacking the other files.
             // Overall, this is a pretty verbose workaround!
+            let mut archive_error = Ok(());
             match archive.entries() {
                 Ok(entries) => {
                     for file in entries {
@@ -281,7 +289,7 @@ pub fn download_and_install_package(
                                             f_path.file_name().expect("Problem getting file name");
 
                                         // In the `pandocfilters` Python package, the readme file specified in
-                                        // `setup.py` is a symlink, which we can't unwrap, and is requried to exist,
+                                        // `setup.py` is a symlink, which we can't unwrap, and is required to exist,
                                         // or the wheel build fails. Workaround here; may apply to other packages as well.
                                         if filename
                                             .to_str()
@@ -300,35 +308,28 @@ pub fn download_and_install_package(
                                 };
                             }
                             Err(e) => {
-                                // todo: dRY while troubleshooting
-                                println!(
-                                    "Problem opening the tar.gz archive: {:?}: {:?},  checking if it's a zip...",
-                                    &archive_file, e
-                                );
-                                // The extract_wheel function just extracts a zip file, so it's appropriate here.
-                                // We'll then continue with this leg, and build/move/cleanup.
-
-                                // Check if we have a zip file instead.
-                                util::extract_zip(&archive_file, &paths.lib, &None);
+                                // We'll continue with this leg, then check if we have a zip file instead.
+                                archive_error = Err(e);
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    println!(
-                        "Problem opening the tar.gz archive: {:?}: {:?},  checking if it's a zip...",
-                        &archive_file, e
-                    );
-                    // The extract_wheel function just extracts a zip file, so it's appropriate here.
-                    // We'll then continue with this leg, and build/move/cleanup.
-
-                    // Check if we have a zip file instead.
-                    util::extract_zip(&archive_file, &paths.lib, &None);
+                    // We'll continue with this leg, then check if we have a zip file instead.
+                    archive_error = Err(e);
                 }
+            }
+            // Check if we have a zip file instead.
+            if let Err(e) = archive_error {
+                println!(
+                    "Problem opening the tar.gz archive: {:?}: {:?}, checking if it's a zip...",
+                    &archive_file, e
+                );
+                util::extract_zip(&archive_file, &paths.lib, &None, &Some((name, filename)));
             }
 
             // The archive is now unpacked into a parent folder from the `tar.gz`. Place
-            // its sub-folders directly in the lib folder, and deleten the parent.
+            // its sub-folders directly in the lib folder, and delete the parent.
             let re = Regex::new(r"^(.*?)(?:\.tar\.gz|\.zip)$").unwrap();
             let folder_name = re
                 .captures(filename)
@@ -338,8 +339,7 @@ pub fn download_and_install_package(
                     util::abort(&format!(
                         "Unable to find extracted folder name: {}",
                         filename
-                    ));
-                    unreachable!()
+                    ))
                 })
                 .as_str();
 
@@ -466,7 +466,7 @@ pub fn download_and_install_package(
                 .expect("Problem copying wheel built from source");
 
             let file_created = fs::File::open(&moved_path).expect("Can't find created wheel.");
-            util::extract_zip(&file_created, &paths.lib, &rename);
+            util::extract_zip(&file_created, &paths.lib, &rename, &None);
 
             // Remove the created and moved wheel
             if fs::remove_file(moved_path).is_err() {
@@ -504,24 +504,7 @@ pub fn uninstall(name_ins: &str, vers_ins: &Version, lib_path: &Path) {
     // Uninstall the package
     // package folders appear to be lowercase, while metadata keeps the package title's casing.
 
-    let mut dist_info_path =
-        lib_path.join(format!("{}-{}.dist-info", name_ins, vers_ins.to_string()));
-    // todo: DRY
-    if !dist_info_path.exists() && (vers_ins.patch == Some(0) || vers_ins.patch == None) {
-        dist_info_path = lib_path.join(format!(
-            "{}-{}.dist-info",
-            name_ins,
-            vers_ins.to_string_med()
-        ));
-        if !dist_info_path.exists() && (vers_ins.minor == Some(0) || vers_ins.minor == None) {
-            dist_info_path = lib_path.join(format!(
-                "{}-{}.dist-info",
-                name_ins,
-                vers_ins.to_string_short()
-            ));
-        }
-    }
-
+    let dist_info_path = find_dist_info_path(name_ins, vers_ins, lib_path);
     let egg_info_path = lib_path.join(format!("{}-{}.egg-info", name_ins, vers_ins.to_string()));
 
     // todo: could top_level.txt be in egg-info too?
@@ -604,7 +587,7 @@ pub fn rename_package_files(top_path: &Path, old: &str, new: &str) {
         );
         data = data.replace(&format!("from {}.", old), &format!("from {}.", new));
         data = data.replace(&format!("import {}", old), &format!("import {}", new));
-        // Todo: Is this one too general? Supercedes the first. Needed for things like `add_newdoc('numpy.core.multiarray...`
+        // Todo: Is this one too general? Supersedes the first. Needed for things like `add_newdoc('numpy.core.multiarray...`
         data = data.replace(&format!("{}.", old), &format!("{}.", new));
 
         fs::write(path, data).expect("Problem writing file while renaming");
@@ -682,7 +665,7 @@ pub fn download_and_install_git(
     let archive_path = &paths.lib.join(&filename);
     let archive_file = util::open_archive(archive_path);
 
-    util::extract_zip(&archive_file, &paths.lib, &None);
+    util::extract_zip(&archive_file, &paths.lib, &None, &None);
 
     // Use the wheel's name to find the dist-info path, to avoid the chicken-egg scenario
     // of need the dist-info path to find the version.
@@ -694,8 +677,7 @@ pub fn download_and_install_git(
             caps.get(2).unwrap().as_str()
         )
     } else {
-        util::abort("Unable to find the dist info path from wheel filename");
-        unreachable!();
+        util::abort("Unable to find the dist info path from wheel filename")
     };
 
     let metadata = util::parse_metadata(&paths.lib.join(dist_info).join("METADATA")); // todo temp!

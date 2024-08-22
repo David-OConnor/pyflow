@@ -1,4 +1,4 @@
-[![crates.io version](https://meritbadge.herokuapp.com/pyflow)](https://crates.io/crates/pyflow)
+[![crates.io version](https://img.shields.io/crates/v/pyflow.svg)](https://crates.io/crates/pyflow)
 [![Build Status](https://travis-ci.org/David-OConnor/pyflow.svg?branch=master)](https://travis-ci.org/David-OConnor/pyflow)
 
 
@@ -67,7 +67,9 @@ creates a folder with the basics.
 ## Quick-and-dirty start for quick-and-dirty scripts
 - Add the line `__requires__ = ['numpy', 'requests']` somewhere in your script, where `numpy` and
 `requests` are dependencies.
-Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
+- Optionally add the line `__python__ = X.Y.Z`, where `X.Y.Z` is a Python version specification.
+Without this line, you will be prompted to choose a version when running the script.
+- Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
 This will set up an isolated environment for this script, and install
 dependencies as required. This is a safe way
 to run one-off Python files that aren't attached to a project, but have dependencies.
@@ -280,7 +282,7 @@ be added to `pyproject.toml` and installed. You can use the `--dev` flag to inst
 - `pyflow` - Run a Python REPL
 - `pyflow main.py` - Run a python file
 - `pyflow ipython`, `pyflow black` etc - Run a CLI tool like `ipython`, or a project function
- For the former, this must have been installed by a dependency; for the latter, it's specfied
+ For the former, this must have been installed by a dependency; for the latter, it's specified
 under `[tool.pyflow]`, `scripts`
 - `pyflow script myscript.py` - Run a one-off script, outside a project directory, with per-file
 package management
@@ -435,7 +437,7 @@ deb, run the new version's installer or deb. If manually calling a binary, repla
 - If installed via `Pip`, run `pip uninstall pyflow`.
 - If installed via Windows installer, run the Installer again and select `Remove` when asked,
 or use `Apps & features`.
-- If installed via a `deb`, useg the `Software Center`.
+- If installed via a `deb`, use the `Software Center`.
 - If manually calling a binary, remove it.
 
 ## Contributing

@@ -13,10 +13,10 @@ use crate::{commands, dep_types::Version, install, util};
 enum PyVers {
     V3_12_0, // unreleased
     V3_11_0, // unreleased
-    V3_10_0, // unreleased
+    V3_10_2, // Win
     V3_9_0,  // either Os
     V3_8_0,  // either Os
-    V3_7_4,  // Either Os
+    V3_7_4,  // either Os
     V3_6_9,  // Linux
     V3_6_8,  // Win
     V3_5_7,  // Linux
@@ -38,8 +38,7 @@ impl From<(Version, Os)> for PyVers {
         let unsupported = "Unsupported python version requested; only Python ≥ 3.4 is supported. \
         to fix this, edit the `py_version` line of `pyproject.toml`, or run `pyflow switch 3.7`";
         if v_o.0.major != Some(3) {
-            util::abort(unsupported);
-            unreachable!()
+            util::abort(unsupported)
         }
         match v_o.0.minor.unwrap_or(0) {
             4 => match v_o.1 {
@@ -91,7 +90,11 @@ impl From<(Version, Os)> for PyVers {
                 }
             },
             10 => match v_o.1 {
-                Os::Windows | Os::Ubuntu | Os::Centos => Self::V3_10_0,
+                Os::Windows => Self::V3_10_2,
+                Os::Ubuntu | Os::Centos => {
+                    abort_helper("3.10", "Linux");
+                    unreachable!()
+                }
                 _ => {
                     abort_helper("3.10", "Mac");
                     unreachable!()
@@ -111,10 +114,7 @@ impl From<(Version, Os)> for PyVers {
                     unreachable!()
                 }
             },
-            _ => {
-                util::abort(unsupported);
-                unreachable!()
-            }
+            _ => util::abort(unsupported),
         }
     }
 }
@@ -124,7 +124,7 @@ impl ToString for PyVers {
         match self {
             Self::V3_12_0 => "3.12.0".into(),
             Self::V3_11_0 => "3.11.0".into(),
-            Self::V3_10_0 => "3.10.0".into(),
+            Self::V3_10_2 => "3.10.2".into(),
             Self::V3_9_0 => "3.9.0".into(),
             Self::V3_8_0 => "3.8.0".into(),
             Self::V3_7_4 => "3.7.4".into(),
@@ -142,7 +142,7 @@ impl PyVers {
         match self {
             Self::V3_12_0 => Version::new(3, 12, 0),
             Self::V3_11_0 => Version::new(3, 11, 0),
-            Self::V3_10_0 => Version::new(3, 10, 0),
+            Self::V3_10_2 => Version::new(3, 10, 2),
             Self::V3_9_0 => Version::new(3, 9, 0),
             Self::V3_8_0 => Version::new(3, 8, 0),
             Self::V3_7_4 => Version::new(3, 7, 4),
@@ -195,7 +195,7 @@ fn download(py_install_path: &Path, version: &Version) {
     }
     #[cfg(target_os = "linux")]
     {
-        let result = util::prompt_list(
+        let result = util::prompts::list(
             "Please enter the number corresponding to your Linux distro:",
             "Linux distro",
             &[
@@ -221,11 +221,7 @@ fn download(py_install_path: &Path, version: &Version) {
                      It's worth trying the other options, to see if one works anyway.",
                 );
                 unreachable!()
-            } //            _ => panic!("If you're seeing this, the code is in what I thought was an unreachable\
-              //            state. I could give you advice for what to do. But honestly, why should you trust me?\
-              //            I clearly screwed this up. I'm writing a message that should never appear, yet\
-              //            I know it will probably appear someday. On a deep level, I know I'm not up to this tak.\
-              //            I'm so sorry.")
+            }
         };
     }
     #[cfg(target_os = "macos")]
@@ -430,7 +426,7 @@ pub fn create_venv(
             }
             _ => {
                 //                let r = prompt_alias(&aliases);
-                let r = util::prompt_list(
+                let r = util::prompts::list(
                     "Found multiple compatible Python versions. Please enter the number associated with the one you'd like to use:",
                     "Python alias",
                     &aliases,

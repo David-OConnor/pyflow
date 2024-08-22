@@ -1,3 +1,4 @@
+<<<<<<< HEAD:src/util.rs
 use std::{
     collections::HashMap,
     env, fs,
@@ -14,15 +15,49 @@ use serde::Deserialize;
 use tar::Archive;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use xz2::read::XzDecoder;
+=======
+pub mod deps;
+pub mod paths;
+pub mod prompts;
+
+mod os;
+pub use os::{get_os, Os};
+
+#[mockall_double::double]
+use crate::dep_resolution::res;
+>>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7:src/util/mod.rs
 
 use crate::{
     commands,
+<<<<<<< HEAD:src/util.rs
     dep_resolution::{res, WarehouseRelease},
     dep_types::{Constraint, DependencyError, Extras, Req, ReqType, Version},
+=======
+    dep_types::{Constraint, DependencyError, Lock, Req, ReqType, Version},
+>>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7:src/util/mod.rs
     files,
     install::{self, PackageType},
-    py_versions, CliConfig,
+    py_versions, util, CliConfig,
 };
+<<<<<<< HEAD:src/util.rs
+=======
+use ini::Ini;
+use regex::Regex;
+
+use std::fs;
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::path::Component;
+use std::str::FromStr;
+use std::{
+    env,
+    error::Error,
+    path::{Path, PathBuf},
+    process, thread, time,
+};
+use tar::Archive;
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use xz2::read::XzDecoder;
+>>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7:src/util/mod.rs
 
 #[derive(Debug)]
 pub struct Paths {
@@ -46,45 +81,10 @@ pub struct Metadata {
     pub requires_dist: Vec<Req>,
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
-/// Used to determine which version of a binary package to download. Assume 64-bit.
-pub enum Os {
-    Linux32,
-    Linux,
-    Windows32,
-    Windows,
-    //    Mac32,
-    Mac,
-    Any,
-}
-
-impl FromStr for Os {
-    type Err = DependencyError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re_linux32 = Regex::new(r"(many)?linux.*i686").unwrap();
-        let re_linux = Regex::new(r"((many)?linux.*|cygwin|(open)?bsd6*)").unwrap();
-        let re_win = Regex::new(r"^win(dows|_amd64)?").unwrap();
-        let re_mac = Regex::new(r"(macosx.*|darwin|.*mac.*)").unwrap();
-
-        Ok(match s {
-            x if re_linux32.is_match(x) => Self::Linux32,
-            x if re_linux.is_match(x) => Self::Linux,
-            "win32" => Self::Windows32,
-            x if re_win.is_match(x) => Self::Windows,
-            x if re_mac.is_match(x) => Self::Mac,
-            "any" => Self::Any,
-            _ => {
-                return Err(DependencyError::new(&format!("Problem parsing Os: {}", s)));
-            }
-        })
-    }
-}
-
 /// Print line in a color, then reset formatting.
 pub fn print_color(message: &str, color: Color) {
     if let Err(_e) = print_color_res(message, color) {
-        panic!("Error printing in color")
+        panic!("Error printing in color");
     }
 }
 
@@ -114,9 +114,14 @@ fn print_color_res_(message: &str, color: Color) -> io::Result<()> {
 /// Used when the program should exit from a condition that may arise normally from program use,
 /// like incorrect info in config files, problems with dependencies, or internet connection problems.
 /// We use `expect`, `panic!` etc for problems that indicate a bug in this program.
-pub fn abort(message: &str) {
+pub fn abort(message: &str) -> ! {
     print_color(message, Color::Red);
     process::exit(1)
+}
+
+pub fn success(message: &str) {
+    print_color(message, Color::Green);
+    process::exit(0)
 }
 
 /// Find which virtual environments exist.
@@ -197,39 +202,6 @@ pub fn set_pythonpath(paths: &[PathBuf]) {
     env::set_var("PYTHONPATH", formatted_paths);
 }
 
-/// List all installed dependencies and console scripts, by examining the `libs` and `bin` folders.
-/// Also include path requirements, which won't appear in the `lib` folder.
-pub fn show_installed(lib_path: &Path, path_reqs: &[Req]) {
-    let installed = find_installed(lib_path);
-    let scripts = find_console_scripts(&lib_path.join("../bin"));
-
-    if installed.is_empty() {
-        print_color("No packages are installed.", Color::Blue); // Dark
-    } else {
-        print_color("These packages are installed:", Color::Blue); // Dark
-        for (name, version, _tops) in installed {
-            print_color_(&name, Color::Cyan);
-            print_color(&format!("=={}", version.to_string_color()), Color::White);
-        }
-        for req in path_reqs {
-            print_color_(&req.name, Color::Cyan);
-            print_color(
-                &format!(", at path: {}", req.path.as_ref().unwrap()),
-                Color::White,
-            );
-        }
-    }
-
-    if scripts.is_empty() {
-        print_color("\nNo console scripts are installed.", Color::Blue); // Dark
-    } else {
-        print_color("\nThese console scripts are installed:", Color::Blue); // Dark
-        for script in scripts {
-            print_color(&script, Color::Cyan); // Dark
-        }
-    }
-}
-
 /// Find the packages installed, by browsing the lib folder for metadata.
 /// Returns package-name, version, folder names
 pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
@@ -239,7 +211,7 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
 
     let mut result = vec![];
 
-    for folder_name in &find_folders(&lib_path) {
+    for folder_name in &find_folders(lib_path) {
         let re_dist = Regex::new(r"^(.*?)-(.*?)\.dist-info$").unwrap();
 
         if let Some(caps) = re_dist.captures(folder_name) {
@@ -268,26 +240,6 @@ pub fn find_installed(lib_path: &Path) -> Vec<(String, Version, Vec<String>)> {
     }
     result
 }
-
-/// Find console scripts installed, by browsing the (custom) bin folder
-pub fn find_console_scripts(bin_path: &Path) -> Vec<String> {
-    let mut result = vec![];
-    if !bin_path.exists() {
-        return vec![];
-    }
-
-    for entry in bin_path
-        .read_dir()
-        .expect("Trouble opening bin path")
-        .flatten()
-    {
-        if entry.file_type().unwrap().is_file() {
-            result.push(entry.file_name().to_str().unwrap().to_owned())
-        }
-    }
-    result
-}
-
 /// Handle reqs added via the CLI. Result is (normal reqs, dev reqs)
 pub fn merge_reqs(
     added: &[String],
@@ -347,8 +299,7 @@ pub fn merge_reqs(
             ) {
                 r
             } else {
-                abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?");
-                unreachable!()
+                abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?")
             };
 
             added_req.constraints.push(Constraint::new(
@@ -381,12 +332,12 @@ pub fn merge_reqs(
 
     if dev {
         if !added_reqs_unique.is_empty() {
-            files::add_reqs_to_cfg(&cfg_path, &[], &added_reqs_unique);
+            files::add_reqs_to_cfg(cfg_path, &[], &added_reqs_unique);
         }
         (cfg.reqs.clone(), result)
     } else {
         if !added_reqs_unique.is_empty() {
-            files::add_reqs_to_cfg(&cfg_path, &added_reqs_unique, &[]);
+            files::add_reqs_to_cfg(cfg_path, &added_reqs_unique, &[]);
         }
         (result, cfg.dev_reqs.clone())
     }
@@ -403,7 +354,12 @@ pub fn compare_names(name1: &str, name2: &str) -> bool {
 
 /// Extract the wheel or zip.
 /// From [this example](https://github.com/mvdnes/zip-rs/blob/master/examples/extract.rs#L32)
-pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, String)>) {
+pub fn extract_zip(
+    file: &fs::File,
+    out_path: &Path,
+    rename: &Option<(String, String)>,
+    package_names: &Option<(&str, &str)>,
+) {
     // Separate function, since we use it twice.
     let mut archive = if let Ok(a) = zip::ZipArchive::new(file) {
         a
@@ -411,33 +367,47 @@ pub fn extract_zip(file: &fs::File, out_path: &Path, rename: &Option<(String, St
         abort(&format!(
             "Problem reading the wheel archive: {:?}. Is it corrupted?",
             &file
-        ));
-        unreachable!()
+        ))
     };
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
         // Change name here instead of after in case we've already installed a non-renamed version.
         // (which would be overwritten by this one.)
-        let file_str2 = file.enclosed_name().unwrap();
-        let file_str = file_str2.to_str().expect("Problem converting path to str");
-
-        let extracted_file = if !file_str.contains("dist-info") && !file_str.contains("egg-info") {
-            match rename {
-                Some((old, new)) => PathBuf::from_str(
-                    file.enclosed_name()
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_owned()
-                        .replace(old, new)
-                        .as_str(),
-                ),
-                None => PathBuf::from_str(file.enclosed_name().unwrap().to_str().unwrap()),
+        let entry_path = file.enclosed_name().unwrap();
+        let mut final_entry_path = PathBuf::with_capacity(entry_path.as_os_str().len());
+        // The `hexdump` Python package intentionally strips its own root folder from its zip source
+        // distribution, which breaks wheel building. As a workaround, add the package name and version
+        // as a prefix to the path when extracting if the package name isn't in the first folder's
+        // name already.
+        if let Some((name, filename)) = package_names {
+            let stem = Path::new(filename).file_stem().unwrap();
+            let components: Vec<Component> = entry_path.components().collect();
+            if components.len() == 1
+                || !components[0]
+                    .as_os_str()
+                    .to_string_lossy()
+                    .starts_with(name)
+            {
+                final_entry_path.push(stem);
             }
-        } else {
-            PathBuf::from_str(file.enclosed_name().unwrap().to_str().unwrap())
-        };
+        }
+        final_entry_path.push(entry_path);
+        let entry_path_str = final_entry_path
+            .to_str()
+            .expect("Problem converting path to str");
+
+        let extracted_file =
+            if !entry_path_str.contains("dist-info") && !entry_path_str.contains("egg-info") {
+                match rename {
+                    Some((old, new)) => {
+                        PathBuf::from_str(entry_path_str.to_owned().replace(old, new).as_str())
+                    }
+                    None => Ok(final_entry_path),
+                }
+            } else {
+                Ok(final_entry_path)
+            };
 
         let outpath = out_path.join(extracted_file.unwrap());
 
@@ -472,8 +442,8 @@ pub fn unpack_tar_xz(archive_path: &Path, dest: &Path) {
     let mut decompressor = XzDecoder::new(&archive_bytes[..]);
     if decompressor.read_to_end(&mut tar).is_err() {
         abort(&format!(
-            "Problem decompressing the archive: {:?}. This may be due to a failed downoad. \
-        Try deleting it, then trying again. Note that Pyflow will only install officially-released \
+            "Problem decompressing the archive: {:?}. This may be due to a failed download. \
+        Try deleting it, then try again. Note that Pyflow will only install officially-released \
         Python versions. If you'd like to use a pre-release, you must install it manually.",
             archive_path
         ))
@@ -524,8 +494,7 @@ pub fn find_or_create_venv(
                 // todo: Handle this, eg by letting the user pick the one to use?
                 "Multiple compatible Python environments found
                 for this project.",
-            );
-            unreachable!()
+            )
         }
     }
 
@@ -555,13 +524,10 @@ pub fn find_or_create_venv(
         let vers_path = fs::canonicalize(vers_path);
         let vers_path = match vers_path {
             Ok(path) => path,
-            Err(error) => {
-                abort(&format!(
-                    "Problem converting path to absolute path: {:?}",
-                    error
-                ));
-                unreachable!()
-            }
+            Err(error) => abort(&format!(
+                "Problem converting path to absolute path: {:?}",
+                error
+            )),
         };
         (vers_path, py_vers)
     }
@@ -589,62 +555,8 @@ pub fn fallible_v_parse(vers: &str) -> Version {
     if let Ok(v) = Version::from_str(&vers) {
         v
     } else {
-        abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1");
-        unreachable!()
+        abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1")
     }
-}
-
-/// A generic prompt function, where the user selects from a list
-pub fn prompt_list<T: Clone + ToString>(
-    init_msg: &str,
-    type_: &str,
-    items: &[(String, T)],
-    show_item: bool,
-) -> (String, T) {
-    print_color(init_msg, Color::Magenta);
-    for (i, (name, content)) in items.iter().enumerate() {
-        if show_item {
-            println!("{}: {}: {}", i + 1, name, content.to_string())
-        } else {
-            println!("{}: {}", i + 1, name)
-        }
-    }
-
-    let mut mapping = HashMap::new();
-    for (i, item) in items.iter().enumerate() {
-        mapping.insert(i + 1, item);
-    }
-
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Problem reading input");
-
-    let input = input
-        .chars()
-        .next()
-        .expect("Problem parsing input")
-        .to_string()
-        .parse::<usize>();
-
-    let input = if let Ok(ip) = input {
-        ip
-    } else {
-        abort("Please try again; enter a number like 1 or 2 .");
-        unreachable!()
-    };
-
-    let (name, content) = if let Some(r) = mapping.get(&input) {
-        r
-    } else {
-        abort(&format!(
-            "Can't find the {} associated with that number. Is it in the list above?",
-            type_
-        ));
-        unreachable!()
-    };
-
-    (name.to_string(), content.clone())
 }
 
 /// Find the operating system from a wheel filename. This doesn't appear to be available
@@ -746,8 +658,7 @@ pub fn find_best_release(
                 "Unable to find a compatible release for {}: {}",
                 name,
                 version.to_string_color()
-            ));
-            unreachable!()
+            ))
         } else {
             best_release = source_releases[0].clone();
             package_type = install::PackageType::Source;
@@ -784,7 +695,7 @@ pub fn get_git_author() -> Vec<String> {
 }
 
 pub fn find_first_file(path: &Path) -> PathBuf {
-    // todo: Propogate errors rather than abort here?
+    // todo: Propagate errors rather than abort here?
     {
         // There should only be one file in this dist folder: The wheel we're looking for.
         for entry in path
@@ -799,8 +710,7 @@ pub fn find_first_file(path: &Path) -> PathBuf {
         abort(&format!(
             "Problem the first file in the directory: {:?}",
             path
-        ));
-        unreachable!()
+        ))
     };
 }
 
@@ -814,8 +724,7 @@ pub fn open_archive(path: &Path) -> fs::File {
             "Problem opening the archive file: {:?}. Was there a problem while
         downloading it?",
             &path
-        ));
-        unreachable!()
+        ))
     }
 }
 
@@ -870,29 +779,6 @@ fn default_python() -> Version {
     }
 }
 
-/// Ask the user what Python version to use.
-pub fn prompt_py_vers() -> Version {
-    print_color(
-        "Please enter the Python version for this project: (eg: 3.8)",
-        Color::Magenta,
-    );
-    let default_ver = default_python();
-    print!("Default [{}]:", default_ver);
-    std::io::stdout().flush().unwrap();
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect("Unable to read user input for version");
-
-    input.pop(); // Remove trailing newline.
-    let input = input.replace("\n", "").replace("\r", "");
-    if !input.is_empty() {
-        fallible_v_parse(&input)
-    } else {
-        default_ver
-    }
-}
-
 /// We've removed the git repos from packages to install form pypi, but make
 /// sure we flag them as not-to-uninstall.
 pub fn find_dont_uninstall(reqs: &[Req], dev_reqs: &[Req]) -> Vec<String> {
@@ -930,7 +816,7 @@ pub(crate) fn check_command_output_with(output: &process::Output, f: impl Fn(&st
     if !output.status.success() {
         let stderr =
             std::str::from_utf8(&output.stderr).expect("building string from command output");
-        f(&stderr)
+        f(stderr)
     }
 }
 
@@ -939,10 +825,7 @@ pub fn canon_join(path: &Path, extend: &str) -> PathBuf {
     let ex_path = Path::new(extend);
     let canon = match ex_path.canonicalize() {
         Ok(c) => c,
-        Err(e) => {
-            abort(&format!("{}\n\"{}\"", e, extend));
-            unreachable!()
-        }
+        Err(e) => abort(&format!("{}\n\"{}\"", e, extend)),
     };
     let mut new_path = path.to_path_buf();
 
@@ -953,6 +836,64 @@ pub fn canon_join(path: &Path, extend: &str) -> PathBuf {
         }
     }
     new_path
+}
+
+/// Install git requirements and collect their downstream dependencies.
+///
+/// The git requirements are removed from the `reqs` vector, and are replaced
+/// by all their downstream requirements.
+pub fn process_reqs(reqs: Vec<Req>, git_path: &Path, paths: &util::Paths) -> Vec<Req> {
+    // git_reqs is used to store requirements from packages installed via git.
+    let mut git_reqs = vec![]; // For path reqs too.
+    for req in reqs.iter().filter(|r| r.git.is_some()) {
+        // todo: as_ref() would be better than clone, if we can get it working.
+        let mut metadata = install::download_and_install_git(
+            &req.name,
+            //  util::GitPath::Git(req.git.clone().unwrap()),
+            &req.git.clone().unwrap(),
+            git_path,
+            paths,
+        );
+        git_reqs.append(&mut metadata.requires_dist);
+    }
+    // We don't pass the git requirement itself, since we've directly installed it,
+    // but we do pass its requirements.
+    let mut updated_reqs: Vec<Req> = reqs
+        .into_iter()
+        .filter(|r| r.git.is_none() && r.path.is_none())
+        .collect();
+    for r in git_reqs {
+        updated_reqs.push(r);
+    }
+    updated_reqs
+}
+
+/// Read dependency data from a lock file.
+pub fn read_lock(path: &Path) -> Result<Lock, Box<dyn Error>> {
+    let data = fs::read_to_string(path)?;
+    Ok(toml::from_str(&data)?)
+}
+
+/// Write dependency data to a lock file.
+pub fn write_lock(path: &Path, data: &Lock) -> Result<(), Box<dyn Error>> {
+    let data = toml::to_string(data)?;
+    fs::write(path, data)?;
+    Ok(())
+}
+
+pub fn handle_color_option(s: &str) -> ColorChoice {
+    match s {
+        "always" => ColorChoice::Always,
+        "ansi" => ColorChoice::AlwaysAnsi,
+        "auto" => {
+            if atty::is(atty::Stream::Stdout) {
+                ColorChoice::Auto
+            } else {
+                ColorChoice::Never
+            }
+        }
+        _ => ColorChoice::Never,
+    }
 }
 
 #[cfg(test)]
