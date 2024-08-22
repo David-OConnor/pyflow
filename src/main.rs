@@ -1,21 +1,26 @@
 #![allow(clippy::non_ascii_literal)]
 
-#[mockall_double::double]
-use crate::dep_resolution::res;
-use crate::dep_types::{
-    Constraint, Extras, Lock, LockPackage, Package, Rename, Req, ReqType, Version,
+use std::{
+    collections::HashMap,
+    env,
+    error::Error,
+    fs,
+    io::{BufRead, BufReader},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::{Arc, RwLock},
 };
-use crate::util::{abort, Os};
 
 use regex::Regex;
 use serde::Deserialize;
-use std::{collections::HashMap, env, error::Error, fs, path::PathBuf, str::FromStr};
-
-use std::io::{BufRead, BufReader};
-use std::path::Path;
-use std::sync::{Arc, RwLock};
 use structopt::StructOpt;
 use termcolor::{Color, ColorChoice};
+
+use crate::{
+    dep_resolution::res,
+    dep_types::{Constraint, Extras, Lock, LockPackage, Package, Rename, Req, ReqType, Version},
+    util::{abort, Os},
+};
 
 mod build;
 mod commands;

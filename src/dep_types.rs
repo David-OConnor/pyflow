@@ -1,18 +1,28 @@
-use crate::dep_parser::{
-    parse_constraint, parse_pip_str, parse_req, parse_req_pypi_fmt, parse_version, parse_wh_py_vers,
+use std::{
+    cmp,
+    collections::HashMap,
+    error::Error,
+    fmt,
+    hash::{Hash, Hasher},
+    io::Write,
+    num,
+    str::FromStr,
 };
-#[mockall_double::double]
-use crate::dep_resolution::res;
-use crate::dep_resolution::WarehouseRelease;
-use crate::{util, CliConfig};
+
 use nom::combinator::all_consuming;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::error::Error;
-use std::hash::{Hash, Hasher};
-use std::io::Write;
-use std::{cmp, fmt, num, str::FromStr};
 use termcolor::{Buffer, BufferWriter, Color, ColorSpec, WriteColor};
+
+// #[mockall_double::double]
+use crate::dep_resolution::res;
+use crate::{
+    dep_parser::{
+        parse_constraint, parse_pip_str, parse_req, parse_req_pypi_fmt, parse_version,
+        parse_wh_py_vers,
+    },
+    dep_resolution::WarehouseRelease,
+    util, CliConfig,
+};
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
 

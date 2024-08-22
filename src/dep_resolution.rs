@@ -1,17 +1,14 @@
+use std::{cmp::min, collections::HashMap, str::FromStr};
+
+use serde::{Deserialize, Serialize};
+use termcolor::Color;
+
 use crate::{
     dep_types::{
         self, Constraint, Dependency, DependencyError, Package, Rename, Req, ReqType, Version,
     },
     util,
 };
-use serde::{Deserialize, Serialize};
-use std::cmp::min;
-use std::collections::HashMap;
-use std::str::FromStr;
-use termcolor::Color;
-
-#[cfg(test)]
-use mockall::automock;
 
 #[derive(Debug, Deserialize)]
 struct WarehouseInfo {
@@ -304,7 +301,7 @@ pub(super) mod res {
     /// Fetch data about a package from the [Pypi Warehouse](https://warehouse.pypa.io/api-reference/json/).
     fn get_warehouse_data(name: &str) -> Result<WarehouseData, reqwest::Error> {
         let url = format!("https://pypi.org/pypi/{}/json", name);
-        let resp = reqwest::get(&url)?.json()?;
+        let resp = reqwest::blocking::get(&url)?.json()?;
         Ok(resp)
     }
 
@@ -443,7 +440,7 @@ pub(super) mod res {
         let url = "https://pydeps.herokuapp.com/multiple/";
         //                let url = "http://localhost:8000/multiple/";
 
-        reqwest::Client::new()
+        reqwest::blocking::Client::new()
             .post(url)
             .json(&MultipleBody {
                 packages: packages2,
@@ -839,8 +836,7 @@ pub(super) mod res {
 }
 #[cfg(test)]
 pub mod tests {
-    use super::res::*;
-    use super::*;
+    use super::{res::*, *};
 
     #[test]
     fn warehouse_versions() {

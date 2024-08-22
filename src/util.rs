@@ -1,29 +1,28 @@
-#[mockall_double::double]
-use crate::dep_resolution::res;
+use std::{
+    collections::HashMap,
+    env, fs,
+    io::{self, BufRead, BufReader, Read, Write},
+    path::{Path, PathBuf},
+    process,
+    str::FromStr,
+    thread, time,
+};
 
-use crate::dep_resolution::WarehouseRelease;
-use crate::dep_types::Extras;
+use ini::Ini;
+use regex::Regex;
+use serde::Deserialize;
+use tar::Archive;
+use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
+use xz2::read::XzDecoder;
+
 use crate::{
     commands,
-    dep_types::{Constraint, DependencyError, Req, ReqType, Version},
+    dep_resolution::{res, WarehouseRelease},
+    dep_types::{Constraint, DependencyError, Extras, Req, ReqType, Version},
     files,
     install::{self, PackageType},
     py_versions, CliConfig,
 };
-use ini::Ini;
-use regex::Regex;
-use serde::Deserialize;
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::str::FromStr;
-use std::{
-    collections::HashMap,
-    env, fs,
-    path::{Path, PathBuf},
-    process, thread, time,
-};
-use tar::Archive;
-use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use xz2::read::XzDecoder;
 
 #[derive(Debug)]
 pub struct Paths {

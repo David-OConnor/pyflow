@@ -1,10 +1,13 @@
-use crate::util;
-use regex::Regex;
-use std::{error::Error, fmt};
 use std::{
+    error::Error,
+    fmt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
+
+use regex::Regex;
+
+use crate::util;
 
 #[derive(Debug)]
 struct _ExecutionError {

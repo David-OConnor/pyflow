@@ -1,15 +1,22 @@
 use std::str::FromStr;
 
-use nom::bytes::complete::{tag, take, take_till};
-use nom::character::complete::{digit1, space0, space1};
-use nom::combinator::{flat_map, map, map_parser, map_res, opt, value};
-use nom::multi::separated_list;
-use nom::sequence::{delimited, preceded, separated_pair, tuple};
-use nom::{branch::alt, character::is_alphabetic};
-use nom::{AsChar, IResult, InputTakeAtPosition};
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take, take_till},
+    character::{
+        complete::{digit1, space0, space1},
+        is_alphabetic,
+    },
+    combinator::{flat_map, map, map_parser, map_res, opt, value},
+    multi::separated_list,
+    sequence::{delimited, preceded, separated_pair, tuple},
+    AsChar, IResult, InputTakeAtPosition,
+};
 
-use crate::dep_types::{Constraint, Extras, Req, ReqType, Version, VersionModifier};
-use crate::util::Os;
+use crate::{
+    dep_types::{Constraint, Extras, Req, ReqType, Version, VersionModifier},
+    util::Os,
+};
 
 enum ExtrasPart {
     Extra(String),
@@ -306,9 +313,8 @@ fn parse_modifier_version(input: &str) -> IResult<&str, VersionModifier> {
 mod tests {
     use rstest::rstest;
 
-    use crate::dep_types::{Version, VersionModifier};
-
     use super::*;
+    use crate::dep_types::{Version, VersionModifier};
 
     #[test]
     fn dummy_test() {}

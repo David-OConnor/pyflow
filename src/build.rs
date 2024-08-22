@@ -1,8 +1,9 @@
-use crate::{dep_types::Req, util};
+use std::{collections::HashMap, env, fs, path::Path, process::Command};
+
 use regex::Regex;
-use std::{collections::HashMap, path::Path};
-use std::{env, fs, process::Command};
 use termcolor::Color;
+
+use crate::{dep_types::Req, util};
 
 // https://packaging.python.org/tutorials/packaging-projects/
 

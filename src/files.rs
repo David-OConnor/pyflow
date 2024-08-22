@@ -1,14 +1,18 @@
+use std::{
+    collections::HashMap,
+    fs,
+    io::{BufRead, BufReader},
+    path::Path,
+};
+
+use regex::Regex;
+use serde::Deserialize;
+use termcolor::Color;
+
 use crate::{
     dep_types::{Req, Version},
     util, Config,
 };
-use regex::Regex;
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::fs;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
-use termcolor::Color;
 
 #[derive(Debug, Deserialize)]
 pub struct Pipfile {
