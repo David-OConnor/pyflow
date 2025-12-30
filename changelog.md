@@ -2,7 +2,7 @@
 
 ## V0.3.1
 - Allow dependency versions with more than 3 digits
-- Add checing of python compatibility to `get_version_info`
+- Add checking of python compatibility to `get_version_info`
 - Add Brew support
 - Fixed various issues that let to some packages not installing
 

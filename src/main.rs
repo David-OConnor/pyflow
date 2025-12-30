@@ -1,11 +1,3 @@
-use crate::actions::run;
-use crate::cli_options::{ExternalCommand, ExternalSubcommands, Opt, SubCommand};
-use crate::dep_types::{Lock, Package, Req, Version};
-use crate::pyproject::{Config, CFG_FILENAME};
-use crate::util::abort;
-use crate::util::deps::sync;
-
-<<<<<<< HEAD
 use std::{
     collections::HashMap,
     env,
@@ -13,6 +5,7 @@ use std::{
     fs,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
+    process,
     str::FromStr,
     sync::{Arc, RwLock},
 };
@@ -23,22 +16,14 @@ use structopt::StructOpt;
 use termcolor::{Color, ColorChoice};
 
 use crate::{
-    dep_resolution::res,
+    actions::run,
+    cli_options::{ExternalCommand, ExternalSubcommands, Opt, SubCommand},
     dep_types::{Constraint, Extras, Lock, LockPackage, Package, Rename, Req, ReqType, Version},
-    util::{abort, Os},
+    pyproject::{Config, CFG_FILENAME},
+    util::{abort, deps::sync, Os},
 };
-
-=======
-use std::process;
-use std::{
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
-
-use termcolor::{Color, ColorChoice};
 
 mod actions;
->>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7
 mod build;
 mod cli_options;
 mod commands;
@@ -124,7 +109,7 @@ fn main() {
         SubCommand::Reset {} => actions::reset(),
         SubCommand::Clear {} => actions::clear(&pyflow_path, &dep_cache_path, &script_env_path),
         SubCommand::Switch { version } => actions::switch(version),
-        SubCommand::External(ref x) => match ExternalCommand::from_opt(x.to_owned()) {
+        SubCommand::External(x) => match ExternalCommand::from_opt(x.to_owned()) {
             ExternalCommand { cmd, args } => match cmd {
                 ExternalSubcommands::Script => {
                     script::run_script(&script_env_path, &dep_cache_path, os, &args, &pyflow_path);

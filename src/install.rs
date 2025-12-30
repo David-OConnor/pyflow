@@ -1,13 +1,15 @@
-use std::{fs, fs::File, io, io::BufRead, path::Path, process::Command};
+use std::{
+    fs,
+    fs::File,
+    io,
+    io::BufRead,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use flate2::read::GzDecoder;
 use regex::Regex;
 use ring::digest;
-<<<<<<< HEAD
-=======
-use std::path::PathBuf;
-use std::{fs, io, io::BufRead, path::Path, process::Command};
->>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7
 use tar::Archive;
 use termcolor::Color;
 

@@ -1,6 +1,4 @@
-<<<<<<< HEAD:src/util.rs
 use std::{
-    collections::HashMap,
     env, fs,
     io::{self, BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
@@ -15,49 +13,24 @@ use serde::Deserialize;
 use tar::Archive;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use xz2::read::XzDecoder;
-=======
 pub mod deps;
 pub mod paths;
 pub mod prompts;
 
 mod os;
-pub use os::{get_os, Os};
+use std::{error::Error, path::Component};
 
-#[mockall_double::double]
-use crate::dep_resolution::res;
->>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7:src/util/mod.rs
+pub use os::{get_os, Os};
+use termcolor::ColorChoice;
 
 use crate::{
     commands,
-<<<<<<< HEAD:src/util.rs
     dep_resolution::{res, WarehouseRelease},
-    dep_types::{Constraint, DependencyError, Extras, Req, ReqType, Version},
-=======
-    dep_types::{Constraint, DependencyError, Lock, Req, ReqType, Version},
->>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7:src/util/mod.rs
+    dep_types::{Constraint, DependencyError, Extras, Lock, Req, ReqType, Version},
     files,
     install::{self, PackageType},
     py_versions, util, CliConfig,
 };
-<<<<<<< HEAD:src/util.rs
-=======
-use ini::Ini;
-use regex::Regex;
-
-use std::fs;
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::path::Component;
-use std::str::FromStr;
-use std::{
-    env,
-    error::Error,
-    path::{Path, PathBuf},
-    process, thread, time,
-};
-use tar::Archive;
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-use xz2::read::XzDecoder;
->>>>>>> 4c6ec9bc8dcf2c486d5820627d70162e44d6b5a7:src/util/mod.rs
 
 #[derive(Debug)]
 pub struct Paths {
@@ -186,7 +159,7 @@ pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::py_versions::AliasEr
         }
         thread::sleep(time::Duration::from_millis(10));
     }
-    Err(crate::py_versions::AliasError {
+    Err(py_versions::AliasError {
         details: "Timed out attempting to create a directory".to_string(),
     })
 }
@@ -199,7 +172,10 @@ pub fn set_pythonpath(paths: &[PathBuf]) {
         .map(|p| p.to_str().unwrap())
         .collect::<Vec<&str>>()
         .join(":");
-    env::set_var("PYTHONPATH", formatted_paths);
+
+    unsafe {
+        env::set_var("PYTHONPATH", formatted_paths);
+    }
 }
 
 /// Find the packages installed, by browsing the lib folder for metadata.

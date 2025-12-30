@@ -12,7 +12,7 @@ use crate::{
     Config,
 };
 
-const GITIGNORE_INIT: &str = indoc::indoc! {r##"
+const GITIGNORE_INIT: &str = r##"
 # General Python ignores
 build/
 dist/
@@ -25,12 +25,12 @@ __pypackages__/
 
 
 # Project ignores
-"##};
+"##;
 
-pub const NEW_ERROR_MESSAGE: &str = indoc::indoc! {r#"
+pub const NEW_ERROR_MESSAGE: &str = r#"
 Problem creating the project. This may be due to a permissions problem.
 If on linux, please try again with `sudo`.
-"#};
+"#;
 
 pub fn new(name: &str) {
     if new_internal(name).is_err() {

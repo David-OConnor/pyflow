@@ -1,14 +1,13 @@
 use std::path::Path;
 
 use termcolor::Color;
+use util::deps::sync;
 
 use crate::{
     dep_types::{LockPackage, Version},
     util::{self, process_reqs, Os, Paths},
     Config,
 };
-
-use util::deps::sync;
 
 // TODO: Refactor this function
 #[allow(clippy::too_many_arguments)]

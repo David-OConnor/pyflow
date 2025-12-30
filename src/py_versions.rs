@@ -11,11 +11,13 @@ use crate::{commands, dep_types::Version, install, util};
 /// Only versions we've built and hosted
 #[derive(Clone, Copy, Debug)]
 enum PyVers {
-    V3_12_0, // unreleased
-    V3_11_0, // unreleased
+    V3_14_0,
+    V3_13_0,
+    V3_12_0,
+    V3_11_0,
     V3_10_2, // Win
     V3_9_0,  // either Os
-    V3_8_0,  // either Os
+    V3_8_2,  // either Os
     V3_7_4,  // either Os
     V3_6_9,  // Linux
     V3_6_8,  // Win
@@ -126,7 +128,7 @@ impl ToString for PyVers {
             Self::V3_11_0 => "3.11.0".into(),
             Self::V3_10_2 => "3.10.2".into(),
             Self::V3_9_0 => "3.9.0".into(),
-            Self::V3_8_0 => "3.8.0".into(),
+            Self::V3_8_2 => "3.8.2".into(),
             Self::V3_7_4 => "3.7.4".into(),
             Self::V3_6_9 => "3.6.9".into(),
             Self::V3_6_8 => "3.6.8".into(),
@@ -144,7 +146,7 @@ impl PyVers {
             Self::V3_11_0 => Version::new(3, 11, 0),
             Self::V3_10_2 => Version::new(3, 10, 2),
             Self::V3_9_0 => Version::new(3, 9, 0),
-            Self::V3_8_0 => Version::new(3, 8, 0),
+            Self::V3_8_2 => Version::new(3, 8, 2),
             Self::V3_7_4 => Version::new(3, 7, 4),
             Self::V3_6_9 => Version::new(3, 6, 9),
             Self::V3_6_8 => Version::new(3, 6, 8),
@@ -453,6 +455,8 @@ pub fn create_venv(
         #[cfg(target_os = "linux")]
         {
             match py_ver.clone().unwrap().minor.unwrap_or(0) {
+                14 => py_name += ".14",
+                13 => py_name += ".13",
                 12 => py_name += ".12",
                 11 => py_name += ".11",
                 10 => py_name += ".10",
@@ -488,13 +492,14 @@ pub fn create_venv(
 
     // For an alias on the PATH
     if let Some(alias) = alias {
-        if commands::create_venv(&alias, &lib_path, ".venv").is_err() {
-            util::abort("Problem creating virtual environment");
+        if let Err(e) = commands::create_venv(&alias, &lib_path, ".venv") {
+            util::abort(&format!("Problem creating virtual environment: {e}"));
         }
     // For a Python one we've installed.
     } else if let Some(alias_path) = alias_path {
-        if commands::create_venv2(&alias_path, &lib_path, ".venv").is_err() {
-            util::abort("Problem creating virtual environment");
+        if let Err(e) = commands::create_venv2(&alias_path, &lib_path, ".venv") {
+            util::abort(&format!("Problem creating virtual environment from a Py version installed\
+             by PF: {e}. Alias path: {alias_path:?} Lib path: {lib_path:?}"));
         }
     }
 

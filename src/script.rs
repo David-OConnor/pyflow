@@ -1,13 +1,14 @@
-use crate::dep_resolution::res;
-use crate::dep_types::{Constraint, Extras, Lock, Req, ReqType, Version};
-use crate::util;
-use regex::Regex;
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path, str::FromStr};
 
-use crate::commands;
-use crate::dep_parser::parse_version;
-use std::str::FromStr;
+use regex::Regex;
+
+use crate::{
+    commands,
+    dep_parser::parse_version,
+    dep_resolution::res,
+    dep_types::{Constraint, Extras, Lock, Req, ReqType, Version},
+    util,
+};
 
 /// Run a standalone script file, with package management
 /// todo: We're using script name as unique identifier; address this in the future,
@@ -201,9 +202,8 @@ fn find_deps_from_script(script: &str) -> Vec<String> {
 mod tests {
     use indoc::indoc;
 
-    use crate::dep_types::Version;
-
     use super::*;
+    use crate::dep_types::Version;
 
     #[test]
     fn parse_python_version_with_no_dunder_specified() {
