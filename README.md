@@ -4,6 +4,9 @@
 
 # Pyflow
 
+## 2025 Update: We recommend you use UV
+It's in a similar vein as PyFlow, and is actively maintained. I stopped maintaining this a few years ago; sorry!
+
 #### *Simple is better than complex* - The Zen of Python
 
 Pyflow streamlines working with Python projects and files. It's an 
