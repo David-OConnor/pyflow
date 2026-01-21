@@ -15,11 +15,13 @@ pub struct Opt {
 
 #[derive(StructOpt, Debug)]
 pub enum SubCommand {
-    /// Create a project folder with the basics
+    /// Create a project folder with the basics file structure
     #[structopt(name = "new")]
     New {
-        #[structopt(name = "name")]
-        name: String, // holds the project name.
+        #[structopt(name = "path")]
+        path: String, // holds the project folder.
+        #[structopt(long)]
+        name: Option<String>, // holds the project name.
     },
 
     /// Add packages to `pyproject.toml` and sync an environment
