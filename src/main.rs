@@ -19,8 +19,8 @@ use crate::{
     actions::run,
     cli_options::{ExternalCommand, ExternalSubcommands, Opt, SubCommand},
     dep_types::{Constraint, Extras, Lock, LockPackage, Package, Rename, Req, ReqType, Version},
-    pyproject::{Config, CFG_FILENAME},
-    util::{abort, deps::sync, Os},
+    pyproject::{CFG_FILENAME, Config},
+    util::{Os, abort, deps::sync},
 };
 
 mod actions;

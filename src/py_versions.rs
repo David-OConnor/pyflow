@@ -78,7 +78,7 @@ impl From<(Version, Os)> for PyVers {
                 }
             },
             8 => match v_o.1 {
-                Os::Windows | Os::Ubuntu | Os::Centos => Self::V3_8_0,
+                Os::Windows | Os::Ubuntu | Os::Centos => Self::V3_8_2,
                 _ => {
                     abort_helper("3.8", "Mac");
                     unreachable!()
@@ -124,6 +124,8 @@ impl From<(Version, Os)> for PyVers {
 impl ToString for PyVers {
     fn to_string(&self) -> String {
         match self {
+            Self::V3_14_0 => "3.14.0".into(),
+            Self::V3_13_0 => "3.13.0".into(),
             Self::V3_12_0 => "3.12.0".into(),
             Self::V3_11_0 => "3.11.0".into(),
             Self::V3_10_2 => "3.10.2".into(),
@@ -142,6 +144,8 @@ impl ToString for PyVers {
 impl PyVers {
     fn to_vers(self) -> Version {
         match self {
+            Self::V3_14_0 => Version::new(3, 14, 0),
+            Self::V3_13_0 => Version::new(3, 13, 0),
             Self::V3_12_0 => Version::new(3, 12, 0),
             Self::V3_11_0 => Version::new(3, 11, 0),
             Self::V3_10_2 => Version::new(3, 10, 2),
@@ -498,8 +502,10 @@ pub fn create_venv(
     // For a Python one we've installed.
     } else if let Some(alias_path) = alias_path {
         if let Err(e) = commands::create_venv2(&alias_path, &lib_path, ".venv") {
-            util::abort(&format!("Problem creating virtual environment from a Py version installed\
-             by PF: {e}. Alias path: {alias_path:?} Lib path: {lib_path:?}"));
+            util::abort(&format!(
+                "Problem creating virtual environment from a Py version installed\
+             by PF: {e}. Alias path: {alias_path:?} Lib path: {lib_path:?}"
+            ));
         }
     }
 

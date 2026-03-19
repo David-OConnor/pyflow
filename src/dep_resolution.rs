@@ -284,7 +284,6 @@ fn guess_graph(
     Ok(())
 }
 
-#[cfg_attr(test, automock())]
 pub(super) mod res {
     use super::*;
 

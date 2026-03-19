@@ -4,11 +4,11 @@ use regex::Regex;
 use termcolor::Color;
 
 use crate::{
+    PackToInstall,
     dep_resolution::res,
     dep_types::{Constraint, Lock, LockPackage, Package, Rename, Req, ReqType, Version},
     install,
     util::{self, abort},
-    PackToInstall,
 };
 
 /// Function used by `Install` and `Uninstall` subcommands to syn dependencies with

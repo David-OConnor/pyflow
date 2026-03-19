@@ -213,9 +213,21 @@ pub fn download_and_install_package(
         util::abort(&format!("Problem reading hash for {}", filename));
     });
 
-    let file_digest_str = data_encoding::HEXUPPER.encode(file_digest.as_ref());
+    let file_digest_str: String = file_digest
+        .as_ref()
+        .iter()
+        .map(|b| format!("{:02X}", b))
+        .collect();
     if file_digest_str.to_lowercase() != expected_digest.to_lowercase() {
-        util::print_color(&format!("Hash failed for {}. Expected: {}, Actual: {}. Continue with installation anyway? (yes / no)", filename, expected_digest.to_lowercase(), file_digest_str.to_lowercase()), Color::Red);
+        util::print_color(
+            &format!(
+                "Hash failed for {}. Expected: {}, Actual: {}. Continue with installation anyway? (yes / no)",
+                filename,
+                expected_digest.to_lowercase(),
+                file_digest_str.to_lowercase()
+            ),
+            Color::Red,
+        );
 
         let mut input = String::new();
         io::stdin()
@@ -462,10 +474,11 @@ pub fn download_and_install_package(
 
             let moved_path = paths.lib.join(&built_wheel_filename);
 
-            // todo: Again, try to move vice copy.
-            let options = fs_extra::file::CopyOptions::new();
-            fs_extra::file::move_file(dist_path.join(&built_wheel_filename), &moved_path, &options)
-                .expect("Problem copying wheel built from source");
+            let src = dist_path.join(&built_wheel_filename);
+            if fs::rename(&src, &moved_path).is_err() {
+                fs::copy(&src, &moved_path).expect("Problem copying wheel built from source");
+                fs::remove_file(&src).expect("Problem removing wheel after copy");
+            }
 
             let file_created = fs::File::open(&moved_path).expect("Can't find created wheel.");
             util::extract_zip(&file_created, &paths.lib, &rename, &None);
@@ -622,26 +635,26 @@ pub fn download_and_install_git(
     }
 
     let folder_name = util::standardize_name(name); // todo: Will this always work?
-                                                    //    match url {
-                                                    //        GitPath::Git(url) => {
-                                                    // Download the repo into the pyflow folder.
-                                                    // todo: Handle checking if it's current and correct; not just a matching folder
-                                                    // todo name.
+    //    match url {
+    //        GitPath::Git(url) => {
+    // Download the repo into the pyflow folder.
+    // todo: Handle checking if it's current and correct; not just a matching folder
+    // todo name.
     if !&git_path.join(&folder_name).exists() && commands::download_git_repo(url, git_path).is_err()
     {
         util::abort(&format!("Problem cloning this repo: {}", url));
     } // todo to keep dl small while troubleshooting.
-      //        }
-      //        GitPath::Path(path) => {
-      //            let f = &git_path.join(&folder_name);
-      //            if !&f.exists() {
-      //                fs::create_dir(f).expect("Problem creating dir for a path dependency");
-      //                let options = fs_extra::dir::CopyOptions::new();
-      //                fs_extra::dir::copy(PathBuf::from(path), &git_path, &options)
-      //                    .expect("Problem copying path requirement to lib folder");
-      //            }
-      //        }
-      //}
+    //        }
+    //        GitPath::Path(path) => {
+    //            let f = &git_path.join(&folder_name);
+    //            if !&f.exists() {
+    //                fs::create_dir(f).expect("Problem creating dir for a path dependency");
+    //                let options = fs_extra::dir::CopyOptions::new();
+    //                fs_extra::dir::copy(PathBuf::from(path), &git_path, &options)
+    //                    .expect("Problem copying path requirement to lib folder");
+    //            }
+    //        }
+    //}
 
     // Build a wheel from the repo
     let output = Command::new(paths.bin.join("python"))
@@ -660,9 +673,11 @@ pub fn download_and_install_git(
 
     // We've built the wheel; now move it into the lib path, as we would for a wheel download
     // from Pypi.
-    let options = fs_extra::file::CopyOptions::new();
-    fs_extra::file::move_file(&archive_path, paths.lib.join(&filename), &options)
-        .expect("Problem moving the wheel.");
+    let dest = paths.lib.join(&filename);
+    if fs::rename(&archive_path, &dest).is_err() {
+        fs::copy(&archive_path, &dest).expect("Problem copying the wheel.");
+        fs::remove_file(&archive_path).expect("Problem removing wheel after copy");
+    }
 
     let archive_path = &paths.lib.join(&filename);
     let archive_file = util::open_archive(archive_path);

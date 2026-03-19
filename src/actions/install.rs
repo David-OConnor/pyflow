@@ -4,9 +4,9 @@ use termcolor::Color;
 use util::deps::sync;
 
 use crate::{
-    dep_types::{LockPackage, Version},
-    util::{self, process_reqs, Os, Paths},
     Config,
+    dep_types::{LockPackage, Version},
+    util::{self, Os, Paths, process_reqs},
 };
 
 // TODO: Refactor this function

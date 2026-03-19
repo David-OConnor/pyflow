@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo search:*)",
+      "Bash(curl -s https://crates.io/api/v1/crates/reqwest/0.13.2)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\([f[''''name''''] for f in d.get\\(''''version'''',{}\\).get\\(''''features'''',{}\\).keys\\(\\)]\\)\")",
+      "Bash(cargo add:*)",
+      "Bash(cat ~/.cargo/registry/src/*/reqwest-0.13.2/Cargo.toml)"
+    ]
+  }
+}

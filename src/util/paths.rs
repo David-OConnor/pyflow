@@ -1,11 +1,21 @@
 use std::path::{Path, PathBuf};
 
 pub fn pyflow_path() -> PathBuf {
-    directories::BaseDirs::new()
-        .expect("Problem finding base directory")
-        .data_dir()
-        .to_owned()
-        .join("pyflow")
+    #[cfg(target_os = "windows")]
+    let base = std::env::var_os("LOCALAPPDATA")
+        .or_else(|| std::env::var_os("APPDATA"))
+        .map(PathBuf::from)
+        .expect("Problem finding base directory");
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME")
+        .map(|h| PathBuf::from(h).join("Library").join("Application Support"))
+        .expect("Problem finding base directory");
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+        .expect("Problem finding base directory");
+    base.join("pyflow")
 }
 
 pub fn dep_cache_path(pyflow_path: &Path) -> PathBuf {

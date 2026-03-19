@@ -7,10 +7,8 @@ System prereqs:
 `pip3 install maturin twine`, `cargo install cargo-deb`, `sudo apt install snapcraft`.
 - Centos 7: `yum update`, `yum install gcc gcc-c++ make`,
  `cargo install cargo-rpm`, `yum install rpm-build`.
-- Windows: Install Visual Studio Community, and Wix. `cargo install cargo-wix`
+- Windows: Install Visual Studio Community.
 
-`Ubuntu` below shall refer to Ubuntu 16.04. Builds tend to be more forward-compatible
-than backwards.
 
 ## Preliminary
 1. Review the commit and PR history since last release. Ensure that all relevant
@@ -26,35 +24,11 @@ links to reflect the latest version.
 
 ## Build binaries
 1. Run `cargo build --release` on Windows and Ubuntu.
-1. Run `cargo deb` on Ubuntu.
-1. Run `cargo rpm build` on Centos 7. Remove the unnecessary `-1` in the filename.
- (This allows easy installation for Red Hat, Fedora, and CentOs.
-Also note that the standalone Linux binary may not work on these distros.)
-users, and binaries built on other OSes appear not to work on these due to OpenSSL issues.
-1. Run `cargo wix` on Windows.
 1. Zip the Windows `.exe`, along with `README.md` and `LICENSE`.
-1. Run `maturin build` on Windows and Ubuntu.
-1. Run `snapcraft` on Ubuntu.
+[//]: # (1. Run `maturin build` on Windows and Ubuntu.)
 
 ## Publish binaries
 1. Run `cargo package` and `cargo publish` (Any os).
-1. Run `snapcraft login`, then `snapcraft push --release=stable pyflow_x.x.x_amd64.snap` on Ubuntu.
 1. For the Windows and Ubuntu wheels, run `twine upload (wheelname)`.
 1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
-1. Upload the following binaries to the release page: zipped Windows binary (This is all `Scoop` needs),
- Linux binary, Msi, Deb, Rpm.
-
-
-
-Note on buildling python binaries for the Pybin repo:
-## Windows: 
-Install, copy the file from Appdata/Local/programs/python,
-and match the filename/compression format with existing entries
- 
-## Linux:
-Download source. Run these:
-```bash
-./configure --prefix=$HOME/python_built
-make
-sudo make install
-```
+1. Upload the following binaries to the release page: Linux binary, Windows exe.

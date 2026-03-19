@@ -20,16 +20,16 @@ pub mod prompts;
 mod os;
 use std::{error::Error, path::Component};
 
-pub use os::{get_os, Os};
+pub use os::{Os, get_os};
 use termcolor::ColorChoice;
 
 use crate::{
-    commands,
-    dep_resolution::{res, WarehouseRelease},
+    CliConfig, commands,
+    dep_resolution::{WarehouseRelease, res},
     dep_types::{Constraint, DependencyError, Extras, Lock, Req, ReqType, Version},
     files,
     install::{self, PackageType},
-    py_versions, util, CliConfig,
+    py_versions, util,
 };
 
 #[derive(Debug)]
@@ -228,9 +228,12 @@ pub fn merge_reqs(
         let trimmed = p.replace(',', "");
         match Req::from_str(&trimmed, false) {
             Ok(r) => added_reqs.push(r),
-            Err(_) => abort(&format!("Unable to parse this package: {}. \
+            Err(_) => abort(&format!(
+                "Unable to parse this package: {}. \
                     Note that installing a specific version via the CLI is currently unsupported. If you need to specify a version,\
-                     edit `pyproject.toml`", &p)),
+                     edit `pyproject.toml`",
+                &p
+            )),
         }
     }
 
@@ -275,7 +278,9 @@ pub fn merge_reqs(
             ) {
                 r
             } else {
-                abort("Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?")
+                abort(
+                    "Problem getting latest version of the package you added. Is it spelled correctly? Is the internet OK?",
+                )
             };
 
             added_req.constraints.push(Constraint::new(
@@ -531,7 +536,9 @@ pub fn fallible_v_parse(vers: &str) -> Version {
     if let Ok(v) = Version::from_str(&vers) {
         v
     } else {
-        abort("Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1")
+        abort(
+            "Problem parsing the Python version you entered. It should look like this: 3.7 or 3.7.1",
+        )
     }
 }
 
@@ -649,10 +656,11 @@ pub fn find_best_release(
 
 /// Find the global git config's user and email, and format it to go in the config's `authors` field.
 pub fn get_git_author() -> Vec<String> {
-    let gitcfg = directories::BaseDirs::new()
-        .unwrap()
-        .home_dir()
-        .join(".gitconfig");
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_default();
+    let gitcfg = home.join(".gitconfig");
 
     if !gitcfg.exists() {
         return vec![];
@@ -862,7 +870,8 @@ pub fn handle_color_option(s: &str) -> ColorChoice {
         "always" => ColorChoice::Always,
         "ansi" => ColorChoice::AlwaysAnsi,
         "auto" => {
-            if atty::is(atty::Stream::Stdout) {
+            use std::io::IsTerminal;
+            if std::io::stdout().is_terminal() {
                 ColorChoice::Auto
             } else {
                 ColorChoice::Never

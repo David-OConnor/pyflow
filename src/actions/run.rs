@@ -45,7 +45,10 @@ pub fn run(lib_path: &Path, bin_path: &Path, vers_path: &Path, cfg: &Config, arg
                 abort(&abort_msg);
             }
         } else {
-            abort(&format!("Problem parsing the following script: {:#?}. Must be in the format module:function_name", s));
+            abort(&format!(
+                "Problem parsing the following script: {:#?}. Must be in the format module:function_name",
+                s
+            ));
         }
         return;
     }
@@ -60,10 +63,12 @@ pub fn run(lib_path: &Path, bin_path: &Path, vers_path: &Path, cfg: &Config, arg
         abort(&abort_msg);
     }
 
-    let mut args_to_pass = vec![script_path
-        .to_str()
-        .expect("Can't find script path")
-        .to_owned()];
+    let mut args_to_pass = vec![
+        script_path
+            .to_str()
+            .expect("Can't find script path")
+            .to_owned(),
+    ];
 
     args_to_pass.append(&mut specified_args);
     if commands::run_python(bin_path, &[lib_path.to_owned()], &args_to_pass).is_err() {

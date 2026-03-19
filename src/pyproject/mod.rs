@@ -263,6 +263,30 @@ impl Config {
             }
         }
 
+        // Parse PEP 621 `[project]` table (uv, flit, etc.). Pyflow takes priority below.
+        if let Some(proj) = decoded.project {
+            if result.name.is_none() {
+                result.name = proj.name;
+            }
+            if result.version.is_none() {
+                if let Some(v) = proj.version {
+                    result.version = Version::from_str(&v).ok();
+                }
+            }
+            if result.description.is_none() {
+                result.description = proj.description;
+            }
+            // Only overwrite deps if the poetry block didn't set them.
+            if result.reqs.is_empty() {
+                if let Some(deps) = proj.dependencies {
+                    result.reqs = deps
+                        .iter()
+                        .filter_map(|s| Req::from_pep508_str(s.trim()))
+                        .collect();
+                }
+            }
+        }
+
         if let Some(pf) = decoded.tool.pyflow {
             if let Some(v) = pf.name {
                 result.name = Some(v);
@@ -347,74 +371,95 @@ impl Config {
             .append(&mut pop_reqs_helper(&self.dev_reqs, true));
     }
 
-    /// Create a new `pyproject.toml` file.
+    /// Create a new `pyproject.toml` file in PEP 621 format.
     pub fn write_file(&self, path: &Path) {
-        let file = path;
-        if file.exists() {
+        if path.exists() {
             abort("`pyproject.toml` already exists")
         }
 
         let mut result = String::new();
 
-        result.push_str("\n[tool.pyflow]\n");
-        if let Some(name) = &self.name {
-            result.push_str(&("name = \"".to_owned() + name + "\"\n"));
-        } else {
-            // Give name, and a few other fields default values.
-            result.push_str(&("name = \"\"".to_owned() + "\n"));
+        // ── [project] ────────────────────────────────────────────────────────
+        result.push_str("[project]\n");
+
+        match &self.name {
+            Some(name) => result.push_str(&format!("name = \"{}\"\n", name)),
+            None => result.push_str("name = \"\"\n"),
         }
-        if let Some(py_v) = &self.py_version {
-            result.push_str(&("py_version = \"".to_owned() + &py_v.to_string_no_patch() + "\"\n"));
-        } else {
-            result.push_str(&("py_version = \"3.8\"".to_owned() + "\n"));
+
+        match &self.version {
+            Some(vers) => result.push_str(&format!("version = \"{}\"\n", vers)),
+            None => result.push_str("version = \"0.1.0\"\n"),
         }
-        if let Some(vers) = self.version.clone() {
-            result.push_str(&(format!("version = \"{}\"", vers.to_string() + "\n")));
-        } else {
-            result.push_str("version = \"0.1.0\"");
-            result.push('\n');
+
+        match &self.py_version {
+            Some(py_v) => result.push_str(&format!(
+                "requires-python = \">={}\"\n",
+                py_v.to_string_no_patch()
+            )),
+            None => result.push_str("requires-python = \">=3.8\"\n"),
         }
+
         if !self.authors.is_empty() {
-            result.push_str("authors = [\"");
-            for (i, author) in self.authors.iter().enumerate() {
-                if i != 0 {
-                    result.push_str(", ");
+            result.push_str("authors = [\n");
+            for author in &self.authors {
+                // Parse "Name <email>" into separate fields; fall back to name-only.
+                if let (Some(lt), Some(gt)) = (author.find('<'), author.rfind('>')) {
+                    let name = author[..lt].trim();
+                    let email = &author[lt + 1..gt];
+                    result.push_str(&format!(
+                        "    {{name = \"{}\", email = \"{}\"}},\n",
+                        name, email
+                    ));
+                } else {
+                    result.push_str(&format!("    {{name = \"{}\"}},\n", author.trim()));
                 }
-                result.push_str(author);
             }
-            result.push_str("\"]\n");
+            result.push_str("]\n");
         }
 
         if let Some(v) = &self.description {
-            result.push_str(&(format!("description = \"{}\"", v) + "\n"));
-        }
-        if let Some(v) = &self.homepage {
-            result.push_str(&(format!("homepage = \"{}\"", v) + "\n"));
+            result.push_str(&format!("description = \"{}\"\n", v));
         }
 
-        // todo: More fields
-
-        result.push('\n');
-        result.push_str("[tool.pyflow.scripts]\n");
-        for (name, mod_fn) in &self.scripts {
-            result.push_str(&(format!("{} = \"{}\"", name, mod_fn) + "\n"));
-        }
-
-        result.push('\n');
-        result.push_str("[tool.pyflow.dependencies]\n");
+        // dependencies array (PEP 508 strings)
+        result.push_str("dependencies = [\n");
         for dep in &self.reqs {
-            result.push_str(&(dep.to_cfg_string() + "\n"));
+            result.push_str(&format!("    \"{}\",\n", dep.to_pep508_string()));
+        }
+        result.push_str("]\n");
+
+        // ── [project.urls] ───────────────────────────────────────────────────
+        if self.homepage.is_some() || self.repository.is_some() {
+            result.push_str("\n[project.urls]\n");
+            if let Some(v) = &self.homepage {
+                result.push_str(&format!("Homepage = \"{}\"\n", v));
+            }
+            if let Some(v) = &self.repository {
+                result.push_str(&format!("Repository = \"{}\"\n", v));
+            }
         }
 
-        result.push('\n');
-        result.push_str("[tool.pyflow.dev-dependencies]\n");
-        for dep in &self.dev_reqs {
-            result.push_str(&(dep.to_cfg_string() + "\n"));
+        // ── [project.scripts] ────────────────────────────────────────────────
+        if !self.scripts.is_empty() {
+            result.push_str("\n[project.scripts]\n");
+            for (name, mod_fn) in &self.scripts {
+                result.push_str(&format!("{} = \"{}\"\n", name, mod_fn));
+            }
+        }
+
+        // ── [tool.uv] dev-dependencies ───────────────────────────────────────
+        if !self.dev_reqs.is_empty() {
+            result.push_str("\n[tool.uv]\ndev-dependencies = [\n");
+            for dep in &self.dev_reqs {
+                result.push_str(&format!("    \"{}\",\n", dep.to_pep508_string()));
+            }
+            result.push_str("]\n");
         }
 
         result.push('\n'); // trailing newline
 
-        if fs::write(file, result).is_err() {
+        if fs::write(path, result).is_err() {
             abort("Problem writing `pyproject.toml`")
         }
     }

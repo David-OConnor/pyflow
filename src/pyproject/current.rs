@@ -2,7 +2,7 @@ use std::{env, path::PathBuf};
 
 use termcolor::Color;
 
-use super::{Config, PresentConfig, CFG_FILENAME, LOCK_FILENAME};
+use super::{CFG_FILENAME, Config, LOCK_FILENAME, PresentConfig};
 use crate::util;
 
 const NOT_FOUND_ERROR_MESSAGE: &str = r#"

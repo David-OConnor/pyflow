@@ -4,9 +4,6 @@
 
 # Pyflow
 
-## 2025 Update: We recommend you use UV
-It's in a similar vein as PyFlow, and is actively maintained. I stopped maintaining this a few years ago; sorry!
-
 #### *Simple is better than complex* - The Zen of Python
 
 Pyflow streamlines working with Python projects and files. It's an 
@@ -34,27 +31,12 @@ and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/).
 
 
 ## Installation
-- **Windows** - Download and run
-[this installer](https://github.com/David-OConnor/pyflow/releases/download/0.3.1/pyflow-0.3.1-x86_64.msi).
-Or, if you have [Scoop](https://scoop.sh) installed, run `scoop install pyflow`.
+- **Pip** - Run `pip install pyflow`. The linux install using this method is much larger than
+  with the above ones, and it doesn't yet work with Mac. This method will likely not work
+  with Red Hat, CentOs, or Fedora.
 
-- **Ubuntu, or another Os that uses Snap** - Run `snap install pyflow --classic`.
-
-- **Ubuntu or Debian without Snap** - Download and run
-[this deb](https://github.com/David-OConnor/pyflow/releases/download/0.3.1/pyflow_0.3.1_amd64.deb).
-
-- **Fedora, CentOs, RedHat, or older versions of SUSE** - Download and run
-[this rpm](https://github.com/David-OConnor/pyflow/releases/download/0.3.1/pyflow-0.3.1.x86_64.rpm).
-
-- **A different Linux distro** - Download this
-[standalone binary](https://github.com/David-OConnor/pyflow/releases/download/0.3.1/pyflow)
- and place it somewhere accessible by the PATH. For example, `/usr/bin`.
-
-- **Mac** - Run `brew install pyflow`
-
-- **With Pip** - Run `pip install pyflow`. The linux install using this method is much larger than
-with the above ones, and it doesn't yet work with Mac. This method will likely not work
-with Red Hat, CentOs, or Fedora.
+- **Standalone executables**:  [Download the appropriate executable](https://github.com/David-OConnor/pyflow/releases) for your system, and add it 
+to the `PATH` environment variable.
 
  - **If you have [Rust](https://www.rust-lang.org) installed** - Run `cargo install pyflow`.
 
@@ -187,12 +169,15 @@ These tools have different scopes and purposes:
 file will be created automatically. You may wish to use `pyflow new` to create a basic
 project folder (With a .gitignore, source directory etc), or `pyflow init` to populate
 info from `requirements.txt` or `Pipfile`. See
-[PEP 518](https://www.python.org/dev/peps/pep-0518/) for details.
+[PEP 518](https://www.python.org/dev/peps/pep-0518/) and [PEP 621](https://peps.python.org/pep-0621/) for details.
 
-Example contents:
+Pyproject.toml may be set up with syntax from the original PEP 518, or the newer PEP 621. 
+
+
+Example contents, PEP 518-style:
 ```toml
 [tool.pyflow]
-py_version = "3.7"
+py_version = "3.12"
 name = "runcible"
 version = "0.3.1"
 authors = ["John Hackworth <jhackworth@vic.org>"]
@@ -201,6 +186,24 @@ authors = ["John Hackworth <jhackworth@vic.org>"]
 numpy = "^1.16.4"
 diffeqpy = "1.1.0"
 ```
+
+Example contents: PEP-621 style:
+```toml
+● [project]
+  name = "runcible"
+  version = "0.3.1"
+  authors = [
+      {name = "John Hackworth", email = "jhackworth@vic.org"}
+  ]
+  requires-python = ">=3.12"
+  dependencies = [
+      "numpy>=1.16.4,<2.0.0",
+      "diffeqpy==1.1.0",
+  ]
+```
+
+
+
 The `[tool.pyflow]` section is used for metadata. The only required item in it is
  `py_version`, unless
 building and distributing a package. The `[tool.pyflow.dependencies]` section

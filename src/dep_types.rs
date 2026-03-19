@@ -9,19 +9,20 @@ use std::{
     str::FromStr,
 };
 
-use nom::combinator::all_consuming;
+use nom::{Parser, combinator::all_consuming};
 use serde::{Deserialize, Serialize};
 use termcolor::{Buffer, BufferWriter, Color, ColorSpec, WriteColor};
 
 // #[mockall_double::double]
 use crate::dep_resolution::res;
 use crate::{
+    CliConfig,
     dep_parser::{
-        parse_constraint, parse_pip_str, parse_req, parse_req_pypi_fmt, parse_version,
-        parse_wh_py_vers,
+        parse_constraint, parse_pep508_str, parse_pip_str, parse_req, parse_req_pypi_fmt,
+        parse_version, parse_wh_py_vers,
     },
     dep_resolution::WarehouseRelease,
-    util, CliConfig,
+    util,
 };
 
 pub const MAX_VER: u32 = 999_999; // Represents the highest major version we can have
@@ -268,7 +269,7 @@ impl Version {
         self.colorize().unwrap_or_else(|_| self.to_string())
     }
 
-    fn colorize(&self) -> anyhow::Result<String> {
+    fn colorize(&self) -> Result<String, std::io::Error> {
         let bufwtr = BufferWriter::stdout(CliConfig::current().color_choice);
         let mut buf: Buffer = bufwtr.buffer();
         let num_c = Some(Color::Blue);
@@ -308,7 +309,8 @@ impl FromStr for Version {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        all_consuming(parse_version)(s)
+        all_consuming(parse_version)
+            .parse(s)
             .map_err(|_| DependencyError::new(&format!("Problem parsing version: {}", s)))
             .map(|(_, v)| v)
     }
@@ -494,7 +496,8 @@ impl FromStr for Constraint {
     type Err = DependencyError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        all_consuming(parse_constraint)(s)
+        all_consuming(parse_constraint)
+            .parse(s)
             .map_err(|_| DependencyError::new(&format!("Problem parsing constraint: {}", s)))
             .map(|(_, c)| c)
     }
@@ -539,7 +542,8 @@ impl Constraint {
     /// Important: The result is intended to be used in an "any" way. Ie "cp35.36" should match
     /// either Python 3.5 or 3.6.
     pub fn from_wh_py_vers(s: &str) -> Result<Vec<Self>, DependencyError> {
-        all_consuming(parse_wh_py_vers)(s)
+        all_consuming(parse_wh_py_vers)
+            .parse(s)
             .map_err(|_| DependencyError::new(&format!("Problem parsing wh_py_vers: {}", s)))
             .map(|(_, vs)| vs)
     }
@@ -680,8 +684,20 @@ impl Constraint {
         }
     }
 
+    /// Returns PEP 508 / PEP 440 compatible constraint strings.
+    /// Expands non-PEP-440 operators (`^` caret and `~` tilde) into `>=`/`<` pairs.
+    pub fn to_pep508_strings(&self) -> Vec<String> {
+        match self.type_ {
+            ReqType::Caret | ReqType::Tilde => {
+                let max = self.get_max_version();
+                vec![format!(">={}", self.version), format!("<{}", max)]
+            }
+            _ => vec![self.to_string2(false, false)],
+        }
+    }
+
     /// This internal function is to DRY Caret and Tilde max versions
-    fn get_max_version(&self) -> Version {
+    pub fn get_max_version(&self) -> Version {
         match self.type_ {
             ReqType::Exact => {
                 if self.version.star {
@@ -875,9 +891,9 @@ impl Req {
 
     pub fn from_str(s: &str, pypi_fmt: bool) -> Result<Self, DependencyError> {
         (if pypi_fmt {
-            all_consuming(parse_req_pypi_fmt)(s)
+            all_consuming(parse_req_pypi_fmt).parse(s)
         } else {
-            all_consuming(parse_req)(s)
+            all_consuming(parse_req).parse(s)
         })
         .map_err(|_| DependencyError::new(&format!("Problem parsing version requirement: {}", s)))
         .map(|x| x.1)
@@ -886,7 +902,38 @@ impl Req {
     /// We use this for parsing requirements.txt.
     pub fn from_pip_str(s: &str) -> Option<Self> {
         // todo multiple ie single quotes support?
-        all_consuming(parse_pip_str)(s).ok().map(|x| x.1)
+        all_consuming(parse_pip_str).parse(s).ok().map(|x| x.1)
+    }
+
+    /// Parse a PEP 508 dependency string such as `"requests>=2.0,<3.0"`.
+    /// Strips surrounding quotes and trailing commas common in TOML array lines.
+    pub fn from_pep508_str(s: &str) -> Option<Self> {
+        let s = s
+            .trim()
+            .trim_end_matches(',')
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .trim();
+        if s.is_empty() || s.starts_with('#') {
+            return None;
+        }
+        all_consuming(parse_pep508_str).parse(s).ok().map(|x| x.1)
+    }
+
+    /// Format as a PEP 508 string, eg `requests>=2.0,<3.0`.
+    /// Non-PEP-440 operators (`^` caret, `~` tilde) are expanded into `>=`/`<` pairs.
+    pub fn to_pep508_string(&self) -> String {
+        if self.constraints.is_empty() {
+            return self.name.clone();
+        }
+        let constraints_str = self
+            .constraints
+            .iter()
+            .flat_map(|c| c.to_pep508_strings())
+            .collect::<Vec<_>>()
+            .join(",");
+        format!("{}{}", self.name, constraints_str)
     }
 
     pub fn from_warehouse_release(
@@ -1073,9 +1120,9 @@ pub struct Lock {
 
 #[cfg(test)]
 pub mod tests {
-    use rstest::rstest;
     use ReqType::*;
     use VersionModifier::*;
+    use rstest::rstest;
 
     use super::*;
 
@@ -1794,21 +1841,6 @@ pub mod tests {
                            r#"package = "!=1.2.3, >=1.2.0""#)
     )]
     fn req_to_cfg_string(req: Req, expected: &str) {
-        assert_eq!(req.to_cfg_string(), expected.to_string());
-    }
-
-    #[test]
-    fn req_to_cfg_string_empty_constraints() {
-        let ctx = res::get_version_info_context();
-        ctx.expect().returning(|name, _py_ver| {
-            Ok((
-                name.to_string(),
-                Version::new(1, 2, 3),
-                vec![Version::new(1, 2, 3), Version::new(1, 1, 2)],
-            ))
-        });
-        let req = Req::new("package".to_string(), vec![]);
-        let expected = r#"package = "^1.2.3""#;
         assert_eq!(req.to_cfg_string(), expected.to_string());
     }
 

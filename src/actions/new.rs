@@ -7,9 +7,8 @@ use std::{
 use termcolor::Color;
 
 use crate::{
-    commands,
+    Config, commands,
     util::{self, abort, success},
-    Config,
 };
 
 const GITIGNORE_INIT: &str = r##"

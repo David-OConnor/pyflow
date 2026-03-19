@@ -10,8 +10,9 @@ use serde::Deserialize;
 use termcolor::Color;
 
 use crate::{
+    Config,
     dep_types::{Req, Version},
-    util, Config,
+    util,
 };
 
 #[derive(Debug, Deserialize)]
@@ -23,16 +24,33 @@ pub struct Pipfile {
     pub dev_packages: Option<HashMap<String, DepComponentWrapper>>,
 }
 
+/// Represents the PEP 621 `[project]` table used by uv and other modern tools.
+#[derive(Debug, Deserialize)]
+pub struct Project {
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub description: Option<String>,
+    /// PEP 508 dependency strings, eg `["requests>=2.0", "flask"]`.
+    pub dependencies: Option<Vec<String>>,
+    #[serde(rename = "optional-dependencies")]
+    pub optional_dependencies: Option<HashMap<String, Vec<String>>>,
+}
+
 /// This nested structure is required based on how the `toml` crate handles dots.
 #[derive(Debug, Deserialize)]
 pub struct Pyproject {
+    /// PEP 621 `[project]` table (used by uv and other standards-compliant tools).
+    pub project: Option<Project>,
+    /// `[tool]` table (used by pyflow, poetry, etc.).
+    #[serde(default)]
     pub tool: Tool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct Tool {
     pub pyflow: Option<Pyflow>,
     pub poetry: Option<Poetry>,
+    pub uv: Option<Poetry>, // todo: A/R
 }
 
 #[derive(Debug, Deserialize)]
@@ -257,33 +275,246 @@ fn update_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
     cfg_lines_with_all_reqs.join("\n")
 }
 
-/// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
-/// we should update the version. Assume we've already parsed the config, and are only
-/// adding new reqs, or ones with a changed version.
-pub fn add_reqs_to_cfg(cfg_path: &Path, added: &[Req], added_dev: &[Req]) {
-    let data = fs::read_to_string(cfg_path)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
-
-    let updated = update_cfg(&data, added, added_dev);
-    fs::write(cfg_path, updated)
-        .expect("Unable to write pyproject.toml while attempting to add a dependency");
+/// Which pyproject.toml format is in use.
+pub enum CfgFormat {
+    /// Pyflow's own `[tool.pyflow.dependencies]` map format.
+    Pyflow,
+    /// PEP 621 `[project]` table with a `dependencies` array of PEP 508 strings (uv, flit, etc.).
+    Pep621,
 }
 
-/// Remove dependencies from pyproject.toml.
-pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
-    // todo: Handle removing dev deps.
-    // todo: DRY from parsing the config.
-    let mut result = String::new();
-    let data = fs::read_to_string(cfg_path)
-        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+/// Detect whether a pyproject.toml uses pyflow's custom format or PEP 621 (uv-style).
+/// Pyflow format takes precedence when both sections are present.
+pub fn detect_cfg_format(cfg_data: &str) -> CfgFormat {
+    for line in cfg_data.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[tool.pyflow]" || trimmed == "[tool.pyflow.dependencies]" {
+            return CfgFormat::Pyflow;
+        }
+    }
+    for line in cfg_data.lines() {
+        if line.trim() == "[project]" {
+            return CfgFormat::Pep621;
+        }
+    }
+    CfgFormat::Pyflow
+}
 
+/// Insert PEP 508 requirement entries into a TOML array identified by `section_header` and `key`.
+/// Handles both multi-line and inline arrays, and creates the section/key if absent.
+fn insert_into_pep621_array(
+    mut lines: Vec<String>,
+    section_header: &str,
+    key: &str,
+    reqs: &[Req],
+) -> Vec<String> {
+    let section_re = Regex::new(r"^\s*\[.*\]\s*$").unwrap();
+    let key_no_space = format!("{}=[", key);
+    let key_with_space = format!("{} = [", key);
+
+    let mut in_section = false;
+    let mut section_idx: Option<usize> = None;
+    let mut array_open_idx: Option<usize> = None;
+    let mut array_close_idx: Option<usize> = None;
+    let mut bracket_depth: i32 = 0;
+
+    'outer: for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        if section_re.is_match(trimmed) {
+            if trimmed == section_header {
+                in_section = true;
+                section_idx = Some(i);
+            } else if in_section {
+                in_section = false;
+            }
+            continue;
+        }
+
+        if in_section && array_open_idx.is_none() {
+            let t = trimmed.replace(' ', "");
+            if t.starts_with(&key_no_space) || t.starts_with(&key_with_space.replace(' ', "")) {
+                array_open_idx = Some(i);
+                for ch in line.chars() {
+                    match ch {
+                        '[' => bracket_depth += 1,
+                        ']' => {
+                            bracket_depth -= 1;
+                            if bracket_depth == 0 {
+                                array_close_idx = Some(i);
+                                break 'outer;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        } else if array_open_idx.is_some() && bracket_depth > 0 {
+            for ch in line.chars() {
+                match ch {
+                    '[' => bracket_depth += 1,
+                    ']' => {
+                        bracket_depth -= 1;
+                        if bracket_depth == 0 {
+                            array_close_idx = Some(i);
+                            break 'outer;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    let new_entries: Vec<String> = reqs
+        .iter()
+        .map(|r| format!("    \"{}\",", r.to_pep508_string()))
+        .collect();
+
+    match (array_open_idx, array_close_idx) {
+        (Some(open), Some(close)) if open == close => {
+            // Inline array on one line: convert to multi-line
+            let line = lines[open].clone();
+            if let Some(bracket_pos) = line.find('[') {
+                let prefix = &line[..=bracket_pos];
+                let rest = &line[bracket_pos + 1..];
+                let end_bracket = rest.rfind(']').unwrap_or(rest.len());
+                let existing_content = &rest[..end_bracket];
+                let mut new_line_vec: Vec<String> = vec![prefix.to_string()];
+                for item in existing_content.split(',') {
+                    let item = item.trim();
+                    if !item.is_empty() {
+                        new_line_vec.push(format!("    {},", item.trim_end_matches(',')));
+                    }
+                }
+                new_line_vec.extend(new_entries);
+                new_line_vec.push("]".into());
+                lines.splice(open..=open, new_line_vec);
+            }
+        }
+        (Some(_open), Some(close)) => {
+            // Multi-line array: insert before the closing `]`
+            lines.splice(close..close, new_entries);
+        }
+        _ => {
+            // Key not found: add it to the section or create the section
+            match section_idx {
+                Some(si) => {
+                    let mut new_lines: Vec<String> = vec![format!("{} = [", key)];
+                    new_lines.extend(new_entries);
+                    new_lines.push("]".into());
+                    new_lines.push("".into());
+                    lines.splice(si + 1..si + 1, new_lines);
+                }
+                None => {
+                    if lines.last().map(|l| !l.is_empty()).unwrap_or(false) {
+                        lines.push("".into());
+                    }
+                    lines.push(section_header.to_string());
+                    lines.push(format!("{} = [", key));
+                    lines.extend(new_entries);
+                    lines.push("]".into());
+                    lines.push("".into());
+                }
+            }
+        }
+    }
+    lines
+}
+
+/// Update a PEP 621 pyproject.toml with new regular and dev dependencies.
+fn update_pep621_cfg(cfg_data: &str, added: &[Req], added_dev: &[Req]) -> String {
+    let mut lines: Vec<String> = cfg_data.lines().map(str::to_string).collect();
+    if !added.is_empty() {
+        lines = insert_into_pep621_array(lines, "[project]", "dependencies", added);
+    }
+    if !added_dev.is_empty() {
+        lines = insert_into_pep621_array(lines, "[tool.uv]", "dev-dependencies", added_dev);
+    }
+    lines.join("\n")
+}
+
+/// Remove deps from a PEP 621 `[project].dependencies` array by package name.
+fn remove_reqs_pep621(data: &str, reqs: &[String]) -> String {
+    let mut result = String::new();
+    let mut in_project = false;
+    let mut in_deps_array = false;
+    let mut bracket_depth: i32 = 0;
+    let section_re = Regex::new(r"^\s*\[.*\]\s*$").unwrap();
+
+    for line in data.lines() {
+        let trimmed = line.trim();
+
+        if section_re.is_match(trimmed) {
+            in_project = trimmed == "[project]";
+            if !in_project {
+                in_deps_array = false;
+                bracket_depth = 0;
+            }
+            result.push_str(line);
+            result.push('\n');
+            continue;
+        }
+
+        if in_project && !in_deps_array {
+            let t = trimmed.replace(' ', "");
+            if t.starts_with("dependencies=[") || t == "dependencies=[" {
+                in_deps_array = true;
+                for ch in line.chars() {
+                    match ch {
+                        '[' => bracket_depth += 1,
+                        ']' => bracket_depth -= 1,
+                        _ => {}
+                    }
+                }
+                if bracket_depth <= 0 {
+                    in_deps_array = false;
+                }
+                result.push_str(line);
+                result.push('\n');
+                continue;
+            }
+        }
+
+        if in_deps_array {
+            let mut depth_delta: i32 = 0;
+            for ch in line.chars() {
+                match ch {
+                    '[' => depth_delta += 1,
+                    ']' => depth_delta -= 1,
+                    _ => {}
+                }
+            }
+            bracket_depth += depth_delta;
+            if bracket_depth <= 0 {
+                in_deps_array = false;
+                result.push_str(line);
+                result.push('\n');
+                continue;
+            }
+            // Try to extract the dep name and skip if it matches a req to remove
+            if let Some(req) = Req::from_pep508_str(trimmed) {
+                if reqs.iter().any(|r| util::compare_names(r, &req.name)) {
+                    continue;
+                }
+            }
+        }
+
+        result.push_str(line);
+        result.push('\n');
+    }
+    result
+}
+
+/// Remove deps from a pyflow-format `[tool.pyflow.dependencies]` section by package name.
+fn remove_reqs_pyflow(data: &str, reqs: &[String]) -> String {
+    let mut result = String::new();
     let mut in_dep = false;
     let mut _in_dev_dep = false;
     let sect_re = Regex::new(r"^\[.*\]$").unwrap();
 
     for line in data.lines() {
         if line.starts_with('#') || line.is_empty() {
-            // todo handle mid-line comements
             result.push_str(line);
             result.push('\n');
             continue;
@@ -309,18 +540,12 @@ pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
             if sect_re.is_match(line) {
                 in_dep = false;
             }
-            // todo: handle comments
             let req_line = if let Ok(r) = Req::from_str(line, false) {
                 r
             } else {
                 result.push_str(line);
                 result.push('\n');
-                continue; // Could be caused by a git etc req.
-                          //                util::abort(&format!(
-                          //                    "Can't parse this line in `pyproject.toml`: {}",
-                          //                    line
-                          //                ));
-                          //                unreachable!()
+                continue;
             };
 
             if reqs
@@ -328,15 +553,42 @@ pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
                 .map(|r| r.to_lowercase())
                 .any(|x| x == req_line.name.to_lowercase())
             {
-                continue; // ie don't append this line to result.
+                continue;
             }
         }
         result.push_str(line);
         result.push('\n');
     }
+    result
+}
 
-    fs::write(cfg_path, result)
-        .expect("Unable to write to pyproject.toml while attempting to add a dependency");
+/// Write dependencies to pyproject.toml. If an entry for that package already exists, ask if
+/// we should update the version. Assume we've already parsed the config, and are only
+/// adding new reqs, or ones with a changed version.
+pub fn add_reqs_to_cfg(cfg_path: &Path, added: &[Req], added_dev: &[Req]) {
+    let data = fs::read_to_string(cfg_path)
+        .expect("Unable to read pyproject.toml while attempting to add a dependency");
+
+    let updated = match detect_cfg_format(&data) {
+        CfgFormat::Pep621 => update_pep621_cfg(&data, added, added_dev),
+        CfgFormat::Pyflow => update_cfg(&data, added, added_dev),
+    };
+    fs::write(cfg_path, updated)
+        .expect("Unable to write pyproject.toml while attempting to add a dependency");
+}
+
+/// Remove dependencies from pyproject.toml.
+pub fn remove_reqs_from_cfg(cfg_path: &Path, reqs: &[String]) {
+    let data = fs::read_to_string(cfg_path)
+        .expect("Unable to read pyproject.toml while attempting to remove a dependency");
+
+    let updated = match detect_cfg_format(&data) {
+        CfgFormat::Pep621 => remove_reqs_pep621(&data, reqs),
+        CfgFormat::Pyflow => remove_reqs_pyflow(&data, reqs),
+    };
+
+    fs::write(cfg_path, updated)
+        .expect("Unable to write to pyproject.toml while attempting to remove a dependency");
 }
 
 pub fn parse_req_dot_text(cfg: &mut Config, path: &Path) {
