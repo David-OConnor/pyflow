@@ -28,6 +28,7 @@ pub struct WarehouseDigests {
 pub struct WarehouseRelease {
     // Could use digests field, which has sha256 as well as md5.
     pub filename: String,
+    #[serde(default)]
     pub has_sig: bool,
     pub digests: WarehouseDigests,
     pub packagetype: String,
@@ -63,12 +64,6 @@ impl ReqCache {
             //            .expect("Problem parsing req: ")  // todo how do I do this?
             .collect()
     }
-}
-
-#[derive(Debug, Serialize)]
-struct MultipleBody {
-    // name, (version, version). Having trouble implementing Serialize for Version.
-    packages: HashMap<String, Vec<String>>,
 }
 
 // TODO: figure out lifetimes so we can automock this function
@@ -423,28 +418,41 @@ pub(super) mod res {
         Ok(release_data.clone())
     }
 
-    /// Fetch items from multiple packages; cuts down on API calls.
-    fn get_req_cache_multiple(
+    /// Minimal response struct for the version-specific PyPI endpoint.
+    /// We only need `info`; avoiding `releases`/`urls` prevents failures
+    /// from deprecated fields (e.g. `has_sig` removed from PyPI API).
+    #[derive(Debug, Deserialize)]
+    struct VersionedWarehouseData {
+        info: WarehouseInfo,
+    }
+
+    /// Fetch dependency metadata for a specific package version directly from PyPI JSON API.
+    fn get_warehouse_data_for_version(
+        name: &str,
+        version: &Version,
+    ) -> Result<VersionedWarehouseData, reqwest::Error> {
+        let url = format!("https://pypi.org/pypi/{}/{}/json", name, version);
+        reqwest::blocking::get(&url)?.json()
+    }
+
+    /// Fetch dependency metadata for each package+version directly from PyPI.
+    /// Replaces the old pydeps.herokuapp.com service.
+    fn get_req_cache_from_pypi(
         packages: &HashMap<String, Vec<Version>>,
     ) -> Result<Vec<ReqCache>, reqwest::Error> {
-        // input tuple is name, min version, max version.
-        // parse strings here.
-        let mut packages2 = HashMap::new();
-        for (name, versions) in packages.iter() {
-            let versions = versions.iter().map(Version::to_string).collect();
-            packages2.insert(name.to_owned(), versions);
+        let mut result = Vec::new();
+        for (name, versions) in packages {
+            for version in versions {
+                let data = get_warehouse_data_for_version(name, version)?;
+                result.push(ReqCache {
+                    name: Some(data.info.name),
+                    version: data.info.version,
+                    requires_python: data.info.requires_python,
+                    requires_dist: data.info.requires_dist.unwrap_or_default(),
+                });
+            }
         }
-
-        let url = "https://pydeps.herokuapp.com/multiple/";
-        //                let url = "http://localhost:8000/multiple/";
-
-        reqwest::blocking::Client::new()
-            .post(url)
-            .json(&MultipleBody {
-                packages: packages2,
-            })
-            .send()?
-            .json()
+        Ok(result)
     }
 
     /// Helper fn for `guess_graph`.
@@ -458,7 +466,7 @@ pub(super) mod res {
     }
 
     /// Pull data on pydeps for a req. Only pull what we need.
-    /// todo: Group all reqs and pull with a single call to pydeps to improve speed?
+
     pub(super) fn fetch_req_data(
         reqs: &[Req],
         vers_cache: &mut HashMap<String, (String, Version, Vec<Version>)>,
@@ -521,7 +529,7 @@ pub(super) mod res {
             return Ok(vec![]);
         }
 
-        Ok(get_req_cache_multiple(&query_data)?)
+        Ok(get_req_cache_from_pypi(&query_data)?)
     }
 
     fn find_constraints(

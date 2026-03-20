@@ -30,6 +30,9 @@ pub struct Project {
     pub name: Option<String>,
     pub version: Option<String>,
     pub description: Option<String>,
+    /// PEP 440 Python version constraint, eg `">=3.11"`.
+    #[serde(rename = "requires-python")]
+    pub requires_python: Option<String>,
     /// PEP 508 dependency strings, eg `["requests>=2.0", "flask"]`.
     pub dependencies: Option<Vec<String>>,
     #[serde(rename = "optional-dependencies")]
@@ -610,18 +613,31 @@ pub fn parse_req_dot_text(cfg: &mut Config, path: &Path) {
     }
 }
 
-/// Update the config file with a new version.
+/// Update the config file with a new Python version.
+/// Handles both pyflow format (`py_version = "3.x"`) and PEP 621 (`requires-python = ">=3.x"`).
 pub fn change_py_vers(cfg_path: &Path, specified: &Version) {
-    let f = fs::File::open(&cfg_path)
+    let f = fs::File::open(cfg_path)
         .expect("Unable to read pyproject.toml while adding Python version");
+    let ver_str = specified.to_string_no_patch();
     let mut new_data = String::new();
+    let mut updated = false;
+
     for line in BufReader::new(f).lines().flatten() {
         if line.starts_with("py_version") {
-            new_data.push_str(&format!("py_version = \"{}\"\n", specified.to_string()));
+            new_data.push_str(&format!("py_version = \"{}\"\n", ver_str));
+            updated = true;
+        } else if line.starts_with("requires-python") {
+            new_data.push_str(&format!("requires-python = \">={}\"\n", ver_str));
+            updated = true;
         } else {
             new_data.push_str(&line);
             new_data.push('\n');
         }
+    }
+
+    // If neither field existed (fresh file), append requires-python.
+    if !updated {
+        new_data.push_str(&format!("requires-python = \">={}\"\n", ver_str));
     }
 
     fs::write(cfg_path, new_data)

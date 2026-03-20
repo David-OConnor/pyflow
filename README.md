@@ -340,10 +340,7 @@ also required by other packages are removed from the `__pypackages__` folder.
 ## How dependencies are resolved
 
 Compatible versions of dependencies are determined using info from
-the [PyPi Warehouse](https://github.com/pypa/warehouse) (available versions, and hash info),
-and the `pydeps` database. We use `pydeps`, which is built specifically for this project,
-due to inconsistent dependency information stored on `pypi`. A dependency graph is built
-using this cached database. We attempt to use the newest compatible version of each package.
+the [PyPi Warehouse](https://github.com/pypa/warehouse) (available versions, and hash info).
 
 If all packages are either only specified once, or specified multiple times with the same
 newest-compatible version, we're done resolving, and ready to install and sync.
@@ -461,20 +458,6 @@ like the ones in the table above.
 - Dependency managers like Pipenv and Poetry work well enough for many cases,
 have dedicated dev teams, and large userbases.
 - `Conda` in particular handles many things this does quite well.
-
-
-## Dependency cache repo:
-- [Github](https://github.com/David-OConnor/pydeps)
-Example API calls: `https://pydeps.herokuapp.com/requests`,
-`https://pydeps.herokuapp.com/requests/2.21.0`.
-This pulls all top-level
-dependencies for the `requests` package, and the dependencies for version `2.21.0` respectively.
-There is also a `POST` API for pulling info on specified versions.
- The first time this command is run
-for a package/version combo, it may be slow. Subsequent calls, by anyone,
-should be fast. This is due to having to download and install each package
-on the server to properly determine dependencies, due to unreliable information
- on the `pypi warehouse`.
 
 
 ## Python binary sources:

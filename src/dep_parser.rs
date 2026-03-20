@@ -45,7 +45,7 @@ pub fn parse_req_pypi_fmt(input: &str) -> IResult<&str, Req> {
                 (parse_package_name, opt(parse_install_with_extras)),
                 alt((
                     preceded(space0, delimited(tag("("), parse_constraints, tag(")"))),
-                    preceded(space1, parse_constraints),
+                    preceded(space0, parse_constraints),
                 )),
                 opt(preceded((space0, tag(";"), space0), parse_extras)),
             ),

@@ -30,5 +30,5 @@ links to reflect the latest version.
 ## Publish binaries
 1. Run `cargo package` and `cargo publish` (Any os).
 1. For the Windows and Ubuntu wheels, run `twine upload (wheelname)`.
-1. Add a release on [Github](https://github.com/David-OConnor/seed/releases), following the format of previous releases.
+1. Add a release on [Github](https://github.com/David-OConnor/pyflow/releases), following the format of previous releases.
 1. Upload the following binaries to the release page: Linux binary, Windows exe.

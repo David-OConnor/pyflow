@@ -97,34 +97,26 @@ pub fn success(message: &str) {
     process::exit(0)
 }
 
-/// Find which virtual environments exist.
+/// Find which virtual environments exist by scanning the pypackages directory.
 pub fn find_venvs(pypackages_dir: &Path) -> Vec<(u32, u32)> {
-    let py_versions: &[(u32, u32)] = &[
-        (2, 6),
-        (2, 7),
-        (2, 8),
-        (2, 9),
-        (3, 0),
-        (3, 1),
-        (3, 2),
-        (3, 3),
-        (3, 4),
-        (3, 5),
-        (3, 6),
-        (3, 7),
-        (3, 8),
-        (3, 9),
-        (3, 10),
-        (3, 11),
-        (3, 12),
-    ];
+    if !pypackages_dir.exists() {
+        return vec![];
+    }
 
     let mut result = vec![];
-    for (maj, mi) in py_versions.iter() {
-        let venv_path = pypackages_dir.join(&format!("{}.{}/.venv", maj, mi));
-
-        if venv_path.join("bin/python").exists() || venv_path.join("Scripts/python.exe").exists() {
-            result.push((*maj, *mi))
+    for entry in fs::read_dir(pypackages_dir).into_iter().flatten().flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        let parts: Vec<&str> = name_str.splitn(2, '.').collect();
+        if parts.len() == 2 {
+            if let (Ok(major), Ok(minor)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                let venv_path = entry.path().join(".venv");
+                if venv_path.join("bin/python").exists()
+                    || venv_path.join("Scripts/python.exe").exists()
+                {
+                    result.push((major, minor));
+                }
+            }
         }
     }
 
@@ -167,11 +159,16 @@ pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::py_versions::AliasEr
 /// Sets the `PYTHONPATH` environment variable, causing Python to look for
 /// dependencies in `__pypackages__`,
 pub fn set_pythonpath(paths: &[PathBuf]) {
+    #[cfg(target_os = "windows")]
+    let sep = ";";
+    #[cfg(not(target_os = "windows"))]
+    let sep = ":";
+
     let formatted_paths = paths
         .iter()
         .map(|p| p.to_str().unwrap())
         .collect::<Vec<&str>>()
-        .join(":");
+        .join(sep);
 
     unsafe {
         env::set_var("PYTHONPATH", formatted_paths);

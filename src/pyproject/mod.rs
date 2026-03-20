@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    dep_types::{Constraint, Req, Version},
+    dep_types::{Constraint, Req, ReqType, Version},
     files,
     util::{self, abort},
 };
@@ -275,6 +275,23 @@ impl Config {
             }
             if result.description.is_none() {
                 result.description = proj.description;
+            }
+            // Parse `requires-python = ">=3.11"` → py_version.
+            // Take the version from the first >= / == / > constraint found.
+            if result.py_version.is_none() {
+                if let Some(rp) = proj.requires_python {
+                    if let Ok(constraints) = Constraint::from_str_multiple(&rp) {
+                        for c in &constraints {
+                            match c.type_ {
+                                ReqType::Gte | ReqType::Gt | ReqType::Exact => {
+                                    result.py_version = Some(c.version.clone());
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
             }
             // Only overwrite deps if the poetry block didn't set them.
             if result.reqs.is_empty() {
