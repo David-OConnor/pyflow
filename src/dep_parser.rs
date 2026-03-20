@@ -3,9 +3,9 @@ use std::str::FromStr;
 use nom::{
     IResult, Parser,
     branch::alt,
-    bytes::complete::{tag, take, take_till, take_while1},
+    bytes::complete::{tag, take_till, take_while1},
     character::complete::{digit1, space0, space1},
-    combinator::{map, map_parser, map_res, opt, value},
+    combinator::{map, map_res, opt, value},
     multi::separated_list0,
     sequence::{delimited, preceded, separated_pair},
 };
@@ -103,20 +103,22 @@ pub fn parse_wh_py_vers(input: &str) -> IResult<&str, Vec<Constraint>> {
 }
 
 fn parse_wh_py_ver(input: &str) -> IResult<&str, Constraint> {
+    // Wheel python tags: cp36, cp310, cp313, py3, pp39, etc.
+    // Format: {prefix}{major}{minor} where minor can be 1 or 2 digits (e.g. 6, 10, 13).
+    // The old code took exactly 1 char for minor, misreading cp313 as Python 3.1 (patch 3)
+    // instead of Python 3.13. We now consume all digits after the major.
     map(
         (
             alt((tag("cp"), tag("py"), tag("pp"))),
             alt((tag("2"), tag("3"), tag("4"))),
-            opt(map_parser(take(1usize), digit1)),
             opt(digit1),
         ),
-        |(_, major, minor, patch): (_, &str, Option<&str>, Option<&str>)| {
+        |(_, major, minor): (_, &str, Option<&str>)| {
             let major: u32 = major.parse().unwrap();
-            let patch = patch.map(|p| p.parse().unwrap());
             match minor {
                 Some(mi) => Constraint::new(
                     ReqType::Exact,
-                    Version::new_opt(Some(major), Some(mi.parse().unwrap()), patch),
+                    Version::new_opt(Some(major), Some(mi.parse().unwrap()), None),
                 ),
                 None => {
                     if major == 2 {

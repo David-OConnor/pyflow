@@ -557,6 +557,19 @@ fn os_from_wheel_fname(filename: &str) -> Result<Os, DependencyError> {
     Err(DependencyError::new("Problem parsing os from wheel name"))
 }
 
+/// Extract the ABI tag from a wheel filename.
+/// Wheel format: {name}-{version}-{python_tag}-{abi_tag}-{platform_tag}.whl
+/// The ABI tag is the second-to-last hyphen-separated component.
+fn abi_from_wheel_fname(filename: &str) -> Option<String> {
+    let stem = filename.strip_suffix(".whl")?;
+    let parts: Vec<&str> = stem.split('-').collect();
+    if parts.len() >= 3 {
+        Some(parts[parts.len() - 2].to_string())
+    } else {
+        None
+    }
+}
+
 /// Find the most appropriate release to download. Ie Windows vs Linux, wheel vs source.
 pub fn find_best_release(
     data: &[WarehouseRelease],
@@ -592,6 +605,16 @@ pub fn find_best_release(
                     os_from_wheel_fname(&rel.filename).expect("Problem getting os from wheel name");
                 if wheel_os != os && wheel_os != Os::Any {
                     compatible = false;
+                }
+
+                // Reject free-threading (GIL-free) wheels unless explicitly opted in.
+                // These use an ABI tag with a trailing 't' (e.g. cp313t vs cp313).
+                // A regular CPython venv cannot load extension modules built for the
+                // free-threading ABI, and vice versa.
+                if let Some(abi) = abi_from_wheel_fname(&rel.filename) {
+                    if abi.ends_with('t') && !abi.ends_with("not") {
+                        compatible = false;
+                    }
                 }
 
                 // Packages that use C code(eg numpy) may fail to load C extensions if installing
