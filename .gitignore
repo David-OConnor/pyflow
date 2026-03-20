@@ -1,25 +1,17 @@
 /target
 **/*.rs.bk
 
-#PyCharm
-*.iws
-*.workspace.xml
+# PyCharm
 .idea
 
 # Prevent generated and test files from being committed
 requirements.txt
-Pipfile
 pyflow.lock
-pyproject.toml
 /.venv
 script.py
 *.egg-info/
 *.wheel
-*.snap
-*.snap.*
-*/snap.*
 build/
 dist/
 
-# grcov
-*.profraw
+.claude

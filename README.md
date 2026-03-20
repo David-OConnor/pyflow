@@ -16,15 +16,12 @@ Example use, including setting up a project and switching Py versions:
 If your project's already configured, the only command you need is `pyflow`,
 or `pyflow myscript.py`; setting up Python and its dependencies are automatic.
 
-**Goals**: Make using and publishing Python projects as simple as possible. Actively
-managing Python environments shouldn't be required to use dependencies safely. We're attempting
-to fix each stumbling block in the Python workflow, so that it's as elegant
-as the language itself.
+**Goals**: Make using and publishing Python projects as simple as possible. Actively managing Python environments shouldn't be required to use dependencies safely. We're attempting
+to fix each stumbling block in the Python workflow, so that it's as elegant as the language itself.
 
 You don't need Python or any other tools installed to use Pyflow.
 
-It runs standalone scripts in their
-own environments with no config, and project functions directly from the CLI.
+It runs standalone scripts in their own environments with no config, and project functions directly from the CLI.
 
 It implements [PEP 582 -- Python local packages directory](https://www.python.org/dev/peps/pep-0582/)
 and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/).
@@ -171,6 +168,8 @@ project folder (With a .gitignore, source directory etc), or `pyflow init` to po
 info from `requirements.txt` or `Pipfile`. See
 [PEP 518](https://www.python.org/dev/peps/pep-0518/) and [PEP 621](https://peps.python.org/pep-0621/) for details.
 
+Supports [PEP 723] for specifying dependencies in one-off files.
+
 Pyproject.toml may be set up with syntax from the original PEP 518, or the newer PEP 621. 
 
 
@@ -278,6 +277,7 @@ entry points for someone using the package, regardless of if they're using this 
 If an environment isn't already set up for the version specified in `pyproject.toml`, sets one up.
  Note that this command isn't required to sync dependencies; any relevant `pyflow`
 command will do so automatically.
+- `pyflow sync`: Syncs packages with `pyproject.toml`; same idea as `pyflow install` with no specific packages.
 - `pyflow install requests` - If you specify one or more packages after `install`, those packages will
 be added to `pyproject.toml` and installed. You can use the `--dev` flag to install dev dependencies. eg:
 `pyflow install black --dev`.
@@ -413,6 +413,7 @@ Other items you can specify in `[tool.pyflow]`:
 - `readme`: The readme filename, use this if it's named something other than `README.md`.
 - `build`: A python script to execute building non-python extensions when running `pyflow package`.
 
+
 ## Building this from source
 If you’d like to build from source, [download and install Rust]( https://www.rust-lang.org/tools/install),
 clone the repo, and in the repo directory, run `cargo build --release`.
@@ -426,21 +427,12 @@ cargo build --release
 ```
 
 ## Updating
-- If installed via `Scoop`, run `scoop update pyflow`.
-- If installed via `Snap`, run `snap refresh pyflow`.
 - If installed via `Cargo`, run `cargo install pyflow --force`.
 - If installed via `Pip`, run `pip install --upgrade pyflow`.
-- If using an installer or
-deb, run the new version's installer or deb. If manually calling a binary, replace it.
 
 ## Uninstalling
-- If installed via `Scoop`, run `scoop uninstall pyflow`.
-- If installed via `Snap`, run `snap remove pyflow`.
 - If installed via `Cargo`, run `cargo uninstall pyflow`.
 - If installed via `Pip`, run `pip uninstall pyflow`.
-- If installed via Windows installer, run the Installer again and select `Remove` when asked,
-or use `Apps & features`.
-- If installed via a `deb`, use the `Software Center`.
 - If manually calling a binary, remove it.
 
 ## Contributing

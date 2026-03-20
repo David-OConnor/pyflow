@@ -9,8 +9,6 @@ use crate::{
     util::{self, Os, Paths, process_reqs},
 };
 
-// TODO: Refactor this function
-#[allow(clippy::too_many_arguments)]
 pub fn install(
     cfg_path: &Path,
     cfg: &Config,

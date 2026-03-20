@@ -5,8 +5,14 @@ use regex::Regex;
 use crate::{commands, pyproject::Config, util::abort};
 
 /// Execute a python CLI tool, either specified in `pyproject.toml`, or in a dependency.
-pub fn run(lib_path: &Path, bin_path: &Path, vers_path: &Path, cfg: &Config, args: Vec<String>) {
-    // Allow both `pyflow run ipython` (args), and `pyflow ipython` (opt.script)
+pub fn run_script(
+    lib_path: &Path,
+    bin_path: &Path,
+    vers_path: &Path,
+    cfg: &Config,
+    args: Vec<String>,
+) {
+    // Allow both `pyflow run_script ipython` (args), and `pyflow ipython` (opt.script)
     if args.is_empty() {
         return;
     }

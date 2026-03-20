@@ -1,7 +1,10 @@
+//! This is for running standalone script files, not associated with a project directory.
+//! It uses [PEP 723: Inline script metadata](https://peps.python.org/pep-0723/)
+//! to manage dependencies. This allows scripts to be run standalone, for convenience.
+
 use std::{fs, path::Path, str::FromStr};
 
-use regex::Regex;
-
+use toml::Value;
 use crate::{
     commands,
     dep_parser::parse_version,
@@ -32,9 +35,6 @@ pub fn run_script(
         );
     };
 
-    // todo: Consider a metadata file, but for now, we'll use folders
-    //    let scripts_data_path = script_env_path.join("scripts.toml");
-
     let env_path = util::canon_join(script_env_path, filename);
     if !env_path.exists() {
         fs::create_dir_all(&env_path).expect("Problem creating environment for the script");
@@ -45,18 +45,18 @@ pub fn run_script(
     let py_vers_path = env_path.join("py_vers.txt");
 
     let script = fs::read_to_string(filename).expect("Problem opening the Python script file.");
-    let dunder_python_vers = check_for_specified_py_vers(&script);
+    let specified_py_vers = check_for_specified_py_vers(&script);
 
-    if let Some(dpv) = dunder_python_vers {
+    if let Some(dpv) = specified_py_vers {
         cfg_vers = dpv;
         create_or_update_version_file(&py_vers_path, &cfg_vers);
     } else if py_vers_path.exists() {
         cfg_vers = Version::from_str(
-            &fs::read_to_string(py_vers_path)
+            &fs::read_to_string(&py_vers_path)
                 .expect("Problem reading Python version for this script")
                 .replace("\n", ""),
         )
-        .expect("Problem parsing version from file");
+            .expect("Problem parsing version from file");
     } else {
         cfg_vers = util::prompts::py_vers();
         create_or_update_version_file(&py_vers_path, &cfg_vers);
@@ -108,7 +108,7 @@ pub fn run_script(
                         Extras::new_py(Constraint::new(ReqType::Exact, py_vers.clone())),
                     )),
                 )
-                .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
+                    .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
                 (vinfo.0, vinfo.1)
             };
 
@@ -135,24 +135,53 @@ pub fn run_script(
 /// Create the `py_vers.txt` if it doesn't exist, and then store `cfg_vers` within.
 fn create_or_update_version_file(py_vers_path: &Path, cfg_vers: &Version) {
     if !py_vers_path.exists() {
-        fs::File::create(&py_vers_path)
+        fs::File::create(py_vers_path)
             .expect("Problem creating a file to store the Python version for this script");
     }
-    fs::write(py_vers_path, &cfg_vers.to_string()).expect("Problem writing Python version file.");
+    fs::write(py_vers_path, cfg_vers.to_string()).expect("Problem writing Python version file.");
 }
 
-/// Find a script's Python version specificion by looking for the `__python__` variable.
-///
-/// If a `__python__` variable is identified, the version must have major, minor, and
-/// patch components to be considered valid. Otherwise, there is still some ambiguity in
-/// which version to use and an error is thrown.
-fn check_for_specified_py_vers(script: &str) -> Option<Version> {
-    let re = Regex::new(r#"^__python__\s*=\s*"(.*?)"$"#).unwrap();
+/// Extracts the PEP 723 metadata TOML block from a script.
+fn extract_script_metadata(script: &str) -> Option<String> {
+    let mut in_block = false;
+    let mut toml_content = String::new();
 
     for line in script.lines() {
-        if let Some(capture) = re.captures(line) {
-            let specification = capture.get(1).unwrap().as_str();
-            let (_, version) = parse_version(specification).unwrap();
+        let trimmed = line.trim();
+        if !in_block {
+            if trimmed == "# /// script" {
+                in_block = true;
+            }
+        } else {
+            if trimmed == "# ///" {
+                return Some(toml_content);
+            }
+            if let Some(stripped) = line.strip_prefix("# ") {
+                toml_content.push_str(stripped);
+                toml_content.push('\n');
+            } else if let Some(stripped) = line.strip_prefix('#') {
+                toml_content.push_str(stripped);
+                toml_content.push('\n');
+            }
+        }
+    }
+    None
+}
+
+/// Find a script's Python version specification by looking for `requires-python`
+/// in the PEP 723 metadata block.
+fn check_for_specified_py_vers(script: &str) -> Option<Version> {
+    let toml_block = extract_script_metadata(script)?;
+
+    // Parse the extracted block into a TOML Value
+    let parsed_toml = toml_block.parse::<Value>().ok()?;
+
+    if let Some(req_py) = parsed_toml.get("requires-python").and_then(|v| v.as_str()) {
+        // PEP 723 specifiers usually include operators (e.g., ">=3.9.1").
+        // We strip non-numeric characters to get the raw semver for parsing.
+        let cleaned_spec = req_py.trim_start_matches(|c: char| !c.is_numeric());
+
+        if let Ok((_, version)) = parse_version(cleaned_spec) {
             match version {
                 Version {
                     major: Some(_),
@@ -164,8 +193,8 @@ fn check_for_specified_py_vers(script: &str) -> Option<Version> {
                 } => return Some(version),
                 _ => {
                     util::abort(
-                        "Problem parsing `__python__` variable. Make sure you've included \
-                        major, minor, and patch specifications (eg `__python__ = X.Y.Z`)",
+                        "Problem parsing `requires-python`. Make sure you've included \
+                        major, minor, and patch specifications (eg `requires-python = \">=X.Y.Z\"`)",
                     );
                 }
             }
@@ -174,28 +203,25 @@ fn check_for_specified_py_vers(script: &str) -> Option<Version> {
     None
 }
 
-/// Find a script's dependencies from a variable: `__requires__ = [dep1, dep2]`
+/// Find a script's dependencies by parsing the `dependencies` array in the PEP 723 block.
 fn find_deps_from_script(script: &str) -> Vec<String> {
-    // todo: Helper for this type of logic? We use it several times in the program.
-    let re = Regex::new(r"(?ms)^__requires__\s*=\s*\[(.*?)\]$").unwrap();
+    let toml_block = match extract_script_metadata(script) {
+        Some(b) => b,
+        None => return vec![],
+    };
 
-    let mut result = vec![];
-
-    if let Some(c) = re.captures(script) {
-        let deps_list = c.get(1).unwrap().as_str().to_owned();
-        result = deps_list
-            .split(',')
-            .map(|d| {
-                d.to_owned()
-                    .replace(" ", "")
-                    .replace("'", "")
-                    .replace("\"", "")
-                    .replace("\n", "")
-            })
-            .filter(|d| !d.is_empty())
-            .collect();
+    // Parse the TOML block and safely navigate to the dependencies array
+    if let Ok(parsed_toml) = toml_block.parse::<Value>() {
+        if let Some(deps_array) = parsed_toml.get("dependencies").and_then(|v| v.as_array()) {
+            return deps_array
+                .iter()
+                .filter_map(|val| val.as_str()) // Only keep valid strings
+                .map(|s| s.to_string())
+                .collect();
+        }
     }
-    result
+
+    vec![] // Return an empty vector if parsing fails or 'dependencies' is missing
 }
 
 #[cfg(test)]
@@ -206,14 +232,13 @@ mod tests {
     use crate::dep_types::Version;
 
     #[test]
-    fn parse_python_version_with_no_dunder_specified() {
+    fn parse_python_version_with_no_metadata() {
         let script = indoc! { r#"
             if __name__ == "__main__":
                 print("Hello, world")
         "# };
 
         let version: Option<Version> = None;
-
         let expected = version;
         let actual = check_for_specified_py_vers(script);
 
@@ -221,9 +246,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_python_version_with_valid_dunder_specified() {
+    fn parse_python_version_with_valid_metadata() {
         let script = indoc! { r#"
-            __python__ = "3.9.1"
+            # /// script
+            # requires-python = ">=3.9.1"
+            # ///
 
             if __name__ == "__main__":
                 print("Hello, world")
@@ -245,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_no_dependencies_with_no_requires() {
+    fn parse_no_dependencies_with_no_metadata() {
         let script = indoc! { r#"
             if __name__ == "__main__":
                 print("Hello, world")
@@ -258,9 +285,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_no_dependencies_with_single_line_requires() {
+    fn parse_no_dependencies_with_single_line() {
         let script = indoc! { r#"
-            __requires__ = []
+            # /// script
+            # dependencies = []
+            # ///
 
             if __name__ == "__main__":
                 print("Hello, world")
@@ -273,10 +302,12 @@ mod tests {
     }
 
     #[test]
-    fn parse_no_dependencies_with_multi_line_requires() {
+    fn parse_no_dependencies_with_multi_line() {
         let script = indoc! { r#"
-            __requires__ = [
-            ]
+            # /// script
+            # dependencies = [
+            # ]
+            # ///
 
             if __name__ == "__main__":
                 print("Hello, world")
@@ -289,9 +320,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_one_dependency_with_single_line_requires() {
+    fn parse_one_dependency_with_single_line() {
         let script = indoc! { r#"
-            __requires__ = ["requests"]
+            # /// script
+            # dependencies = ["requests"]
+            # ///
 
             if __name__ == "__main__":
                 print("Hello, world")
@@ -304,11 +337,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_one_dependency_with_multi_line_requires() {
+    fn parse_one_dependency_with_multi_line() {
         let script = indoc! { r#"
-            __requires__ = [
-                "requests"
-            ]
+            # /// script
+            # dependencies = [
+            #     "requests"
+            # ]
+            # ///
 
             if __name__ == "__main__":
                 print("Hello, world")
@@ -321,9 +356,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_multiple_dependencies_with_single_line_requires() {
+    fn parse_multiple_dependencies_with_single_line() {
         let script = indoc! { r#"
-            __requires__ = ["python-dateutil", "requests"]
+            # /// script
+            # dependencies = ["python-dateutil", "requests"]
+            # ///
 
             if __name__ == "__main__":
                 print("Hello, world")
@@ -336,12 +373,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_multiple_dependencies_with_multi_line_requires() {
+    fn parse_multiple_dependencies_with_multi_line() {
         let script = indoc! { r#"
-            __requires__ = [
-                "python-dateutil",
-                "requests"
-            ]
+            # /// script
+            # dependencies = [
+            #     "python-dateutil",
+            #     "requests"
+            # ]
+            # ///
 
             if __name__ == "__main__":
                 print("Hello, world")

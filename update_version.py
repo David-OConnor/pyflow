@@ -20,6 +20,7 @@ def helper(filename: str, startswith: str, quotes: bool):
 
 def main():
     helper('Cargo.toml', "version = ", True)
+    helper('pyproject.toml', "version = ", True)
 
     data = ""
     with open('README.md') as f:

@@ -1,6 +1,6 @@
 use std::{cmp::min, collections::HashMap, str::FromStr};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use termcolor::Color;
 
 use crate::{
@@ -322,72 +322,40 @@ pub(super) mod res {
                 })
             })
             .flatten();
+
+        // Determine the target Python version
         let py_vers = if let Some(ref r) = req {
             r.py_ver_or_default()
         } else {
             Version::new_star(None, None, None, true)
         };
-        let select_version = if let Some(ref r) = req {
-            let av: Vec<Req> = all_versions.clone().collect();
-            let compat_av: Vec<Version> = av
-                .iter()
-                .filter_map(|x: &Req| {
-                    if is_compat(&r.constraints, &x.constraints[0].version) {
-                        if let Some(ref pv) = x.python_version {
-                            if is_compat(pv, &py_vers) {
-                                Some(x.constraints[0].version.clone())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let v = compat_av.iter().max();
-            v.cloned()
-        } else {
-            None
-        };
 
-        #[cfg(not(debug_assertions))]
-        let all_compat: Vec<Version>;
-        #[cfg(debug_assertions)]
-        let mut all_compat: Vec<Version>;
-
-        all_compat = all_versions
+        // Filter ALL warehouse releases down to ONLY the ones compatible with the target Python version
+        let all_compat: Vec<Version> = all_versions
             .filter_map(|x| {
                 if let Some(y) = x.python_version {
-                    if is_compat(&y, &py_vers) {
+                    let compat = is_compat(&y, &py_vers);
+                    if compat {
                         Some(x.constraints.first().unwrap().version.clone())
                     } else {
                         None
                     }
                 } else {
-                    None
+                    Some(x.constraints.first().unwrap().version.clone())
                 }
             })
             .collect();
 
-        #[cfg(debug_assertions)]
-        all_compat.sort();
+        // Grab the absolute latest version from the Python-compatible pool
+        let latest_py_compat_version = all_compat
+            .iter()
+            .max()
+            .unwrap_or_else(|| panic!("Can't find a valid version for {}", name))
+            .clone();
 
-        if let Some(v) = select_version {
-            Ok((data.info.name, v, all_compat))
-        } else {
-            Ok((
-                data.info.name,
-                all_compat
-                    .iter()
-                    .max()
-                    .unwrap_or_else(|| panic!("Can't find a valid version for {}", name))
-                    .clone(),
-                all_compat,
-            ))
-        }
+        // Return the name, the absolute highest compatible version, and the full pool of options.
+        // fetch_req_data will use all_compat to evaluate package-specific constraints (like >= 3.1)
+        Ok((data.info.name, latest_py_compat_version, all_compat))
     }
 
     /// Get release data from the warehouse, ie the file url, name, and hash.
@@ -497,6 +465,9 @@ pub(super) mod res {
 
             let mut max_v_to_query = latest_version;
 
+            // todo temp
+            // println!("\n\n Req: {req:?} Latest v: {:?}", max_v_to_query);
+
             // Find the maximum version compatible with the constraints.
             // todo: May need to factor in additional constraints here, and put
             // todo in fn signature for things that don't resolve with the optimal soln.
@@ -512,13 +483,42 @@ pub(super) mod res {
                 max_v_to_query = min(constr.compatible_range()[i].1.clone(), max_v_to_query);
             }
 
-            // To minimimize request time, only query the latest compatible version.
+            // todo temp
+            // println!("\n Req: {:?} Max V: {:?}", req, max_v_to_query);
+            // for version in &all_versions {
+            //     println!("-V: {:?}", version);
+            // }
+
+
+            // To minimize request time, only query the latest compatible version.
             let best_version = match all_versions
                 .into_iter()
                 .filter(|v| *v <= max_v_to_query)
                 .max()
             {
-                Some(v) => vec![v],
+                Some(v) => {
+                    // If this version doesn't satisfy the package constraints, no
+                    // Python-compatible version does. Give a helpful error rather than
+                    // letting guess_graph produce a confusing "Can't find a compatible package".
+                    if !is_compat(&req.constraints, &v) {
+                        util::abort(&format!(
+                            "No release of `{}` satisfying `{}` was found on PyPI \
+                             for Python {}.{}. The latest compatible release is {}. \
+                             Check that the version exists on https://pypi.org/project/{}/",
+                            req.name,
+                            req.constraints
+                                .iter()
+                                .map(|c| c.to_string2(false, false))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            py_vers.major.unwrap_or(3),
+                            py_vers.minor.unwrap_or(0),
+                            v,
+                            req.name,
+                        ));
+                    }
+                    vec![v]
+                }
                 None => vec![],
             };
 

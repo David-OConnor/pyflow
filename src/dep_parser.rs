@@ -103,23 +103,38 @@ pub fn parse_wh_py_vers(input: &str) -> IResult<&str, Vec<Constraint>> {
 }
 
 fn parse_wh_py_ver(input: &str) -> IResult<&str, Constraint> {
-    // Wheel python tags: cp36, cp310, cp313, py3, pp39, etc.
-    // Format: {prefix}{major}{minor} where minor can be 1 or 2 digits (e.g. 6, 10, 13).
-    // The old code took exactly 1 char for minor, misreading cp313 as Python 3.1 (patch 3)
-    // instead of Python 3.13. We now consume all digits after the major.
     map(
         (
             alt((tag("cp"), tag("py"), tag("pp"))),
             alt((tag("2"), tag("3"), tag("4"))),
             opt(digit1),
         ),
-        |(_, major, minor): (_, &str, Option<&str>)| {
+        |(prefix, major, minor): (&str, &str, Option<&str>)| { // <-- Capture `prefix`
             let major: u32 = major.parse().unwrap();
+
+            // Determine constraint type based on the wheel tag prefix
+            let req_type = match prefix {
+                "py" => ReqType::Gte, // Pure Python is >=
+                _ => ReqType::Exact,  // CPython (cp) & PyPy (pp) are exact
+            };
+
             match minor {
-                Some(mi) => Constraint::new(
-                    ReqType::Exact,
-                    Version::new_opt(Some(major), Some(mi.parse().unwrap()), None),
-                ),
+                Some(digits) => {
+                    let (mi, patch) = if major == 2 && digits.len() > 1 {
+                        let mi: u32 = digits[..1].parse().unwrap();
+                        let patch: u32 = digits[1..].parse().unwrap();
+                        (mi, Some(patch))
+                    } else {
+                        (digits.parse().unwrap(), None)
+                    };
+                    Constraint::new(
+                        req_type,
+                        match patch {
+                            Some(p) => Version::new(major, mi, p),
+                            None => Version::new_opt(Some(major), Some(mi), None),
+                        },
+                    )
+                }
                 None => {
                     if major == 2 {
                         Constraint::new(ReqType::Lte, Version::new_short(2, 10))
@@ -130,7 +145,7 @@ fn parse_wh_py_ver(input: &str) -> IResult<&str, Constraint> {
             }
         },
     )
-    .parse(input)
+        .parse(input)
 }
 
 fn quote(input: &str) -> IResult<&str, &str> {
@@ -222,7 +237,7 @@ pub fn parse_constraint(input: &str) -> IResult<&str, Constraint> {
     map(
         alt((
             value((Some(ReqType::Gte), Version::new(0, 0, 0)), tag("*")),
-            (opt(parse_req_type), parse_version),
+            (opt(parse_req_type), preceded(space0, parse_version)),
         )),
         |(r, v)| Constraint::new(r.unwrap_or(ReqType::Exact), v),
     )

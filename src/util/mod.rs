@@ -9,7 +9,6 @@ use std::{
 
 use ini::Ini;
 use regex::Regex;
-use serde::Deserialize;
 use tar::Archive;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use xz2::read::XzDecoder;

@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "pyflow"
+version = "0.3.5"
+description = "A modern Python installation and dependency manager"
+readme = "README.md"
+license = { text = "MIT" }
+keywords = ["python", "dependency", "packaging", "build"]
+
+[tool.maturin]
+bindings = "bin"

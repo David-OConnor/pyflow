@@ -5,7 +5,7 @@ mod list;
 mod new;
 mod package;
 mod reset;
-mod run;
+mod run_script;
 mod switch;
 
 pub use clear::clear;
@@ -15,5 +15,5 @@ pub use list::list;
 pub use new::new;
 pub use package::package;
 pub use reset::reset;
-pub use run::run;
+pub use run_script::run_script;
 pub use switch::switch;

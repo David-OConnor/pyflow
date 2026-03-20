@@ -6,10 +6,12 @@ pub fn pyflow_path() -> PathBuf {
         .or_else(|| std::env::var_os("APPDATA"))
         .map(PathBuf::from)
         .expect("Problem finding base directory");
+
     #[cfg(target_os = "macos")]
     let base = std::env::var_os("HOME")
         .map(|h| PathBuf::from(h).join("Library").join("Application Support"))
         .expect("Problem finding base directory");
+
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let base = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)

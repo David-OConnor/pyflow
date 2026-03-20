@@ -12,7 +12,6 @@ pub enum Os {
     Linux,
     Windows32,
     Windows,
-    //    Mac32,
     Mac,
     Any,
 }

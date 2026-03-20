@@ -44,6 +44,10 @@ pub enum SubCommand {
         #[structopt(short, long)]
         dev: bool,
     },
+    /// Sync the environment with `pyproject.toml`
+    #[structopt(name = "sync")]
+    Sync,
+
     /// Uninstall all packages, or ones specified
     #[structopt(name = "uninstall")]
     Uninstall {
@@ -74,15 +78,18 @@ pub enum SubCommand {
     /// Run a CLI script like `ipython` or `black`. Note that you can simply run `pyflow black`
     /// as a shortcut.
     // Dummy option with space at the end for documentation
-    #[structopt(name = "run ")] // We don't need to invoke this directly, but the option exists
-    Run,
+    #[structopt(name = "run_script ")]
+    // We don't need to invoke this directly, but the option exists
+    RunScript,
 
     /// Run the project python or script with the project python environment.
     /// As a shortcut you can simply specify a script name ending in `.py`
     // Dummy option with space at the end for documentation
     #[structopt(name = "python ")]
     Python,
-
+    /// Alias for running Pyflow with no subcommands. Same as `Python`
+    #[structopt(name = "run ")]
+    Run,
     /// Run a standalone script not associated with a project
     // Dummy option with space at the end for documentation
     #[structopt(name = "script ")]

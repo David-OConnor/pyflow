@@ -51,12 +51,17 @@ fn replace_distutils(setup_path: &Path) {
         ));
     };
 
-    let re = Regex::new(r"distutils.core").unwrap();
-    let new_text = re.replace_all(&setup_text, "setuptools");
+    // 1. Inject `import setuptools` at the top of the file to activate
+    // the vendored distutils in Python 3.12+
+    let mut new_text = format!("import setuptools\n{}", setup_text);
+
+    // 2. Escape the dot! Keep this for legacy fallback, but applied to `new_text`
+    let re = Regex::new(r"distutils\.core").unwrap();
+    new_text = re.replace_all(&new_text, "setuptools").to_string();
 
     if new_text != setup_text {
-        fs::write(setup_path, new_text.to_string())
-            .expect("Problem replacing `distutils.core` with `setuptools` in `setup.py`");
+        fs::write(setup_path, new_text)
+            .expect("Problem replacing `distutils` references in `setup.py`");
     }
 }
 
@@ -365,7 +370,12 @@ pub fn download_and_install_package(
 
             replace_distutils(&extracted_parent.join("setup.py"));
 
-            #[cfg(target_os = "windows")]
+
+            // Add setuptools using Pip, to bootstrap?
+            {
+
+            }
+            // #[cfg(target_os = "windows")]
             {
                 let output = Command::new(paths.bin.join("python"))
                     .current_dir(&extracted_parent)
@@ -378,6 +388,7 @@ pub fn download_and_install_package(
                             paths.bin.join("python")
                         )
                     });
+
                 util::check_command_output_with(&output, |s| {
                     panic!(
                         "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
@@ -387,52 +398,53 @@ pub fn download_and_install_package(
                     );
                 });
             }
-            // The Linux and Mac builds appear to be unable to build wheels due to
-            // missing the ctypes library; revert to system python.
-            #[cfg(target_os = "linux")]
-            {
-                let output = Command::new("python3")
-                    .current_dir(&extracted_parent)
-                    .args(&["setup.py", "bdist_wheel"])
-                    .output()
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
-                            &extracted_parent,
-                            paths.bin.join("python")
-                        )
-                    });
-                util::check_command_output_with(&output, |s| {
-                    panic!(
-                        "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
-                        &extracted_parent,
-                        paths.bin.join("python"),
-                        s
-                    );
-                });
-            }
-            #[cfg(target_os = "macos")]
-            {
-                let output = Command::new("python3")
-                    .current_dir(&extracted_parent)
-                    .args(&["setup.py", "bdist_wheel"])
-                    .output()
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
-                            &extracted_parent,
-                            paths.bin.join("python")
-                        )
-                    });
-                util::check_command_output_with(&output, |s| {
-                    panic!(
-                        "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
-                        &extracted_parent,
-                        paths.bin.join("python"),
-                        s
-                    );
-                });
-            }
+
+            // // The Linux and Mac builds appear to be unable to build wheels due to
+            // // missing the ctypes library; revert to system python.
+            // #[cfg(target_os = "linux")]
+            // {
+            //     let output = Command::new("python3")
+            //         .current_dir(&extracted_parent)
+            //         .args(&["setup.py", "bdist_wheel"])
+            //         .output()
+            //         .unwrap_or_else(|_| {
+            //             panic!(
+            //                 "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+            //                 &extracted_parent,
+            //                 paths.bin.join("python")
+            //             )
+            //         });
+            //     util::check_command_output_with(&output, |s| {
+            //         panic!(
+            //             "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
+            //             &extracted_parent,
+            //             paths.bin.join("python"),
+            //             s
+            //         );
+            //     });
+            // }
+            // #[cfg(target_os = "macos")]
+            // {
+            //     let output = Command::new("python3")
+            //         .current_dir(&extracted_parent)
+            //         .args(&["setup.py", "bdist_wheel"])
+            //         .output()
+            //         .unwrap_or_else(|_| {
+            //             panic!(
+            //                 "Problem running setup.py bdist_wheel in folder: {:?}. Py path: {:?}",
+            //                 &extracted_parent,
+            //                 paths.bin.join("python")
+            //             )
+            //         });
+            //     util::check_command_output_with(&output, |s| {
+            //         panic!(
+            //             "running setup.py bdist_wheel in folder {:?}. Py path: {:?}: {}",
+            //             &extracted_parent,
+            //             paths.bin.join("python"),
+            //             s
+            //         );
+            //     });
+            // }
 
             let dist_path = &extracted_parent.join("dist");
             if !dist_path.exists() {

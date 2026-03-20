@@ -1,26 +1,18 @@
 use std::{
-    collections::HashMap,
-    env,
-    error::Error,
-    fs,
-    io::{BufRead, BufReader},
-    path::{Path, PathBuf},
+    io::BufRead,
+    path::PathBuf,
     process,
-    str::FromStr,
     sync::{Arc, RwLock},
 };
 
-use regex::Regex;
-use serde::Deserialize;
-use structopt::StructOpt;
 use termcolor::{Color, ColorChoice};
 
 use crate::{
-    actions::run,
+    actions::run_script,
     cli_options::{ExternalCommand, ExternalSubcommands, Opt, SubCommand},
-    dep_types::{Constraint, Extras, Lock, LockPackage, Package, Rename, Req, ReqType, Version},
+    dep_types::{Lock, Package, Req, Version},
     pyproject::{CFG_FILENAME, Config},
-    util::{Os, abort, deps::sync},
+    util::{abort, deps::sync},
 };
 
 mod actions;
@@ -38,10 +30,6 @@ mod script;
 mod util;
 
 type PackToInstall = ((String, Version), Option<(u32, String)>); // ((Name, Version), (parent id, rename name))
-
-///////////////////////////////////////////////////////////////////////////////
-/// Global multithreaded variables part
-///////////////////////////////////////////////////////////////////////////////
 
 struct CliConfig {
     pub color_choice: ColorChoice,
@@ -68,22 +56,13 @@ thread_local! {
     static CLI_CONFIG: RwLock<Arc<CliConfig>> = RwLock::new(Default::default());
 }
 
-///////////////////////////////////////////////////////////////////////////////
-/// \ Global multithreaded variables part
-///////////////////////////////////////////////////////////////////////////////
-
 /// We process input commands in a deliberate order, to ensure the required, and only the required
 /// setup steps are accomplished before each.
-#[allow(clippy::match_single_binding)]
-#[allow(clippy::single_match)]
-// TODO: Remove clippy::match_single_binding and clippy::single_match after full function refactoring
 fn main() {
     let (pyflow_path, dep_cache_path, script_env_path, git_path) = util::paths::get_paths();
     let os = util::get_os();
 
     let opt = <Opt as structopt::StructOpt>::from_args();
-    #[cfg(debug_assertions)]
-    eprintln!("opts {:?}", opt);
 
     CliConfig {
         color_choice: util::handle_color_option(
@@ -114,12 +93,9 @@ fn main() {
                 ExternalSubcommands::Script => {
                     script::run_script(&script_env_path, &dep_cache_path, os, &args, &pyflow_path);
                 }
-                // TODO: Move branches to omitted match
                 _ => (),
             },
         },
-
-        // TODO: Move branches to omitted match
         _ => {}
     }
 
@@ -207,6 +183,20 @@ fn main() {
             )
         }
 
+        SubCommand::Sync => actions::install(
+            &pcfg.config_path,
+            &pcfg.config,
+            &git_path,
+            &paths,
+            found_lock,
+            &[],
+            false,
+            &lockpacks,
+            &os,
+            &py_vers,
+            &pcfg.lock_path,
+        ),
+
         SubCommand::Uninstall { packages } => {
             // todo: uninstall dev?
             // Remove dependencies specified in the CLI from the config, then lock and sync.
@@ -273,7 +263,7 @@ fn main() {
                 }
             }
             ExternalSubcommands::Run => {
-                run(&paths.lib, &paths.bin, &vers_path, &pcfg.config, x.args);
+                run_script(&paths.lib, &paths.bin, &vers_path, &pcfg.config, x.args);
             }
             x => {
                 abort(&format!(
@@ -284,6 +274,3 @@ fn main() {
         }
     }
 }
-
-#[cfg(test)]
-pub mod tests {}

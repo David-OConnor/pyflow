@@ -1,5 +1,6 @@
-on: [pull_request, push]
 name: build_and_test
+on: [pull_request, push]
+
 jobs:
   build_and_test:
     env:
@@ -8,18 +9,23 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-        toolchain: [stable, beta]  # , nightly]
+        toolchain: [stable, beta]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      
+      # Modern Rust toolchain installation
+      - name: Install Rust ${{ matrix.toolchain }}
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args:  --verbose --all
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args:  --verbose --all
+
+      # Rust cache speeds up your builds significantly
+      - uses: Swatinem/rust-cache@v2
+      
+      # Use standard cargo commands instead of custom actions
+      - name: Build
+        run: cargo build --verbose --all
+
+      - name: Test
+        run: cargo test --verbose --all
