@@ -86,7 +86,7 @@ database of dependencies, vice downloading and checking each package, or relying
 on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
 `Pipenv`’s resolution in particular may be prohibitively-slow on weak internet connections.
 
-- It keeps dependencies in the project directory, in `__pypackages__`. This is subtle,
+- It keeps dependencies in the project directory, in `.venv`. This is subtle,
 but reinforces the idea that there's
 no hidden state.
 
@@ -334,7 +334,7 @@ wheels from source if none are available. It verifies the integrity of the downl
 versions used are stored in a lock file.
 
 When a dependency is removed from `pyproject.toml`, it, and its subdependencies not
-also required by other packages are removed from the `__pypackages__` folder.
+also required by other packages are removed from the `.venv` folder.
 
 
 ## How dependencies are resolved
@@ -469,17 +469,17 @@ by Steve Dower.
 
 
 ## Gotchas
-- Make sure `__pypackages__` is in your `.gitignore` file.
-- You may need to set up IDEs to find packages in `__pypackages__`. If using PyCharm:
+- Make sure `.venv` is in your `.gitignore` file.
+- You may need to set up IDEs to find packages in `.venv`. If using PyCharm:
 `Settings` → `Project` → `Project Interpreter` → `⚙` → `Show All...` →
-(Select the interpreter, ie `(projname)/__pypackages__/3.x/.venv/bin/python` on 
-Linux/Mac, or `(projname)/__pypackages__/3.x/Scripts/python` on Windows) →
+(Select the interpreter, ie `(projname)/.venv/3.x/.venv/bin/python` on 
+Linux/Mac, or `(projname)/.venv/3.x/Scripts/python` on Windows) →
 Click the folder-tree icon at the bottom of the pop-out window →
  Click the `+` icon at the bottom of the new pop-out window →
- Navigate to and select `(projname)/__pypackages__/3.x/lib`
+ Navigate to and select `(projname)/.venv/3.x/lib`
 - If using VsCode: `Settings` → search `python extra paths` →
  `Edit in settings.json` → Add or modify the line:
- `"python.autoComplete.extraPaths": ["(projname)/__pypackages__/3.7/lib"]`
+ `"python.autoComplete.extraPaths": ["(projname)/.venv/3.7/lib"]`
 
 
 # References

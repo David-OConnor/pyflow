@@ -11,7 +11,7 @@ requirements.txt
 Pipfile
 pyflow.lock
 pyproject.toml
-/__pypackages__
+/.venv
 script.py
 *.egg-info/
 *.wheel

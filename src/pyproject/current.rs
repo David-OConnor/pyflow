@@ -40,7 +40,7 @@ pub fn get_config() -> Option<PresentConfig> {
         .parent()
         .expect("Can't find project path via parent")
         .to_path_buf();
-    let pypackages_path = project_path.join("__pypackages__");
+    let pypackages_path = project_path.join(".venv");
     let lock_path = project_path.join(LOCK_FILENAME);
 
     let mut config = Config::from_file(&config_path).unwrap_or_default();

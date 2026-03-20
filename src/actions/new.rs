@@ -16,7 +16,7 @@ const GITIGNORE_INIT: &str = r##"
 build/
 dist/
 __pycache__/
-__pypackages__/
+.venv/
 .ipynb_checkpoints/
 *.pyc
 *~

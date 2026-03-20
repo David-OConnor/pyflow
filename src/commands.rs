@@ -83,9 +83,9 @@ pub fn find_py_version(alias: &str) -> Option<crate::Version> {
 }
 
 /// Create the virtual env. Assume we're running Python 3.3+, where `venv` is included.
-/// Additionally, create the __pypackages__ directory if not already created.
+/// Additionally, create the .venv directory if not already created.
 pub fn create_venv(py_alias: &str, lib_path: &Path, name: &str) -> Result<(), Box<dyn Error>> {
-    // While creating the lib path, we're creating the __pypackages__ structure.
+    // While creating the lib path, we're creating the .venv structure.
     let output = Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))
@@ -97,7 +97,7 @@ pub fn create_venv(py_alias: &str, lib_path: &Path, name: &str) -> Result<(), Bo
 
 // todo: DRY for using a path instead of str. use impl Into<PathBuf> ?
 pub fn create_venv2(py_alias: &Path, lib_path: &Path, name: &str) -> Result<(), Box<dyn Error>> {
-    // While creating the lib path, we're creating the __pypackages__ structure.
+    // While creating the lib path, we're creating the .venv structure.
     let output = Command::new(py_alias)
         .args(&["-m", "venv", name])
         .current_dir(lib_path.join("../"))

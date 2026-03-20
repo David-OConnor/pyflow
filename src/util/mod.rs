@@ -157,7 +157,7 @@ pub fn wait_for_dirs(dirs: &[PathBuf]) -> Result<(), crate::py_versions::AliasEr
 }
 
 /// Sets the `PYTHONPATH` environment variable, causing Python to look for
-/// dependencies in `__pypackages__`,
+/// dependencies in `.venv`,
 pub fn set_pythonpath(paths: &[PathBuf]) {
     #[cfg(target_os = "windows")]
     let sep = ";";

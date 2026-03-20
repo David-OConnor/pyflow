@@ -20,7 +20,6 @@ def helper(filename: str, startswith: str, quotes: bool):
 
 def main():
     helper('Cargo.toml', "version = ", True)
-    helper('snapcraft.yaml', "version: ", False)
 
     data = ""
     with open('README.md') as f:

@@ -484,7 +484,7 @@ pub fn create_venv(
     let lib_path = vers_path.join("lib");
 
     if !lib_path.exists() {
-        fs::create_dir_all(&lib_path).expect("Problem creating __pypackages__ directory");
+        fs::create_dir_all(&lib_path).expect("Problem creating .venv directory");
     }
 
     #[cfg(target_os = "windows")]
@@ -541,7 +541,7 @@ pub fn create_venv(
 
     // We need `wheel` installed to build wheels from source.
     // We use `twine` to upload packages to pypi.
-    // Note: This installs to the venv's site-packages, not __pypackages__/3.x/lib.
+    // Note: This installs to the venv's site-packages, not .venv/3.x/lib.
     let wheel_url = "https://files.pythonhosted.org/packages/00/83/b4a77d044e78ad1a45610eb88f745be2fd2c6d658f9798a15e384b7d57c9/wheel-0.33.6-py2.py3-none-any.whl";
 
     install::download_and_install_package(

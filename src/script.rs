@@ -63,7 +63,7 @@ pub fn run_script(
     }
 
     // todo DRY
-    let pypackages_dir = env_path.join("__pypackages__");
+    let pypackages_dir = env_path.join(".venv");
     let (vers_path, py_vers) =
         util::find_or_create_venv(&cfg_vers, &pypackages_dir, pyflow_dir, dep_cache_path);
 

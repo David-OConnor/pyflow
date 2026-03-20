@@ -38,26 +38,3 @@ reqwest = { version = "0.13.2", default-features = false, features = ["blocking"
 [dev-dependencies]
 rstest = "0.23"
 indoc = "2"
-
-[package.metadata.deb]
-section = "Python"
-# Non-MD subsection of readme.
-extended-description = """This tool implements
-PEP 582 -- Python local packages directory.
-It manages dependencies, keeping them isolated in the project directory, and runs
-python in an environment which uses this directory. Per PEP 582, dependencies
-are stored in the project directory → `__pypackages__` → `3.7`(etc) → `lib`.
-A virtual environment is created in the same directory as `lib`, and is used
-transparently."""
-
-
-[package.metadata.rpm]
-buildflags = ["--release"]
-
-[package.metadata.rpm.targets]
-pyflow = { path = "/usr/bin/pyflow" }
-
-
-[package.metadata.maturin]
-# todo
-classifier = ["Programming Language :: Python"]
