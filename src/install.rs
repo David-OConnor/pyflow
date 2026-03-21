@@ -224,7 +224,7 @@ pub fn download_and_install_package(
         .map(|b| format!("{:02X}", b))
         .collect();
     if file_digest_str.to_lowercase() != expected_digest.to_lowercase() {
-        util::print_color(
+        print_color(
             &format!(
                 "Hash failed for {}. Expected: {}, Actual: {}. Continue with installation anyway? (yes / no)",
                 filename,
@@ -370,16 +370,45 @@ pub fn download_and_install_package(
 
             replace_distutils(&extracted_parent.join("setup.py"));
 
+            Command::new(paths.bin.join("python"))
+                .args(["-m", "ensurepip", "--upgrade"])
+                .output()
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Problemensuring pip: {:?}. Py path: {:?}",
+                        &extracted_parent,
+                        paths.bin.join("python")
+                    )
+                });
+
+            Command::new(paths.bin.join("python"))
+                .args([
+                    "-m",
+                    "pip",
+                    "install",
+                    "--upgrade",
+                    "pip",
+                    "setuptools",
+                    "wheel",
+                    "build",
+                ])
+                .output()
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Problem installing setupjtools, wheel, build: {:?}. Py path: {:?}",
+                        &extracted_parent,
+                        paths.bin.join("python")
+                    )
+                });
 
             // Add setuptools using Pip, to bootstrap?
-            {
-
-            }
+            {}
             // #[cfg(target_os = "windows")]
             {
                 let output = Command::new(paths.bin.join("python"))
                     .current_dir(&extracted_parent)
-                    .args(&["setup.py", "bdist_wheel"])
+                    // .args(&["setup.py", "bdist_wheel"])
+                    .args(&["-m", "build", "--wheel", "--no-isolation"])
                     .output()
                     .unwrap_or_else(|_| {
                         panic!(

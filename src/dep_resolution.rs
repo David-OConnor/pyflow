@@ -1,6 +1,6 @@
 use std::{cmp::min, collections::HashMap, str::FromStr};
 
-use serde::{Deserialize};
+use serde::Deserialize;
 use termcolor::Color;
 
 use crate::{
@@ -298,7 +298,7 @@ pub(super) mod res {
         Ok(resp)
     }
 
-    /// Find the latest version of a package by querying the warehouse.  Also return
+    /// Find the latest version of a package by querying the warehouse. Also return
     /// a vec of the versions found, so we can reuse this later without fetching a second time.
     /// Return name to, so we get correct capitalization.
     pub fn get_version_info(
@@ -346,12 +346,23 @@ pub(super) mod res {
             })
             .collect();
 
+        // todo temp
+        // println!("\n\n\nAll compat: {:?}", all_compat);
+        // for v in &all_compat {
+        //     if v.major == Some(9) && v.minor == Some(7) {
+        //         println!("V: {:?}", v);
+        //     }
+        // }
+
         // Grab the absolute latest version from the Python-compatible pool
         let latest_py_compat_version = all_compat
             .iter()
             .max()
             .unwrap_or_else(|| panic!("Can't find a valid version for {}", name))
             .clone();
+
+        // todo temp
+        // println!("\n\n\nlatest compat: {:?}", latest_py_compat_version);
 
         // Return the name, the absolute highest compatible version, and the full pool of options.
         // fetch_req_data will use all_compat to evaluate package-specific constraints (like >= 3.1)
@@ -489,7 +500,6 @@ pub(super) mod res {
             //     println!("-V: {:?}", version);
             // }
 
-
             // To minimize request time, only query the latest compatible version.
             let best_version = match all_versions
                 .into_iter()
@@ -568,7 +578,6 @@ pub(super) mod res {
     fn make_renamed_packs(
         _vers_cache: &HashMap<String, (String, Version, Vec<Version>)>,
         deps: &[Dependency],
-        //    all_deps: &[Dependency],
         name: &str,
     ) -> Vec<Package> {
         util::print_color(

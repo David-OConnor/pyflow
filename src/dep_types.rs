@@ -147,7 +147,7 @@ impl PartialOrd for VersionModifier {
 }
 
 /// An exact, 3-number Semver version. With some possible extras.
-#[derive(Clone, Default, Deserialize, Eq)]
+#[derive(Clone, Default, Debug, Deserialize, Eq)]
 pub struct Version {
     pub major: Option<u32>,
     pub minor: Option<u32>,
@@ -318,45 +318,43 @@ impl FromStr for Version {
 
 impl Ord for Version {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        // None version modifiers should rank highest. Ie 17.0 > 17.0rc1
-        let self_mod = self.modifier.clone().unwrap_or((VersionModifier::Null, 0));
-        let other_mod = other.modifier.clone().unwrap_or((VersionModifier::Null, 0));
-        // Mirror the set field if we have a star present
-        let cmp_star = |obj: Option<u32>, oth: Option<u32>, star: bool| -> cmp::Ordering {
-            let none_val = if star {
-                if obj.is_none() && oth.is_none() {
-                    0
-                } else if let Some(x) = obj {
-                    x
-                } else {
-                    oth.unwrap_or(0)
-                }
-            } else {
-                0
-            };
-            obj.unwrap_or(none_val).cmp(&oth.unwrap_or(none_val))
-        };
-        let star = self.star || other.star;
-        let maj = cmp_star(self.major, other.major, star);
-        let min = cmp_star(self.minor, other.minor, star);
-        let pat = cmp_star(self.patch, other.patch, star);
-        let ext = cmp_star(self.extra_num, other.extra_num, star);
-        if !matches!(maj, cmp::Ordering::Equal) {
-            maj
-        } else if !matches!(min, cmp::Ordering::Equal) {
-            min
-        } else if !matches!(pat, cmp::Ordering::Equal) {
-            pat
-        } else if !matches!(ext, cmp::Ordering::Equal) {
-            ext
-        } else if !star {
-            if self_mod.0 == other_mod.0 {
-                self_mod.1.cmp(&other_mod.1)
-            } else {
-                self_mod.0.cmp(&other_mod.0)
+        // 1. Compare numeric components. Treat None as 0 for stability.
+        let fields = [
+            (self.major, other.major),
+            (self.minor, other.minor),
+            (self.patch, other.patch),
+            (self.extra_num, other.extra_num),
+        ];
+
+        for (s, o) in fields {
+            let res = s.unwrap_or(0).cmp(&o.unwrap_or(0));
+            if res != cmp::Ordering::Equal {
+                return res;
             }
-        } else {
-            cmp::Ordering::Equal
+        }
+
+        // 2. Handle Stars: If one is a wildcard and the other isn't,
+        // define a stable rule (e.g., specific versions are "greater" than wildcards)
+        if self.star != other.star {
+            return self.star.cmp(&other.star);
+        }
+
+        // 3. Handle Modifiers
+        let self_mod = self.modifier.as_ref().map(|(m, v)| (m, *v));
+        let other_mod = other.modifier.as_ref().map(|(m, v)| (m, *v));
+
+        match (self_mod, other_mod) {
+            (None, Some(_)) => cmp::Ordering::Greater, // None is higher (e.g., 1.0 > 1.0-rc1)
+            (Some(_), None) => cmp::Ordering::Less,
+            (Some((m1, v1)), Some((m2, v2))) => {
+                let res = m1.cmp(m2);
+                if res == cmp::Ordering::Equal {
+                    v1.cmp(&v2)
+                } else {
+                    res
+                }
+            }
+            (None, None) => cmp::Ordering::Equal,
         }
     }
 }
@@ -427,11 +425,11 @@ impl fmt::Display for Version {
     }
 }
 
-impl fmt::Debug for Version {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", &self.to_string())
-    }
-}
+// impl fmt::Debug for Version {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "{}", &self.to_string())
+//     }
+// }
 
 /// Specify the type of version requirement
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]

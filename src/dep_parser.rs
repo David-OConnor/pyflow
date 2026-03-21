@@ -109,7 +109,8 @@ fn parse_wh_py_ver(input: &str) -> IResult<&str, Constraint> {
             alt((tag("2"), tag("3"), tag("4"))),
             opt(digit1),
         ),
-        |(prefix, major, minor): (&str, &str, Option<&str>)| { // <-- Capture `prefix`
+        |(prefix, major, minor): (&str, &str, Option<&str>)| {
+            // <-- Capture `prefix`
             let major: u32 = major.parse().unwrap();
 
             // Determine constraint type based on the wheel tag prefix
@@ -145,7 +146,7 @@ fn parse_wh_py_ver(input: &str) -> IResult<&str, Constraint> {
             }
         },
     )
-        .parse(input)
+    .parse(input)
 }
 
 fn quote(input: &str) -> IResult<&str, &str> {

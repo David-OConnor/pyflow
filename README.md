@@ -6,18 +6,13 @@
 
 #### *Simple is better than complex* - The Zen of Python
 
-Pyflow streamlines working with Python projects and files. It's an 
-easy-to-use CLI app with a minimalist API. Never worry about having the right
-version of Python or dependencies.
+Pyflow streamlines working with Python projects and files. Objectives: "Just works", and fast. It's an easy-to-use CLI app which manages python dependency and interpreter versions.
 
-Example use, including setting up a project and switching Py versions:
-![Demonstration](https://raw.githubusercontent.com/david-oconnor/pyflow/master/demo.gif)
+Example use, including setting up a project and switching Py versions: ![Demonstration](https://raw.githubusercontent.com/david-oconnor/pyflow/master/demo.gif)
 
-If your project's already configured, the only command you need is `pyflow`,
-or `pyflow myscript.py`; setting up Python and its dependencies are automatic.
+If your project's already configured, the only command you need is `pyflow`, or `pyflow myscript.py`; setting up Python and its dependencies are automatic.
 
-**Goals**: Make using and publishing Python projects as simple as possible. Actively managing Python environments shouldn't be required to use dependencies safely. We're attempting
-to fix each stumbling block in the Python workflow, so that it's as elegant as the language itself.
+**Goals**: Make using and publishing Python projects as simple as possible. Actively managing Python environments shouldn't be required to use dependencies safely. We're attempting to fix each stumbling block in the Python workflow, so that it's as elegant as the language itself.
 
 You don't need Python or any other tools installed to use Pyflow.
 
@@ -27,10 +22,8 @@ It implements [PEP 582 -- Python local packages directory](https://www.python.or
 and [Pep 518 (pyproject.toml)](https://www.python.org/dev/peps/pep-0518/).
 
 
-## Installation
-- **Pip** - Run `pip install pyflow`. The linux install using this method is much larger than
-  with the above ones, and it doesn't yet work with Mac. This method will likely not work
-  with Red Hat, CentOs, or Fedora.
+## Install
+- **Pip** - Run `pip install pyflow`.
 
 - **Standalone executables**:  [Download the appropriate executable](https://github.com/David-OConnor/pyflow/releases) for your system, and add it 
 to the `PATH` environment variable.
@@ -47,104 +40,71 @@ creates a folder with the basics.
 
 
 ## Quick-and-dirty start for quick-and-dirty scripts
-- Add the line `__requires__ = ['numpy', 'requests']` somewhere in your script, where `numpy` and
-`requests` are dependencies.
-- Optionally add the line `__python__ = X.Y.Z`, where `X.Y.Z` is a Python version specification.
-Without this line, you will be prompted to choose a version when running the script.
-- Run `pyflow script myscript.py`, where `myscript.py` is the name of your script.
-This will set up an isolated environment for this script, and install
-dependencies as required. This is a safe way
-to run one-off Python files that aren't attached to a project, but have dependencies.
+Compliant with [PEP 723](https://peps.python.org/pep-0723/), which allows specifying the Python interpreter, and dependency versions at the top of a script. Note: We previously used a different syntax for this, and still support that, but now support PEP 723 as well.
 
+- Specify dependencies and a Python version in a comment at the top of the script. (See the example below)
+- Run `pyflow script myscript.py`, where `myscript.py` is the name of your script. This will set up an isolated environment for this script, and install dependencies as required. This is a safe way to run one-off Python files that aren't attached to a project, but have dependencies.
+
+Example, from that PEP:
+```python
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "requests<3",
+#   "rich",
+# ]
+# ///
+
+import requests
+from rich.pretty import pprint
+
+resp = requests.get("https://peps.python.org/api/peps.json")
+data = resp.json()
+pprint([(k, v["title"]) for k, v in data.items()][:10])
+```
 
 ## Why add another Python manager?
-`Pipenv`, `Poetry`, and `Pyenv` address parts of
-Pyflow's *raison d'être*, but expose stumbling blocks that may frustrate new users,
-both when installing and using. Some reasons why this is different:
+Overall: I find Python dependency and interpreter management to be high-frictcion and unpleasant to use. My intent: "Just works", which no other workflow satisfies. (2026 update: UV satisfies this)
+`Pipenv`, `Poetry`, and `Pyenv` address parts of Pyflow's *raison d'être*, but expose stumbling blocks that may frustrate new users, both when installing and using. Some reasons why this is different:
 
-- It behaves consistently regardless of how your system and Python installations
-are configured.
+- It behaves consistently regardless of how your system and Python installations are configured.
 
-- It automatically manages Python installations and environments. You specify a Python version
- in `pyproject.toml` (if omitted, it asks), and it ensures that version is used.
- If the version's not installed, Pyflow downloads a binary, and uses that.
- If multiple installations are found for that version, it asks which to use.
- `Pyenv` can be used to install Python, but only if your system is configured in a certain way:
- I don’t think expecting a user’s computer to compile Python is reasonable.
+- It automatically manages Python installations and environments. You specify a Python version in `pyproject.toml` (if omitted, it asks), and it ensures that version is used. If the version's not installed, Pyflow downloads a binary, and uses that. If multiple installations are found for that version, it asks which to use. `Pyenv` can be used to install Python, but only if your system is configured in a certain way: I don’t think expecting a user’s computer to compile Python is reasonable.
 
-- By not using Python to install or run, it remains environment-agnostic.
-This is important for making setup and use as simple and decision-free as
- possible. It's common for Python-based CLI tools
-to not run properly when installed from `pip` due to the `PATH` or user directories
-not being configured in the expected way.
+- By not using Python to install or run, it remains environment-agnostic. This is important for making setup and use as simple and decision-free as possible. It's common for Python-based CLI tools to not run properly when installed from `pip` due to the `PATH` or user directories not being configured in the expected way.
 
-- Its dependency resolution and locking is faster due to using a cached
-database of dependencies, vice downloading and checking each package, or relying
-on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse).
-`Pipenv`’s resolution in particular may be prohibitively-slow on weak internet connections.
+- Its dependency resolution and locking is faster due to using a cached database of dependencies, vice downloading and checking each package, or relying on the incomplete data available on the [pypi warehouse](https://github.com/pypa/warehouse). `Pipenv`’s resolution in particular may be prohibitively-slow on weak internet connections.
 
-- It keeps dependencies in the project directory, in `.venv`. This is subtle,
-but reinforces the idea that there's
-no hidden state.
+- It keeps dependencies in the project directory, in `.venv`. This is subtle, but reinforces the idea that there's no hidden state.
 
 - It will always use the specified version of Python. This is a notable limitation in `Poetry`; Poetry
 may pick the wrong installation (eg Python2 vice Python3), with no obvious way to change it.
-Poetry allows projects to specify version, but neither selects,
-nor provides a way to select the right one. If it chooses the wrong one, it will
-install the wrong environment, and produce a confusing
-error message. This can be worked around using `Pyenv`, but this solution isn't
-documented, and adds friction to the
-workflow. It may confuse new users, as it occurs
-by default on popular linux distros like Ubuntu. Additionally, `Pyenv's` docs are
-confusing: It's not obvious how to install it, what operating systems
-it's compatible with, or what additional dependencies are required.
+Poetry allows projects to specify version, but neither selects, nor provides a way to select the right one. If it chooses the wrong one, it will install the wrong environment, and produce a confusing
+error message. This can be worked around using `Pyenv`, but this solution isn't documented, and adds friction to the workflow. It may confuse new users, as it occurs by default on popular linux distros like Ubuntu. Additionally, `Pyenv's` docs are confusing: It's not obvious how to install it, what operating systems it's compatible with, or what additional dependencies are required.
 
-- Multiple versions of a dependency can be installed, allowing resolution
-of conflicting sub-dependencies. (ie: Your package requires `Dep A>=1.0` and `Dep B`.
-`Dep B` requires Dep `A==0.9`) There are many cases where `Poetry` and `Pipenv` will fail
-to resolve dependencies. Try it for yourself with a few
- random dependencies from [pypi](https://pypi.org/); there's a good chance you'll
- hit this problem using `Poetry` or `Pipenv`. *Limitations: This will not work for
-some compiled dependencies, and attempting to package something using this will
-trigger an error.*
+- Multiple versions of a dependency can be installed, allowing resolution of conflicting sub-dependencies. (ie: Your package requires `Dep A>=1.0` and `Dep B`. `Dep B` requires Dep `A==0.9`) There are many cases where `Poetry` and `Pipenv` will fail to resolve dependencies. Try it for yourself with a few
+ random dependencies from [pypi](https://pypi.org/); there's a good chance you'll  hit this problem using `Poetry` or `Pipenv`. *Limitations: This will not work for some compiled dependencies, and attempting to package something using this will trigger an error.*
 
-Perhaps the biggest philosophical difference is that Pyflow abstracts over environments,
-rather than expecting users to manage them.
+Perhaps the biggest philosophical difference is that Pyflow abstracts over environments, rather than expecting users to manage them.
 
 
 ## My OS comes with Python, and Virtual environments are easy. What's the point of this?
 Hopefully we're not replacing [one problem](https://xkcd.com/1987/) with [another](https://xkcd.com/927/).
 
-Some people like the virtual-environment workflow - it requires only tools included
-with Python, and uses few console commands to create,
-and activate and environments. However, it may be tedious depending on workflow:
-The commands may be long depending on the path of virtual envs and projects,
-and it requires modifying the state of the terminal for each project, each time
-you use it, which you may find inconvenient or inelegant.
+Some people like the virtual-environment workflow - it requires only tools included with Python, and uses few console commands to create, and activate and environments. However, it may be tedious depending on workflow: The commands may be long depending on the path of virtual envs and projects, and it requires modifying the state of the terminal for each project, each time you use it, which you may find inconvenient or inelegant.
 
-I think we can do better. This is especially relevant for new Python users
-who don't understand venvs, or are unaware of the hazards of working with a system Python.
+I think we can do better. This is especially relevant for new Python users who don't understand venvs, or are unaware of the hazards of working with a system Python.
 
-`Pipenv` improves the workflow by automating environment use, and
-allowing reproducible dependency graphs. `Poetry` improves upon `Pipenv's` API,
-speed, and dependency resolution, as well as improving
-the packaging and distributing process by using a consolidating project config. Both
- are sensitive to the environment they run in, and won't work
- correctly if it's not as expected.
+`Pipenv` improves the workflow by automating environment use, and allowing reproducible dependency graphs. `Poetry` improves upon `Pipenv's` API, speed, and dependency resolution, as well as improving the packaging and distributing process by using a consolidating project config. Both are sensitive to the environment they run in, and won't work correctly if it's not as expected.
 
-`Conda` addresses these problems elegantly, but maintains a separate repository
-of binaries from `PyPi`. If all packages you need are available on `Conda`, it may
-be the best solution. If not, it requires falling back to `Pip`, which means
-using two separate package managers.
+`Conda` addresses these problems elegantly, but maintains a separate repository of binaries from `PyPi`. If all packages you need are available on `Conda`, it may be the best solution. If not, it requires falling back to `Pip`, which means using two separate package managers.
 
-When building and deploying packages, a set of overlapping files are
-traditionally used: `setup.py`, `setup.cfg`, `requirements.txt` and `MANIFEST.in`. We use
-`pyproject.toml` as the single-source of project info required to build
-and publish.
+When building and deploying packages, a set of overlapping files are traditionally used: `setup.py`, `setup.cfg`, `requirements.txt` and `MANIFEST.in`. We use `pyproject.toml` as the single-source of project info required to build and publish.
 
 
 ## A thoroughly biased feature table
 These tools have different scopes and purposes:
+(todo: Update with a UV comparison. It will likely be similar to Pyflow's)
 
 | Name | [Pip + venv](https://docs.python.org/3/library/venv.html) | [Pipenv](https://docs.pipenv.org) | [Poetry](https://poetry.eustace.io) | [pyenv](https://github.com/pyenv/pyenv) | [pythonloc](https://github.com/cs01/pythonloc) | [Conda](https://docs.conda.io/en/latest/) |this |
 |------|------------|--------|--------|-------|-----------|-------|-----|
@@ -162,13 +122,9 @@ These tools have different scopes and purposes:
 
 
 ## Use
-- Optionally, create a `pyproject.toml` file in your project directory. Otherwise, this
-file will be created automatically. You may wish to use `pyflow new` to create a basic
-project folder (With a .gitignore, source directory etc), or `pyflow init` to populate
-info from `requirements.txt` or `Pipfile`. See
-[PEP 518](https://www.python.org/dev/peps/pep-0518/) and [PEP 621](https://peps.python.org/pep-0621/) for details.
+- Optionally, create a `pyproject.toml` file in your project directory. Otherwise, this file will be created automatically. You may wish to use `pyflow new` to create a basic project folder (With a .gitignore, source directory etc), or `pyflow init` to populate info from `requirements.txt` or `Pipfile`. See [PEP 518](https://www.python.org/dev/peps/pep-0518/) and [PEP 621](https://peps.python.org/pep-0621/) for details.
 
-Supports [PEP 723] for specifying dependencies in one-off files.
+Supports [PEP 723](https://peps.python.org/pep-0723/) for specifying dependencies in one-off files.
 
 Pyproject.toml may be set up with syntax from the original PEP 518, or the newer PEP 621. 
 
@@ -204,17 +160,10 @@ Example contents: PEP-621 style:
 
 
 The `[tool.pyflow]` section is used for metadata. The only required item in it is
- `py_version`, unless
-building and distributing a package. The `[tool.pyflow.dependencies]` section
-contains all dependencies, and is an analog to `requirements.txt`. You can specify
-developer dependencies in the `[tool.pyflow.dev-dependencies]` section. These
-won't be packed or published, but will be installed locally. You can install these
-from the cli using the `--dev` flag. Eg: `pyflow install black --dev`
+ `py_version`, unless building and distributing a package. The `[tool.pyflow.dependencies]` section contains all dependencies, and is an analog to `requirements.txt`. You can specify developer dependencies in the `[tool.pyflow.dev-dependencies]` section. These won't be packed or published, but will be installed locally. You can install these from the cli using the `--dev` flag. Eg: `pyflow install black --dev`
 
-You can specify `extra` dependencies, which will only be installed when passing
-explicit flags to `pyflow install`, or when included in another project with the appropriate
- flag enabled. Ie packages requiring this one can enable with
-`pip install -e` etc.
+You can specify `extra` dependencies, which will only be installed when passing explicit flags to `pyflow install`, or when included in another project with the appropriate flag enabled. Ie packages requiring this one can enable with `pip install -e` etc.
+
 ```toml
 [tool.pyflow.extras]
 test = ["pytest", "nose"]
@@ -240,8 +189,7 @@ To install from a `git` repo, use syntax like this:
 saturn = { git = "https://github.com/david-oconnor/saturn.git" }  # The trailing `.git` here is optional.
 ```
 
-`git`dependencies are currently experimental. If you run into problems with them,
-please submit an issue.
+`git`dependencies are currently experimental. If you run into problems with them, please submit an issue.
 
 To install a package that includes a `.` in its name, enclose the name in quotes.
 
@@ -260,14 +208,9 @@ You can specify direct entry points to parts of your program using something lik
 [tool.pyflow.scripts]
 name = "module:function"
 ```
-Where you replace `name`, `function`, and `module` with the name to call your script with, the
-function you wish to run, and the module it's in respectively. This is similar to specifying
-scripts in `setup.py` for built packages. The key difference is that functions specified here
-can be run at any time,
-without having to build the package. Run with `pyflow name` to do this.
+Where you replace `name`, `function`, and `module` with the name to call your script with, the function you wish to run, and the module it's in respectively. This is similar to specifying scripts in `setup.py` for built packages. The key difference is that functions specified here can be run at any time, without having to build the package. Run with `pyflow name` to do this.
 
-If you run `pyflow package` on on a package using this, the result will work like normal script
-entry points for someone using the package, regardless of if they're using this tool.
+If you run `pyflow package` on on a package using this, the result will work like normal script entry points for someone using the package, regardless of if they're using this tool.
 
 
 ## What you can do
@@ -314,49 +257,29 @@ environments; it will ask you which ones you'd like to clear.
 
 
 ## How installation and locking work
-Running `pyflow install` syncs the project's installed dependencies with those
- specified in `pyproject.toml`. It generates `pyflow.lock`, which on subsequent runs,
-  keeps dependencies each package a fixed version, as long as it continues to meet the constraints
-  specified in `pyproject.toml`. Adding a
-package name via the CLI, eg `pyflow install matplotlib` simply adds that requirement before proceeding.
-`pyflow.lock` isn't meant to be edited directly.
+Running `pyflow install` syncs the project's installed dependencies with those  specified in `pyproject.toml`. It generates `pyflow.lock`, which on subsequent runs, keeps dependencies each package a fixed version, as long as it continues to meet the constraints specified in `pyproject.toml`. Adding a
+package name via the CLI, eg `pyflow install matplotlib` simply adds that requirement before proceeding. `pyflow.lock` isn't meant to be edited directly.
 
-Each dependency listed in `pyproject.toml` is checked for a compatible match in `pyflow.lock`
- If a constraint is met by something in the lock file,
-the version we'll sync will match that listed in the lock file. If not met, a new entry
-is added to the lock file, containing the highest version allowed by `pyproject.toml`.
-Once complete, packages are installed and removed in order to exactly meet those listed
-in the updated lock file.
+Each dependency listed in `pyproject.toml` is checked for a compatible match in `pyflow.lock` If a constraint is met by something in the lock file,
+the version we'll sync will match that listed in the lock file. If not met, a new entry is added to the lock file, containing the highest version allowed by `pyproject.toml`. Once complete, packages are installed and removed in order to exactly meet those listed in the updated lock file.
 
-This tool downloads and unpacks wheels from `pypi`, or builds
-wheels from source if none are available. It verifies the integrity of the downloaded file
- against that listed on `pypi` using `SHA256`, and the exact
-versions used are stored in a lock file.
+This tool downloads and unpacks wheels from `pypi`, or builds wheels from source if none are available. It verifies the integrity of the downloaded file
+ against that listed on `pypi` using `SHA256`, and the exact versions used are stored in a lock file.
 
-When a dependency is removed from `pyproject.toml`, it, and its subdependencies not
-also required by other packages are removed from the `.venv` folder.
+When a dependency is removed from `pyproject.toml`, it, and its subdependencies not also required by other packages are removed from the `.venv` folder.
 
 
 ## How dependencies are resolved
 
-Compatible versions of dependencies are determined using info from
-the [PyPi Warehouse](https://github.com/pypa/warehouse) (available versions, and hash info).
+Compatible versions of dependencies are determined using info from the [PyPi Warehouse](https://github.com/pypa/warehouse) (available versions, and hash info).
 
-If all packages are either only specified once, or specified multiple times with the same
-newest-compatible version, we're done resolving, and ready to install and sync.
+If all packages are either only specified once, or specified multiple times with the same newest-compatible version, we're done resolving, and ready to install and sync.
 
-If a package is included more than once with different newest-compatible versions, but one
-of those newest-compatible is compatible with all requirements, we install that one. If not,
-we search all versions to find one that's compatible.
+If a package is included more than once with different newest-compatible versions, but one of those newest-compatible is compatible with all requirements, we install that one. If not, we search all versions to find one that's compatible.
 
-If still unable to find a version of a package that satisfies all requirements, we install
-multiple versions of it as-required, store them in separate directories, and modify
-their parents' imports as required.
+If still unable to find a version of a package that satisfies all requirements, we install multiple versions of it as-required, store them in separate directories, and modify their parents' imports as required.
 
-Note that it may be possible to resolve dependencies in cases not listed above, instead
-of installing multiple versions. Ie we could try different combinations of top-level packages,
-check for resolutions, then vary children as-required down the hierarchy. We don't do this because
- it's slow, has no guarantee of success, and involves installing older versions of packages.
+Note that it may be possible to resolve dependencies in cases not listed above, instead of installing multiple versions. Ie we could try different combinations of top-level packages, check for resolutions, then vary children as-required down the hierarchy. We don't do this because  it's slow, has no guarantee of success, and involves installing older versions of packages.
 
 
 ## Not-yet-implemented

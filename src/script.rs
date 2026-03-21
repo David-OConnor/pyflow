@@ -5,6 +5,7 @@
 use std::{fs, path::Path, str::FromStr};
 
 use toml::Value;
+
 use crate::{
     commands,
     dep_parser::parse_version,
@@ -56,7 +57,7 @@ pub fn run_script(
                 .expect("Problem reading Python version for this script")
                 .replace("\n", ""),
         )
-            .expect("Problem parsing version from file");
+        .expect("Problem parsing version from file");
     } else {
         cfg_vers = util::prompts::py_vers();
         create_or_update_version_file(&py_vers_path, &cfg_vers);
@@ -108,7 +109,7 @@ pub fn run_script(
                         Extras::new_py(Constraint::new(ReqType::Exact, py_vers.clone())),
                     )),
                 )
-                    .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
+                .unwrap_or_else(|_| panic!("Problem getting version info for {}", &name));
                 (vinfo.0, vinfo.1)
             };
 
